@@ -1,0 +1,48 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1769145112654,
+      "tag": "0000_amazing_molten_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1769160606320,
+      "tag": "0001_cuddly_zodiak",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1770444272865,
+      "tag": "0002_final_refactor_json",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1770897038700,
+      "tag": "0003_sad_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1771827899000,
+      "tag": "0004_fixed_malice",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1772078461951,
+      "tag": "0005_curved_morlun",
+      "breakpoints": true
+    }
+  ]
+}
