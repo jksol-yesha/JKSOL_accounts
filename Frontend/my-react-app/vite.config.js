@@ -12,7 +12,7 @@ export default defineConfig({
     allowedHosts: ['telescope-assigned-fragrance-imagine.trycloudflare.com'], // Allow any host (e.g. any ngrok URL)
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:3000',
+        target: 'http://127.0.0.1:8100',
         changeOrigin: true,
         secure: false,
         ws: true,  // Enable WebSocket proxying
