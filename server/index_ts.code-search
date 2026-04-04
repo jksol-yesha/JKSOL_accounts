@@ -1,0 +1,11 @@
+# Query: index.ts
+# ContextLines: 1
+
+1 result - 1 file
+
+server/package.json:
+  1    "name": "auth_api",
+  2    "name": "auth_api",
+  3:   "module": "index.ts",
+  3    "type": "module",
+  4    "type": "module",

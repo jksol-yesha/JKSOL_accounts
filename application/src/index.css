@@ -1,0 +1,1987 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #1e293b;
+  --color-primary-dark: #0f172a;
+  --color-background: #f1f3f9;
+  --color-background-darker: #e9ecf3;
+  --color-sidebar: #ffffff;
+  --color-sidebar-text: #64748b;
+  --color-sidebar-active: #1e293b;
+  --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+}
+
+:root {
+  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light;
+  color: #1e293b;
+  background-color: #f1f3f9;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  height: 100%;
+  overflow: hidden;
+}
+
+@layer base {
+  body {
+    @apply bg-gray-50 text-slate-800 min-h-screen flex flex-col;
+    margin: 0;
+    min-width: 320px;
+  }
+}
+
+#root {
+  width: 100%;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Notification Animations */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+.accounts-laptop-currency-trigger {
+  display: none;
+}
+
+.accounts-laptop-account-type-trigger,
+.accounts-laptop-subtype-trigger {
+  display: none;
+}
+
+.accounts-laptop-currency-menu {
+  max-height: 180px;
+}
+
+.accounts-laptop-account-type-menu,
+.accounts-laptop-subtype-menu {
+  max-height: 180px;
+}
+
+/* Desktop/laptop transaction form scrolling (keep save/cancel reachable when GST/errors expand form) */
+@media (min-width: 1024px) {
+  .txn-laptop-list-table .txn-amount-header-col {
+    padding-right: 2.75rem !important;
+  }
+
+  .txn-laptop-list-table .txn-amount-value-cell,
+  .txn-laptop-list-table .txn-amount-total-cell {
+    padding-right: 2.75rem !important;
+  }
+
+  .txn-desktop-form {
+    height: auto;
+    max-height: calc(100dvh - 130px);
+    min-height: 0;
+  }
+
+  .txn-desktop-card {
+    height: auto !important;
+    max-height: calc(100dvh - 130px) !important;
+    overflow: hidden !important;
+  }
+
+  .txn-desktop-form-scroll {
+    flex: 0 1 auto !important;
+    max-height: calc(100dvh - 300px) !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    overscroll-behavior: contain;
+  }
+ 
+  .accounts-create-page {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .accounts-create-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 32px !important;
+    padding-bottom: 32px !important;
+  }
+
+  .accounts-create-form {
+    width: 100%;
+  }
+
+  .accounts-create-card {
+    padding: 18px 24px !important;
+  }
+
+  .accounts-create-card > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 10px !important;
+  }
+
+  .accounts-create-card-header {
+    margin-bottom: 0 !important;
+  }
+
+  .accounts-create-grid {
+    gap: 10px !important;
+  }
+
+  .accounts-create-field label {
+    font-size: 9px !important;
+    letter-spacing: 0.14em !important;
+    line-height: 1.1 !important;
+  }
+
+  .accounts-create-field input:not([type='checkbox']),
+  .accounts-create-field textarea,
+  .accounts-create-select {
+    min-height: 36px;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+  }
+
+  .accounts-create-field input:not([type='checkbox']),
+  .accounts-create-field textarea {
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .accounts-create-field textarea {
+    min-height: 38px;
+  }
+
+  .accounts-create-balance-prefix {
+    font-size: 12px !important;
+  }
+
+  .accounts-create-status {
+    min-height: 26px;
+  }
+
+  .accounts-create-actions {
+    padding-top: 4px !important;
+  }
+
+  .accounts-create-actions button {
+    min-height: 36px;
+  }
+
+  .transactions-create-page {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .transactions-create-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+  }
+
+  .transactions-create-form {
+    width: 100%;
+  }
+
+  .parties-create-page {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .parties-create-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 32px !important;
+    padding-bottom: 32px !important;
+  }
+
+  .parties-create-form {
+    width: 100%;
+  }
+
+  .parties-create-card {
+    padding: 18px 24px !important;
+  }
+
+  .parties-create-card > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 10px !important;
+  }
+
+  .parties-create-card-header {
+    margin-bottom: 0 !important;
+  }
+
+  .parties-create-grid {
+    gap: 10px !important;
+  }
+
+  .parties-create-field label {
+    font-size: 9px !important;
+    letter-spacing: 0.14em !important;
+    line-height: 1.1 !important;
+  }
+
+  .parties-create-field input:not([type='checkbox']),
+  .parties-create-field textarea {
+    min-height: 36px;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .parties-create-field textarea {
+    min-height: 56px;
+  }
+
+  .parties-create-phone-wrap {
+    min-height: 36px !important;
+    height: 36px !important;
+  }
+
+  .parties-create-phone-wrap button,
+  .parties-create-phone-wrap input {
+    min-height: 36px;
+  }
+
+  .parties-create-toggle-row {
+    padding-top: 4px !important;
+    padding-bottom: 0 !important;
+  }
+
+  .parties-create-actions {
+    padding-top: 4px !important;
+  }
+
+  .parties-create-actions button {
+    min-height: 36px;
+  }
+
+  .accounts-laptop-currency-native,
+  .accounts-laptop-account-type-native,
+  .accounts-laptop-subtype-native {
+    display: none !important;
+  }
+
+  .accounts-laptop-currency-native-arrow,
+  .accounts-laptop-account-type-native-arrow,
+  .accounts-laptop-subtype-native-arrow {
+    display: none !important;
+  }
+
+  .accounts-laptop-currency-trigger,
+  .accounts-laptop-account-type-trigger,
+  .accounts-laptop-subtype-trigger {
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  /* Stabilize sticky header compositing to avoid sort-time flicker lines */
+  .accounts-laptop-table thead,
+  .accounts-laptop-table thead th {
+    transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: transform;
+  }
+}
+
+/* Create Account: switch to whole-page scroll only when runtime overflow is detected */
+.accounts-create-page.accounts-create-page-scroll {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}
+
+.accounts-create-page.accounts-create-page-scroll .accounts-create-shell,
+.accounts-create-shell.accounts-create-shell-scroll {
+  flex: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Create Party: switch to whole-page scroll only when runtime overflow is detected */
+.parties-create-page.parties-create-page-scroll {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}
+
+.parties-create-page.parties-create-page-scroll .parties-create-shell,
+.parties-create-shell.parties-create-shell-scroll {
+  flex: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+/* Create Transaction: switch to whole-page scroll only when runtime overflow is detected */
+.transactions-create-page.transactions-create-page-scroll {
+  height: auto !important;
+  min-height: 100% !important;
+  overflow: visible !important;
+}
+
+.transactions-create-page.transactions-create-page-scroll .transactions-create-shell,
+.transactions-create-shell.transactions-create-shell-scroll {
+  flex: none !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.transactions-create-page.transactions-create-page-scroll .txn-desktop-form,
+.transactions-create-page.transactions-create-page-scroll .txn-laptop-form,
+.transactions-create-shell.transactions-create-shell-scroll .txn-desktop-form,
+.transactions-create-shell.transactions-create-shell-scroll .txn-laptop-form {
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0 !important;
+}
+
+.transactions-create-page.transactions-create-page-scroll .txn-desktop-card,
+.transactions-create-page.transactions-create-page-scroll .txn-laptop-card,
+.transactions-create-shell.transactions-create-shell-scroll .txn-desktop-card,
+.transactions-create-shell.transactions-create-shell-scroll .txn-laptop-card {
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.transactions-create-page.transactions-create-page-scroll .txn-desktop-form-scroll,
+.transactions-create-page.transactions-create-page-scroll .txn-laptop-form-scroll,
+.transactions-create-shell.transactions-create-shell-scroll .txn-desktop-form-scroll,
+.transactions-create-shell.transactions-create-shell-scroll .txn-laptop-form-scroll {
+  flex: none !important;
+  max-height: none !important;
+  overflow-y: visible !important;
+  min-height: 0 !important;
+  overscroll-behavior: auto !important;
+}
+
+/* Narrow desktop/laptop table containment */
+@media (min-width: 1024px) and (max-width: 1450px) {
+  .sidebar-laptop-menu-label {
+    font-size: 9px !important;
+    letter-spacing: 0.18em !important;
+  }
+
+  .sidebar-laptop-item-label {
+    font-size: 13px !important;
+  }
+
+  .accounts-laptop-table {
+    min-width: 1080px;
+  }
+
+  .parties-laptop-table {
+    min-width: 1280px;
+  }
+
+  .txn-laptop-list-table {
+    min-width: 1360px;
+  }
+
+  .category-laptop-registry-table {
+    min-width: 920px !important;
+  }
+
+  .recent-laptop-table {
+    min-width: 980px;
+  }
+
+  .category-laptop-page-grid {
+    grid-template-columns: minmax(280px, 0.92fr) minmax(0, 2.08fr) !important;
+    gap: 12px !important;
+  }
+
+  .category-laptop-left-panel {
+    grid-column: 1 !important;
+  }
+
+  .category-laptop-right-panel {
+    grid-column: 2 !important;
+    min-width: 0 !important;
+  }
+
+  .category-laptop-registry-scroll {
+    overflow-x: hidden !important;
+  }
+
+  .category-laptop-registry-table {
+    min-width: 0 !important;
+    width: 100% !important;
+    table-layout: fixed !important;
+  }
+
+  .category-laptop-registry-table col.category-laptop-col-id {
+    width: 50px !important;
+  }
+
+  .category-laptop-registry-table col.category-laptop-col-type {
+    width: 96px !important;
+  }
+
+  .category-laptop-registry-table col.category-laptop-col-status {
+    width: 88px !important;
+  }
+
+  .category-laptop-registry-table col.category-laptop-col-actions {
+    width: 78px !important;
+  }
+
+  .category-laptop-registry-table thead th,
+  .category-laptop-registry-table tbody td {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+
+  .category-laptop-registry-table thead th {
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  .category-laptop-registry-table tbody td {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+  }
+
+  .category-laptop-name-cell {
+    min-width: 0 !important;
+  }
+
+  .category-laptop-subcategory-name-cell {
+    padding-left: 36px !important;
+  }
+
+  .category-laptop-actions-cell button {
+    padding: 3px !important;
+  }
+
+  .accounts-laptop-table tbody td {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(2),
+  .accounts-laptop-table tbody td:nth-child(2) {
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(3),
+  .accounts-laptop-table tbody td:nth-child(3) {
+    text-align: left !important;
+    padding-left: 16px !important;
+    padding-right: 8px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(4),
+  .accounts-laptop-table tbody td:nth-child(4) {
+    min-width: 148px !important;
+    text-align: right !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(5),
+  .accounts-laptop-table tbody td:nth-child(5) {
+    min-width: 148px !important;
+    text-align: right !important;
+    padding-left: 16px !important;
+    padding-right: 32px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(6),
+  .accounts-laptop-table tbody td:nth-child(6) {
+    min-width: 112px !important;
+    text-align: left !important;
+    padding-left: 32px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(7),
+  .accounts-laptop-table tbody td:nth-child(7) {
+    min-width: 132px !important;
+    text-align: left !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(8),
+  .accounts-laptop-table tbody td:nth-child(8) {
+    min-width: 96px !important;
+    text-align: right !important;
+    padding-left: 12px !important;
+    padding-right: 24px !important;
+  }
+
+  .accounts-laptop-balance-header {
+    white-space: normal !important;
+  }
+
+  .accounts-laptop-sort-header {
+    justify-content: flex-end !important;
+    display: inline-flex !important;
+    width: 100%;
+    gap: 6px !important;
+  }
+
+  .accounts-laptop-balance-label {
+    display: inline-block;
+    max-width: 78px;
+    white-space: normal;
+    line-height: 1.1;
+    text-align: right;
+  }
+
+  .accounts-laptop-select {
+    font-size: 13px !important;
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .accounts-laptop-select option {
+    font-size: 12px;
+  }
+
+  .accounts-laptop-date-input {
+    font-size: 13px !important;
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  /* Dashboard: compact metric cards + category registry cards for laptop only */
+  .dashboard-laptop-metric-card {
+    padding: 8px !important;
+  }
+
+  .dashboard-laptop-metric-header {
+    margin-bottom: 3px !important;
+  }
+
+  .dashboard-laptop-metric-title {
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  .dashboard-laptop-metric-amount-wrap {
+    margin-top: 1px !important;
+    margin-bottom: 0 !important;
+  }
+
+  .dashboard-laptop-metric-amount {
+    font-size: 14px !important;
+    line-height: 1.1 !important;
+  }
+
+  .dashboard-laptop-metric-link {
+    font-size: 11px !important;
+    line-height: 1 !important;
+  }
+
+  .dashboard-laptop-metric-icon {
+    width: 36px !important;
+    height: 36px !important;
+  }
+
+  .dashboard-laptop-metric-footer {
+    margin-top: -3px !important;
+  }
+
+  .dashboard-insights-text {
+    font-size: 13px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-insights-branch button {
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    font-size: 12px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child svg {
+    width: 14px !important;
+    height: 14px !important;
+  }
+
+  .dashboard-laptop-category-card {
+    min-height: 0 !important;
+  }
+
+  .dashboard-laptop-category-body {
+    min-height: 188px !important;
+    max-height: 188px !important;
+    overflow: hidden !important;
+  }
+
+  .dashboard-laptop-category-head-row {
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    font-size: 10px !important;
+  }
+
+  .dashboard-laptop-category-scroll {
+    max-height: 176px !important;
+    overflow-y: auto !important;
+  }
+
+  .dashboard-laptop-category-row {
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+  }
+
+  .dashboard-laptop-account-row {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .dashboard-laptop-category-avatar {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 8px !important;
+  }
+
+  .dashboard-laptop-account-row .dashboard-laptop-category-avatar {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .dashboard-laptop-category-name,
+  .dashboard-laptop-category-amount {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dashboard-laptop-category-amount {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-laptop-account-balance-amount {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-laptop-category-title {
+    font-size: 11px !important;
+  }
+
+  .dashboard-laptop-category-total {
+    font-size: 12px !important;
+    padding-top: 1px !important;
+    padding-bottom: 1px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    width: fit-content !important;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .dashboard-laptop-account-title-wrap {
+    gap: 0.3rem !important;
+  }
+
+  .dashboard-laptop-account-title {
+    font-size: 10px !important;
+    line-height: 1 !important;
+    letter-spacing: -0.01em !important;
+  }
+
+  .dashboard-laptop-account-total-wrap {
+    flex-shrink: 0 !important;
+  }
+
+  .dashboard-laptop-account-total {
+    font-size: 12px !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  .recent-laptop-title {
+    font-size: 11px !important;
+    letter-spacing: 0.01em;
+  }
+
+  .recent-laptop-scroll {
+    max-height: 196px !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .recent-laptop-scroll-fill {
+    max-height: none !important;
+  }
+
+  .recent-laptop-table thead th {
+    font-size: 9px !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+    letter-spacing: 0.03em !important;
+  }
+
+  .recent-laptop-table tbody td {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+
+  .recent-laptop-description {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .recent-laptop-description-col {
+    width: 17% !important;
+    max-width: 17% !important;
+  }
+
+  .recent-laptop-description {
+    padding-left: 12px !important;
+    padding-right: 8px !important;
+  }
+
+  .recent-laptop-description-text {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .txn-laptop-form {
+    height: auto !important;
+    max-height: calc(100dvh - 130px) !important;
+    min-height: 0 !important;
+  }
+
+  .txn-laptop-card {
+    height: auto !important;
+    max-height: calc(100dvh - 130px) !important;
+    overflow: hidden !important;
+  }
+
+  .txn-laptop-form-scroll {
+    flex: 0 1 auto !important;
+    max-height: calc(100dvh - 300px) !important;
+    overflow-y: auto !important;
+    min-height: 0 !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .txn-laptop-list-table {
+    min-width: 1360px;
+  }
+
+  .txn-laptop-list-table thead th {
+    font-size: 10px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .txn-laptop-list-table tbody td {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  .txn-laptop-list-table thead th:nth-child(2),
+  .txn-laptop-list-table tbody td:nth-child(2) {
+    min-width: 140px !important;
+  }
+
+  .txn-laptop-list-table thead th:nth-child(6),
+  .txn-laptop-list-table tbody td:nth-child(6) {
+    min-width: 120px !important;
+  }
+
+  .txn-laptop-list-table thead th:nth-child(7),
+  .txn-laptop-list-table tbody td:nth-child(7) {
+    min-width: 130px !important;
+  }
+
+  .txn-laptop-list-table thead th:nth-child(8),
+  .txn-laptop-list-table tbody td:nth-child(8) {
+    min-width: 140px !important;
+  }
+
+  .txn-laptop-list-table thead th:nth-child(9),
+  .txn-laptop-list-table tbody td:nth-child(9) {
+    min-width: 110px !important;
+  }
+
+  .txn-laptop-action-col {
+    position: static !important;
+    right: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* Category page: compact New Category / New Sub-Category cards on laptop only */
+  .category-laptop-metric-card {
+    margin-bottom: 12px !important;
+  }
+
+  .category-laptop-metric-content {
+    padding: 12px 14px !important;
+    gap: 8px !important;
+  }
+
+  .category-laptop-metric-content h3 {
+    font-size: 12px !important;
+  }
+
+  .category-laptop-metric-content p {
+    font-size: 9px !important;
+  }
+
+  .category-laptop-metric-form {
+    gap: 10px !important;
+  }
+
+  .category-laptop-metric-form label {
+    font-size: 12px !important;
+  }
+
+  .category-laptop-metric-form input,
+  .category-laptop-metric-form [data-custom-select-trigger="true"] {
+    font-size: 12px !important;
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .category-laptop-metric-cta {
+    font-size: 11px !important;
+    padding-top: 10px !important;
+    padding-bottom: 10px !important;
+  }
+
+}
+
+@media (min-width: 1280px) {
+  .txn-laptop-list-table .txn-amount-header-col {
+    padding-right: 3.25rem !important;
+  }
+
+  .txn-laptop-list-table .txn-amount-value-cell,
+  .txn-laptop-list-table .txn-amount-total-cell {
+    padding-right: 3.25rem !important;
+  }
+}
+
+@media (max-width: 1023px) {
+  .txn-mobile-form {
+    height: auto;
+    min-height: 0;
+  }
+
+  .txn-mobile-card {
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  .txn-mobile-form-scroll {
+    overflow-y: visible !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overscroll-behavior: auto;
+  }
+}
+
+/* Dashboard compact laptop mode: preserve desktop/mobile layouts, tighten only shorter laptop screens */
+@media (min-width: 1280px) and (max-width: 1680px) and (max-height: 800px) {
+  .dashboard-small-desktop-page .dashboard-small-desktop-shell {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+    padding-top: 8px !important;
+    padding-bottom: 12px !important;
+    gap: 10px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-tablet-stat-grid {
+    gap: 10px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-card {
+    padding: 8px 9px !important;
+    border-radius: 14px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-header {
+    margin-bottom: 2px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-title {
+    font-size: 10px !important;
+    line-height: 1.05 !important;
+    letter-spacing: 0.04em !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-link {
+    font-size: 12px !important;
+    line-height: 1.02 !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-card {
+    border-radius: 18px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-body {
+    min-height: 156px !important;
+    max-height: 156px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-scroll {
+    max-height: 144px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-head-row {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+    font-size: 10px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-row {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-title {
+    font-size: 11px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-name {
+    font-size: 11px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-amount,
+  .dashboard-small-desktop-page .dashboard-laptop-account-balance-amount {
+    font-size: 10px !important;
+    line-height: 1.1 !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-progress-group {
+    width: 8rem !important;
+    gap: 0.25rem !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-progress-track {
+    height: 0.45rem !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-value-header {
+    width: 8rem !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-value-cell {
+    width: 5.5rem !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-category-total {
+    font-size: 11px !important;
+    padding-left: 7px !important;
+    padding-right: 7px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-account-title-wrap {
+    gap: 0.25rem !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-account-title {
+    font-size: 9px !important;
+    line-height: 1 !important;
+    letter-spacing: -0.015em !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-account-total {
+    font-size: 11px !important;
+    padding-left: 5px !important;
+    padding-right: 5px !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-title {
+    font-size: 12px !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-scroll {
+    max-height: 260px !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-scroll-fill {
+    max-height: none !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th {
+    font-size: 9px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table tbody td {
+    font-size: 11px !important;
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-description,
+  .dashboard-small-desktop-page .recent-laptop-description-text {
+    font-size: 10px !important;
+    line-height: 1.12 !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(7),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(7) {
+    display: none !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(1),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(1) {
+    width: 12% !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(2),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(2) {
+    width: 10% !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(3),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(3) {
+    width: 16% !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(4),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(4) {
+    width: 16% !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(5),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(5) {
+    width: 14% !important;
+  }
+
+  .dashboard-small-desktop-page .recent-laptop-table thead th:nth-child(6),
+  .dashboard-small-desktop-page .recent-laptop-table tbody td:nth-child(6) {
+    width: 32% !important;
+  }
+}
+
+/* Dashboard laptop-only refinements for 1366x768-style screens */
+@media (min-width: 1280px) and (max-width: 1450px) and (max-height: 800px) {
+  .dashboard-small-desktop-page .dashboard-laptop-metric-card {
+    padding-top: 5px !important;
+    padding-bottom: 5px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-header {
+    margin-bottom: 0 !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-spacer {
+    height: 12px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-metric-change {
+    margin-top: 12px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-account-row {
+    min-height: 40px !important;
+  }
+
+  .dashboard-small-desktop-page .dashboard-laptop-account-title {
+    font-size: 11px !important;
+  }
+}
+
+/* Category form cards: compress further on shorter laptop/small-desktop screens */
+@media (min-width: 1024px) and (max-width: 1600px) and (max-height: 920px) {
+  .category-laptop-left-panel > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.75rem !important;
+  }
+
+  .category-laptop-metric-card {
+    margin-bottom: 0 !important;
+  }
+
+  .category-laptop-metric-content {
+    padding: 10px 12px !important;
+    gap: 6px !important;
+  }
+
+  .category-laptop-metric-content h3 {
+    font-size: 11px !important;
+  }
+
+  .category-laptop-metric-content p {
+    display: none !important;
+  }
+
+  .category-laptop-metric-form {
+    gap: 8px !important;
+  }
+
+  .category-laptop-metric-form label {
+    font-size: 11px !important;
+    line-height: 1.1 !important;
+  }
+
+  .category-laptop-metric-form input,
+  .category-laptop-metric-form [data-custom-select-trigger="true"] {
+    font-size: 11px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+  }
+
+  .category-laptop-metric-cta {
+    font-size: 10px !important;
+    padding-top: 8px !important;
+    padding-bottom: 8px !important;
+  }
+}
+
+/* Tablet landscape smoothing */
+@media (min-width: 1024px) and (max-width: 1279px) {
+  .dashboard-tablet-insights-row {
+    align-items: center !important;
+    gap: 10px !important;
+  }
+
+  .dashboard-insights-text {
+    flex: 1 1 auto !important;
+    min-width: 180px !important;
+    font-size: 12px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-insights-branch {
+    width: auto !important;
+    max-width: 220px !important;
+    flex: 0 0 auto !important;
+  }
+
+  .dashboard-insights-branch button {
+    width: auto !important;
+    justify-content: space-between !important;
+    max-width: 220px !important;
+    min-height: 36px !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .dashboard-laptop-category-body {
+    min-height: 220px !important;
+    max-height: 220px !important;
+  }
+
+  .dashboard-laptop-category-scroll {
+    max-height: 208px !important;
+  }
+}
+
+/* Tablet portrait and small landscape safety */
+@media (min-width: 768px) and (max-width: 1023px) {
+  :root {
+    overflow: auto;
+  }
+
+  .sidebar-laptop-menu-label {
+    font-size: 9px !important;
+    letter-spacing: 0.14em !important;
+  }
+
+  .sidebar-laptop-item-label {
+    font-size: 13px !important;
+  }
+}
+
+/* Dashboard page scroll for non-desktop widths */
+@media (max-width: 1279px) {
+  .dashboard-tablet-page {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .dashboard-tablet-shell {
+    overflow: visible !important;
+    min-height: max-content !important;
+  }
+}
+
+/* Tablet dashboard layout */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .accounts-tablet-page {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .accounts-tablet-card {
+    min-width: 0 !important;
+  }
+
+  .accounts-tablet-card-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dashboard-tablet-shell {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    gap: 12px !important;
+  }
+
+  .dashboard-tablet-insights-row {
+    gap: 10px !important;
+  }
+
+  .dashboard-insights-text {
+    font-size: 12px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-insights-branch {
+    width: auto !important;
+    max-width: 190px !important;
+  }
+
+  .dashboard-insights-branch button {
+    width: auto !important;
+    max-width: 190px !important;
+    min-height: 34px !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    font-size: 11px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child svg {
+    width: 12px !important;
+    height: 12px !important;
+  }
+
+  .dashboard-tablet-stat-grid {
+    gap: 12px !important;
+  }
+
+  .dashboard-laptop-metric-card {
+    padding: 10px !important;
+    border-radius: 14px !important;
+  }
+
+  .dashboard-laptop-metric-title {
+    font-size: 10px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-laptop-metric-amount {
+    font-size: 15px !important;
+    line-height: 1.12 !important;
+  }
+
+  .dashboard-laptop-metric-link {
+    font-size: 11px !important;
+  }
+
+  .dashboard-laptop-metric-icon {
+    width: 38px !important;
+    height: 38px !important;
+  }
+
+  .dashboard-laptop-category-card {
+    min-width: 0 !important;
+  }
+
+  .dashboard-laptop-category-body {
+    min-height: 210px !important;
+    max-height: 210px !important;
+  }
+
+  .dashboard-laptop-category-scroll {
+    max-height: 198px !important;
+  }
+
+  .dashboard-laptop-category-head-row {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+    font-size: 9px !important;
+  }
+
+  .dashboard-laptop-category-row {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .dashboard-laptop-account-row {
+    padding-top: 2px !important;
+    padding-bottom: 2px !important;
+  }
+
+  .dashboard-laptop-category-avatar {
+    width: 20px !important;
+    height: 20px !important;
+    font-size: 8px !important;
+  }
+
+  .dashboard-laptop-account-row .dashboard-laptop-category-avatar {
+    width: 22px !important;
+    height: 22px !important;
+  }
+
+  .dashboard-laptop-category-title {
+    font-size: 12px !important;
+  }
+
+  .dashboard-laptop-category-name {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dashboard-laptop-account-balance-amount,
+  .dashboard-laptop-category-amount {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dashboard-laptop-category-total {
+    font-size: 12px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    width: fit-content !important;
+  }
+
+  .recent-laptop-title {
+    font-size: 12px !important;
+  }
+
+  .dashboard-tablet-recent-mobile {
+    display: block !important;
+    max-height: none !important;
+    padding: 12px !important;
+  }
+
+  .dashboard-tablet-recent-desktop {
+    display: none !important;
+  }
+
+  .dashboard-tablet-recent-mobile .bg-white {
+    padding: 10px !important;
+  }
+
+  .dashboard-tablet-recent-mobile .text-sm {
+    font-size: 13px !important;
+  }
+
+  .dashboard-tablet-recent-mobile .text-xs {
+    font-size: 11px !important;
+  }
+
+  .dashboard-tablet-recent-mobile .text-\[10px\] {
+    font-size: 9px !important;
+  }
+
+  .dashboard-tablet-recent-mobile .text-\[8px\],
+  .dashboard-tablet-recent-mobile .text-\[9px\] {
+    font-size: 8px !important;
+  }
+
+  .category-laptop-page-shell {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+
+  .category-laptop-page-content {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    flex: none !important;
+    padding: 12px !important;
+  }
+
+  .category-laptop-page-grid {
+    height: auto !important;
+    min-height: auto !important;
+    flex: none !important;
+    gap: 16px !important;
+  }
+
+  .category-laptop-left-panel {
+    position: static !important;
+    top: auto !important;
+  }
+
+  .category-laptop-right-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  .category-laptop-registry-card {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    border-radius: 1rem !important;
+  }
+
+  header {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  .reports-tablet-page {
+    padding: 12px !important;
+    gap: 16px !important;
+  }
+
+  .reports-tablet-filters-card {
+    padding: 12px !important;
+  }
+
+  .reports-tablet-filter-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .reports-tablet-filter-actions {
+    justify-content: flex-end !important;
+    gap: 10px !important;
+  }
+
+  .reports-tablet-filter-actions button {
+    width: 180px !important;
+    height: 38px !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+    font-size: 13px !important;
+  }
+
+  .reports-tablet-filter-input,
+  .reports-tablet-filters-card input,
+  .reports-tablet-filters-card [data-custom-select-trigger="true"] {
+    min-height: 38px !important;
+    height: 38px !important;
+    font-size: 12px !important;
+  }
+
+  .reports-tablet-filters-card label {
+    font-size: 10px !important;
+  }
+
+  .reports-tablet-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 12px !important;
+  }
+
+  .reports-tablet-table-card .dashboard-laptop-metric-card {
+    padding: 10px !important;
+  }
+
+  .reports-tablet-table-toolbar {
+    padding: 12px !important;
+    gap: 10px !important;
+  }
+
+  .reports-tablet-table-toolbar h3 {
+    font-size: 13px !important;
+  }
+
+  .reports-tablet-table-wrap {
+    max-height: 520px !important;
+  }
+
+  .reports-tablet-table-inner {
+    min-width: 820px !important;
+  }
+
+  .reports-tablet-table thead th {
+    padding: 7px 10px !important;
+    font-size: 10px !important;
+  }
+
+  .reports-tablet-table tbody td {
+    padding: 7px 10px !important;
+    font-size: 11px !important;
+  }
+}
+
+
+/* Mid-range laptop accounts table containment (e.g. 1536x864) */
+@media (min-width: 1451px) and (max-width: 1600px) and (max-height: 920px) {
+  .accounts-laptop-table {
+    min-width: 1120px;
+  }
+
+  .accounts-laptop-table thead th:nth-child(2),
+  .accounts-laptop-table tbody td:nth-child(2) {
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(3),
+  .accounts-laptop-table tbody td:nth-child(3) {
+    text-align: left !important;
+    padding-left: 16px !important;
+    padding-right: 8px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(4),
+  .accounts-laptop-table tbody td:nth-child(4) {
+    min-width: 148px !important;
+    text-align: right !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(5),
+  .accounts-laptop-table tbody td:nth-child(5) {
+    min-width: 148px !important;
+    text-align: right !important;
+    padding-left: 16px !important;
+    padding-right: 32px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(6),
+  .accounts-laptop-table tbody td:nth-child(6) {
+    min-width: 112px !important;
+    text-align: left !important;
+    padding-left: 32px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(7),
+  .accounts-laptop-table tbody td:nth-child(7) {
+    min-width: 132px !important;
+    text-align: left !important;
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  .accounts-laptop-table thead th:nth-child(8),
+  .accounts-laptop-table tbody td:nth-child(8) {
+    min-width: 96px !important;
+    text-align: right !important;
+    padding-left: 12px !important;
+    padding-right: 24px !important;
+  }
+
+  .accounts-laptop-balance-header {
+    white-space: normal !important;
+  }
+
+  .accounts-laptop-sort-header {
+    justify-content: flex-end !important;
+    display: inline-flex !important;
+    width: 100%;
+    gap: 6px !important;
+  }
+
+  .txn-laptop-list-table {
+    min-width: 1440px;
+  }
+}
+
+/* Manage organization modal: grow with content, only scroll when it reaches viewport limits */
+.manage-org-modal-shell.manage-org-modal-manage {
+  max-height: calc(100dvh - 2rem) !important;
+}
+
+/* Category desktop/laptop layout: fixed page with internal registry scroll */
+@media (min-width: 1024px) {
+  .category-laptop-page-shell {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+  }
+
+  .category-laptop-page-content {
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+  }
+
+  .category-laptop-page-grid {
+    height: auto !important;
+    min-height: 0 !important;
+    flex: none !important;
+    align-items: start !important;
+  }
+
+  .category-laptop-left-panel {
+    position: static !important;
+    top: auto !important;
+  }
+
+  .category-laptop-right-panel {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    align-self: start !important;
+  }
+
+  .category-laptop-registry-card {
+    height: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    border-radius: 1rem !important;
+  }
+
+  .category-laptop-registry-scroll {
+    flex: none !important;
+    min-height: 0 !important;
+    height: auto !important;
+    max-height: calc(100vh - 360px) !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .category-laptop-registry-footer {
+    flex: 0 0 auto !important;
+    position: relative !important;
+    z-index: 20 !important;
+    background: white !important;
+    min-height: 34px !important;
+    padding: 4px 12px !important;
+    gap: 8px !important;
+  }
+
+  .category-laptop-registry-footer > div:first-child {
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .category-laptop-registry-footer button {
+    min-height: 22px !important;
+    font-size: 10px !important;
+    line-height: 1 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .category-laptop-registry-footer .w-6 {
+    width: 22px !important;
+    height: 22px !important;
+  }
+}
+
+@media (min-width: 1280px) and (max-height: 650px) {
+  .category-laptop-page-shell {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .category-laptop-page-content {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .category-laptop-page-grid {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  .category-laptop-right-panel {
+    height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .category-laptop-registry-card {
+    height: 100% !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .category-laptop-registry-scroll {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: calc(100vh - 340px) !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .category-laptop-registry-footer {
+    flex: 0 0 auto !important;
+    position: relative !important;
+    z-index: 20 !important;
+    background: white !important;
+  }
+}
+
+
+/* Desktop-only refinement (exclude laptop/mobile compact breakpoints) */
+@media (min-width: 1451px) {
+  .recent-desktop-type-body {
+    font-size: 12px !important;
+  }
+
+  .dashboard-rankings-grid .dashboard-laptop-category-progress-group,
+  .dashboard-rankings-grid .dashboard-laptop-category-value-header {
+    width: 14rem !important;
+  }
+}
+
+.dashboard-rankings-grid {
+  align-content: start;
+}
+
+.dashboard-rankings-grid .dashboard-ranking-cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.dashboard-rankings-grid .dashboard-ranking-cell > * {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.dashboard-rankings-grid .dashboard-laptop-category-card {
+  min-width: 0 !important;
+  height: 100% !important;
+}
+
+.dashboard-rankings-grid .dashboard-laptop-category-body {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+.dashboard-rankings-grid .dashboard-laptop-category-scroll {
+  min-height: 0 !important;
+  max-height: none !important;
+  height: 100% !important;
+  overflow-y: auto !important;
+}
+
+.dashboard-rankings-grid .dashboard-laptop-category-row {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+}
+
+.dashboard-rankings-grid .dashboard-laptop-account-row {
+  padding-top: 2px !important;
+  padding-bottom: 2px !important;
+}
+
+/* Narrow-laptop dashboard typography (e.g. 1041x746) */
+@media (min-width: 1024px) and (max-width: 1199px) and (max-height: 760px) {
+  .dashboard-laptop-category-head-row {
+    font-size: 8px !important;
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+
+  .dashboard-laptop-category-avatar {
+    width: 18px !important;
+    height: 18px !important;
+    font-size: 8px !important;
+  }
+
+  .dashboard-laptop-account-row .dashboard-laptop-category-avatar {
+    width: 20px !important;
+    height: 20px !important;
+  }
+
+  .dashboard-laptop-category-name,
+  .dashboard-laptop-category-amount {
+    font-size: 9px !important;
+    line-height: 1.2 !important;
+  }
+
+  .dashboard-laptop-category-amount,
+  .dashboard-laptop-account-balance-amount {
+    font-size: 9px !important;
+    line-height: 1.15 !important;
+  }
+
+  .dashboard-laptop-category-title {
+    font-size: 11px !important;
+  }
+
+  .dashboard-laptop-category-total {
+    font-size: 12px !important;
+    white-space: nowrap !important;
+    display: inline-flex !important;
+    width: fit-content !important;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .dashboard-laptop-metric-title {
+    font-size: 9px !important;
+    line-height: 1.05 !important;
+  }
+
+  .dashboard-laptop-metric-amount {
+    font-size: 12px !important;
+    line-height: 1.05 !important;
+  }
+
+  .dashboard-laptop-metric-link {
+    font-size: 10px !important;
+  }
+
+  .dashboard-insights-text {
+    font-size: 12px !important;
+    line-height: 1.1 !important;
+  }
+
+  .dashboard-insights-branch button {
+    padding: 3px 7px !important;
+    gap: 5px !important;
+    font-size: 11px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .dashboard-insights-branch button > div:first-child svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  .recent-laptop-title {
+    font-size: 11px !important;
+  }
+
+  .recent-laptop-table thead th {
+    font-size: 9px !important;
+    padding-top: 4px !important;
+    padding-bottom: 4px !important;
+  }
+
+  .recent-laptop-table tbody td {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    padding-top: 3px !important;
+    padding-bottom: 3px !important;
+  }
+
+  .recent-laptop-table tbody td span {
+    font-size: 10px !important;
+  }
+}
+
+@media print {
+
+  /* Global Hide */
+  .no-print,
+  nav,
+  header,
+  aside,
+  .sidebar {
+    display: none !important;
+  }
+
+  /* Reset Layout Constraints */
+  body,
+  #root,
+  main,
+  .h-screen,
+  .min-h-screen,
+  .overflow-hidden {
+    height: auto !important;
+    overflow: visible !important;
+    position: static !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+    background: white !important;
+  }
+
+  /* Force Print Content Visibility */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Ensure fixed positioning works for the print overlay */
+  .print-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 9999 !important;
+    background: white !important;
+  }
+}
