@@ -173,8 +173,15 @@ const EnterOtp = () => {
         } catch (error) {
             console.error("OTP Verification Error:", error);
             const msg = error.response?.data?.message || 'Verification failed';
-            // Only show error if it's NOT "already used" coming from a race condition (hard to detect perfectly frontend side, but preventing double submit helps)
             showToast(msg, 'error');
+            
+            // Empty the OTP input on invalid attempt
+            setOtp(['', '', '', '', '', '']);
+            setTimeout(() => {
+                const inputs = document.querySelectorAll('input[type="text"]');
+                if (inputs.length > 0) inputs[0].focus();
+            }, 0);
+            
             isSubmittingRef.current = false; // Allow retry on failure
         } finally {
             setIsLoading(false);
@@ -191,12 +198,12 @@ const EnterOtp = () => {
             subtitle={`We've sent a code to ${email || 'your email'}`}
         >
             <form onSubmit={handleSubmit} className="w-full">
-                <div className="flex justify-between gap-2 mb-8">
+                <div className="flex justify-between gap-2 mb-6">
                     {otp.map((data, index) => (
                         <input
                             key={index}
                             type="text"
-                            className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl font-bold border border-gray-300 rounded-lg focus:border-black focus:outline-none transition-colors"
+                            className="w-11 h-12 sm:w-12 sm:h-12 text-center text-xl font-bold text-slate-900 bg-white border border-slate-300 rounded-md focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-colors"
                             maxLength="1"
                             value={data}
                             onChange={(e) => handleChange(e.target, index)}
@@ -209,19 +216,19 @@ const EnterOtp = () => {
 
                 <button
                     type="submit"
-                    className="w-full bg-black text-white p-2 rounded font-bold hover:bg-gray-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="w-full h-10 bg-slate-900 text-white rounded-md text-sm font-semibold hover:bg-slate-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                     disabled={isLoading || otp.join('').length !== 6}
                 >
-                    {isLoading ? 'Verifying...' : 'Verify'}
+                    {isLoading ? 'Verifying...' : 'Verify Code'}
                 </button>
 
-                <div className="mt-6 text-center text-sm text-gray-600">
+                <div className="mt-6 text-center text-sm font-medium text-slate-500">
                     {timer > 0 ? (
-                        <p>Resend code in <span className="font-bold text-black">{formatTime(timer)}</span></p>
+                        <p>Resend code in <span className="font-semibold text-slate-900">{formatTime(timer)}</span></p>
                     ) : (
                         <button
                             type="button"
-                            className="text-black font-bold hover:underline"
+                            className="text-slate-900 font-semibold hover:text-emerald-600 transition-colors"
                             onClick={handleResendOtp}
                             disabled={isLoading}
                         >
