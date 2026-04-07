@@ -324,7 +324,8 @@ api.interceptors.response.use(
         }
 
         // Handle Decryption/Encryption Key Mismatch (Server Restart)
-        const errorMessage = error.response?.data?.message || "";
+        const backendData = error.response?.data;
+        const errorMessage = typeof backendData === 'string' ? backendData : (backendData?.message || backendData?.error || "");
         const isDecryptionError = errorMessage.includes("Decryption failed") || errorMessage.includes("Invalid Encrypted Key");
 
         if (

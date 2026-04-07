@@ -2,6 +2,19 @@ import { db } from '../../db';
 import { parties, transactions } from '../../db/schema';
 import { eq, and, desc, or, ilike } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
+import { DELETED_STATUS, isNotDeleted } from '../../shared/soft-delete';
+
+const buildDeletedPartyValue = (
+    value: string | null | undefined,
+    maxLength: number,
+    fallbackLabel: string,
+    deletedAt: number
+) => {
+    const suffix = ` [DELETED ${deletedAt}]`;
+    const trimmedValue = String(value || '').trim();
+    const baseValue = trimmedValue.slice(0, Math.max(0, maxLength - suffix.length)).trim();
+    return `${baseValue || fallbackLabel}${suffix}`;
+};
 
 export async function createParty(data: any) {
     const [result] = await db.insert(parties).values({
@@ -27,9 +40,9 @@ export async function createParty(data: any) {
 
 export async function getAllParties(
     orgId: number,
-    status?: 1 | 2
+    status?: 1 | 2 | 3
 ) {
-    let conditions = [eq(parties.orgId, orgId)];
+    let conditions = [eq(parties.orgId, orgId), isNotDeleted(parties)];
 
     if (status) {
         conditions.push(eq(parties.status, status));
@@ -61,7 +74,7 @@ export async function getAllParties(
 }
 
 export async function updateParty(id: number, data: any, orgId: number, userId: number) {
-    const [oldParty] = await db.select().from(parties).where(eq(parties.id, id));
+    const [oldParty] = await db.select().from(parties).where(and(eq(parties.id, id), isNotDeleted(parties)));
     if (!oldParty) throw new Error("Party not found");
 
     const updateData: any = {};
@@ -91,24 +104,35 @@ export async function updateParty(id: number, data: any, orgId: number, userId: 
 }
 
 export async function deleteParty(id: number, orgId: number, userId?: number) {
-    const [party] = await db.select().from(parties).where(eq(parties.id, id));
+    const [party] = await db.select().from(parties).where(and(eq(parties.id, id), isNotDeleted(parties)));
     if (!party) throw new Error("Party not found");
 
     if (party.orgId !== orgId) throw new Error("Unauthorized access to this party");
-    
-    // Proactive check for usage in transactions
-    const query = db.select({ id: transactions.id })
+
+    const [usage] = await db.select({ id: transactions.id })
         .from(transactions)
-        .where(eq(transactions.contactId, id))
+        .where(and(
+            eq(transactions.orgId, orgId),
+            eq(transactions.contactId, id),
+            isNotDeleted(transactions)
+        ))
         .limit(1);
 
-    const usage = await query;
-
-    if (usage.length > 0) {
-        throw new Error("Cannot delete this party because it is used in associated records (Transactions). Please modify the Status to 'Inactive' instead.");
+    if (usage) {
+        throw new Error("Cannot delete this party because it is used in associated records (Transactions).");
     }
 
-    await db.delete(parties).where(and(eq(parties.id, id), eq(parties.orgId, orgId)));
+    const deletedAt = Date.now();
+
+    await db.update(parties)
+        .set({
+            companyName: buildDeletedPartyValue(party.companyName, 255, 'Party', deletedAt),
+            name: buildDeletedPartyValue(party.name, 255, 'Party', deletedAt),
+            gstName: buildDeletedPartyValue(party.gstName, 255, party.companyName || 'Party', deletedAt),
+            status: DELETED_STATUS,
+            updatedAt: new Date()
+        })
+        .where(and(eq(parties.id, id), eq(parties.orgId, orgId)));
 
     if (userId) {
         await AuditService.log(orgId, 'party', id, 'delete', userId, party, null);

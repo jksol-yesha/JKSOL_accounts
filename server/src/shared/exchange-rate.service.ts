@@ -24,13 +24,26 @@ const persistRate = async (
         toCurrency,
         rate: rate.toString(),
         createdAt: new Date()
-    }).catch(e => console.error("[ExchangeRateService] Failed to cache rate in DB:", e));
+    }).onDuplicateKeyUpdate({
+        set: {
+            rate: rate.toString(),
+            createdAt: new Date()
+        }
+    }).catch(e => {
+        // If it still fails (e.g. connectivity), log it but don't crash
+        console.error("[ExchangeRateService] Failed to cache rate in DB:", e.message);
+    });
 };
 
 const fetchFrankfurterRate = async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
-    const response = await fetch(`https://api.frankfurter.app/latest?from=${fromCurrency}&to=${toCurrency}`);
+    const url = `https://api.frankfurter.dev/v1/latest?from=${fromCurrency}&to=${toCurrency}`;
+    const response = await fetch(url);
     if (!response.ok) {
-        console.warn(`[ExchangeRateService] Frankfurter fetch failed: ${response.status}`);
+        if (response.status === 404) {
+            console.warn(`[ExchangeRateService] Frankfurter - Currency not supported or date in future: ${fromCurrency} -> ${toCurrency} (URL: ${url})`);
+        } else {
+            console.warn(`[ExchangeRateService] Frankfurter fetch failed: ${response.status} for ${fromCurrency} -> ${toCurrency}`);
+        }
         return null;
     }
 
@@ -42,7 +55,7 @@ const fetchFrankfurterRate = async (fromCurrency: string, toCurrency: string): P
 const fetchOpenErApiRate = async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
     const response = await fetch(`https://open.er-api.com/v6/latest/${fromCurrency}`);
     if (!response.ok) {
-        console.warn(`[ExchangeRateService] open.er-api fetch failed: ${response.status}`);
+        console.warn(`[ExchangeRateService] open.er-api fetch failed: ${response.status} for ${fromCurrency}`);
         return null;
     }
 

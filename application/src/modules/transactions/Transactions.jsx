@@ -8,10 +8,8 @@ import {
 } from 'lucide-react';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
-import { useOrganization } from '../../context/OrganizationContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
-import { usePermission } from '../../hooks/usePermission';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuth } from '../../context/AuthContext';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
@@ -581,8 +579,7 @@ const AttachmentPreview = ({ attachmentPath, isOpen, onClose, onViewFullScreen, 
 
 const Transactions = () => {
     const navigate = useNavigate();
-    const { selectedBranch, branches, getBranchFilterValue } = useBranch();
-    const { selectedOrg } = useOrganization();
+    const { selectedBranch, branches } = useBranch();
     const { user } = useAuth();
     const { selectedYear } = useYear();
     const { formatCurrency, formatDate } = usePreferences();
@@ -598,21 +595,18 @@ const Transactions = () => {
     // Toolbar States
     const [searchTerm, setSearchTerm] = useState('');
     const [activeDropdown, setActiveDropdown] = useState(null);
-    const [pageSize, setPageSize] = useState(20);
+    const pageSize = 20;
     const [currentPage, setCurrentPage] = useState(1);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [sortConfig, setSortConfig] = useState({ key: 'txnDate', direction: 'desc' });
     const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_TXN_COLUMNS);
 
-    // Tooltip State
-    const [tooltip, setTooltip] = useState({ show: false, text: '', x: 0, y: 0 });
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const [isPDFImportModalOpen, setIsPDFImportModalOpen] = useState(false);
     const [activeAttachmentTxnId, setActiveAttachmentTxnId] = useState(null); // Keep for legacy if needed, but we use object now
     const [attachmentViewer, setAttachmentViewer] = useState({ isOpen: false, txnId: null, path: null, position: { top: 0, right: 0 } });
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
-    const [isPrinting, setIsPrinting] = useState(false);
+    const isPrinting = false;
     const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
     const [desktopViewportHeight, setDesktopViewportHeight] = useState(null);
     const [desktopTableHeight, setDesktopTableHeight] = useState(null);
@@ -646,7 +640,7 @@ const Transactions = () => {
                 setTransactions(parsed);
                 setHasFetchedOnce(true);
             }
-        } catch (error) {
+        } catch {
             // Ignore cache parse errors and continue with live fetch
         }
     }, [cacheKey]);
@@ -665,7 +659,7 @@ const Transactions = () => {
             }
 
             setVisibleColumns(normalizeTxnColumns(JSON.parse(raw)));
-        } catch (error) {
+        } catch {
             setVisibleColumns(DEFAULT_VISIBLE_TXN_COLUMNS);
         }
     }, [columnSettingsKey, user?.id]);
@@ -675,7 +669,7 @@ const Transactions = () => {
 
         try {
             localStorage.setItem(columnSettingsKey, JSON.stringify(visibleColumns));
-        } catch (error) {
+        } catch {
             // Ignore storage errors
         }
     }, [columnSettingsKey, user?.id, visibleColumns]);
@@ -810,14 +804,12 @@ const Transactions = () => {
                 data = response;
             } else if (response && Array.isArray(response.data)) {
                 data = response.data;
-            } else if (response && response.success && Array.isArray(response.data)) {
-                data = response.data;
             }
             const enriched = data.map(enrichTransaction);
             setTransactions(enriched);
             try {
                 sessionStorage.setItem(cacheKey, JSON.stringify(enriched));
-            } catch (error) {
+            } catch {
                 // Ignore storage errors
             }
         } catch (error) {
@@ -841,17 +833,17 @@ const Transactions = () => {
     // 🔥 Listen for real-time transaction updates
     useEffect(() => {
         // Listen for new transactions
-        const unsubscribeCreate = on('transaction:created', (newTransaction) => {
+        const unsubscribeCreate = on('transaction:created', () => {
             fetchTransactions();
         });
 
         // Listen for updated transactions
-        const unsubscribeUpdate = on('transaction:updated', (updatedTransaction) => {
+        const unsubscribeUpdate = on('transaction:updated', () => {
             fetchTransactions();
         });
 
         // Listen for deleted transactions
-        const unsubscribeDelete = on('transaction:deleted', (data) => {
+        const unsubscribeDelete = on('transaction:deleted', () => {
             fetchTransactions();
         });
 
@@ -1230,40 +1222,9 @@ const Transactions = () => {
         }
     };
 
-    // Derived values for footer
-    const uniquePartiesCount = useMemo(() => {
-        const parties = new Set(filteredTransactions.map(t => t.counterpartyName).filter(Boolean));
-        return parties.size;
-    }, [filteredTransactions]);
-
     // Calculate totals grouped by currency
     const currencyTotals = useMemo(() => {
         const totals = {};
-        // Calculate totals based on the original (un-grouped) transactions list to be accurate
-        // but only for those that match the current ID set of filtered grouped transactions
-        const filteredIds = new Set(filteredTransactions.map(t => t.id));
-        transactions.forEach(t => {
-            // Check if this transaction belongs to one of the grouped results
-            // We use a date|amount|party|type|notes key match for grouping, but the underlying
-            // transactions still have their own IDs. However, currently filteredTransactions
-            // are a subset of the grouped ones.
-
-            // Simpler: Just use the raw transactions and apply the same filters? 
-            // Better: Sum the amounts based on the branches currently being viewed if 'All' is selected.
-
-            const currency = t.baseCurrency || t.currencyCode || 'INR';
-            const amount = Number(t.amountBaseCurrency || t.finalAmountLocal || t.amountBase || 0);
-
-            // Filter implementation for totals (simplified)
-            // Ideally we'd reuse the filtering logic but for now let's use the grouped result as a filter
-            // This is tricky because the grouped result contains the first txn of a group.
-
-            // Let's just sum the grouped ones if they were supposed to be summed? No, the user wants accurate totals.
-            // If we have 10 branches and each has a 10 INR entry, the total IS 100 INR.
-            // So we SHOULD sum them for the summary, but NOT for the row display.
-        });
-
-        // Re-implementing: Use filteredTransactions but sum the 'replicated' count
         filteredTransactions.forEach(t => {
             const currency = t.baseCurrency || t.currencyCode || 'INR';
             const unitAmount = Number(t.amountBaseCurrency || t.finalAmountLocal || t.amountBase || 0);
@@ -2119,8 +2080,8 @@ const Transactions = () => {
                 open={deleteDialog.open}
                 title="Delete Transaction"
                 message={deleteDialog.label
-                    ? `Are you sure you want to delete "${deleteDialog.label}"? This action cannot be undone.`
-                    : 'Are you sure you want to delete this transaction? This action cannot be undone.'}
+                    ? `Are you sure you want to archive "${deleteDialog.label}"? It will be hidden from active lists.`
+                    : 'Are you sure you want to archive this transaction? It will be hidden from active lists.'}
                 confirmLabel="Yes, Delete Transaction"
                 isSubmitting={deleteDialog.loading}
                 onCancel={handleCloseDeleteDialog}

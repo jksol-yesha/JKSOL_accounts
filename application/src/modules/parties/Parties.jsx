@@ -262,7 +262,7 @@ const Parties = () => {
             await apiService.parties.delete(deleteDialog.id);
             setParties(prev => prev.filter(p => p.id !== deleteDialog.id));
             setDeleteDialog(createInitialDeleteDialog());
-            showToast('Party deleted successfully.', 'success');
+            showToast('Party archived successfully.', 'success');
         } catch (error) {
             console.error("Failed to delete party:", error);
             const msg = error.response?.data?.message || "Failed to delete party";
@@ -705,8 +705,8 @@ const Parties = () => {
                 open={deleteDialog.open}
                 title="Delete Party"
                 message={deleteDialog.name
-                    ? `Are you sure you want to delete "${deleteDialog.name}"? This action cannot be undone.`
-                    : 'Are you sure you want to delete this party? This action cannot be undone.'}
+                    ? `Are you sure you want to archive "${deleteDialog.name}"? It will be hidden from active lists.`
+                    : 'Are you sure you want to archive this party? It will be hidden from active lists.'}
                 confirmLabel="Yes, Delete Party"
                 isSubmitting={deleteDialog.loading}
                 onCancel={handleCloseDeleteDialog}

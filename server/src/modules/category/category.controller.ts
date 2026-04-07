@@ -172,7 +172,7 @@ export const deleteCategory = async ({ body, user, orgId, set }: ElysiaContext &
         }
 
         await CategoryService.delete(id, user.id);
-        return { success: true, message: "Category deleted successfully" };
+        return { success: true, message: "Category archived successfully" };
     } catch (e: any) {
         console.error("Delete category error:", e);
         const errCode = e.code || e.cause?.code;
@@ -184,6 +184,7 @@ export const deleteCategory = async ({ body, user, orgId, set }: ElysiaContext &
             errCode === 'ER_ROW_IS_REFERENCED_2' ||
             errMessage.includes('foreign key constraint fails') ||
             causeMessage.includes('foreign key constraint fails') ||
+            errMessage.includes('used in associated records') ||
             errMessage.includes('constraint') ||
             causeMessage.includes('constraint') ||
             e.errno === 1451 ||
@@ -192,7 +193,9 @@ export const deleteCategory = async ({ body, user, orgId, set }: ElysiaContext &
             set.status = 400; // Bad Request
             return {
                 success: false,
-                message: "Cannot delete this category because it is used in associated records (Transactions). Please modify the Status to 'Inactive' instead."
+                message: errMessage.includes('used in associated records')
+                    ? e.message
+                    : "Cannot delete this category because it is used in associated records (Transactions). Please modify the Status to 'Inactive' instead."
             };
         }
         if (errMessage.includes('Category not found')) {
@@ -248,7 +251,7 @@ export const deleteSubCategory = async ({ params: { id }, set, user }: ElysiaCon
     if (!user) throw new Error("Unauthorized");
     try {
         await CategoryService.deleteSub(Number(id), user.id);
-        return { success: true, message: "Subcategory deleted successfully" };
+        return { success: true, message: "Subcategory archived successfully" };
     } catch (e: any) {
         console.error("Delete subcategory error:", e);
         const errCode = e.code || e.cause?.code;
@@ -260,6 +263,7 @@ export const deleteSubCategory = async ({ params: { id }, set, user }: ElysiaCon
             errCode === 'ER_ROW_IS_REFERENCED_2' ||
             errMessage.includes('foreign key constraint fails') ||
             causeMessage.includes('foreign key constraint fails') ||
+            errMessage.includes('used in associated records') ||
             errMessage.includes('constraint') ||
             causeMessage.includes('constraint') ||
             e.errno === 1451 ||
@@ -268,7 +272,9 @@ export const deleteSubCategory = async ({ params: { id }, set, user }: ElysiaCon
             set.status = 400;
             return {
                 success: false,
-                message: "Cannot delete this subcategory because it is used in associated records (Transactions). Please modify Status to 'Inactive'."
+                message: errMessage.includes('used in associated records')
+                    ? e.message
+                    : "Cannot delete this subcategory because it is used in associated records (Transactions). Please modify Status to 'Inactive'."
             };
         }
         if (errMessage.includes('Subcategory not found') || errMessage.includes('Category not found')) {

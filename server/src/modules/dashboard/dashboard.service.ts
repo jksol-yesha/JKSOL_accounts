@@ -4,6 +4,7 @@ import { transactions, financialYears, categories, accounts, organizations, bran
 import { eq, and, lt, lte, gte, sql, inArray, or } from 'drizzle-orm';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { resolveBankFromIfsc } from '../../shared/ifsc-bank';
+import { isNotDeleted } from '../../shared/soft-delete';
 
 const monthDiffInclusive = (startDate: string, endDate: string) => {
     const [startYear = 0, startMonth = 1] = startDate.split('-').map(Number);
@@ -90,6 +91,7 @@ export const DashboardService = {
         ): Promise<number> => {
             const whereClause = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 filterFn(transactions)
             ];
 
@@ -126,8 +128,10 @@ export const DashboardService = {
         ): Promise<number> => {
             const whereClause = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 dateFilter(transactions),
+                isNotDeleted(accounts),
                 eq(accounts.accountType, 1),
                 eq(accounts.subtype, 14)
             ];
@@ -199,6 +203,7 @@ export const DashboardService = {
         // GLOBAL: Accounts are unified organization-wide
         const accountFilters = [
             eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
             eq(accounts.status, 1)
         ];
 
@@ -324,6 +329,7 @@ export const DashboardService = {
 
             const whereClause = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 gte(transactions.txnDate, fy.startDate),
                 lte(transactions.txnDate, fy.endDate)
@@ -349,9 +355,11 @@ export const DashboardService = {
 
             const investmentWhereClause = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 gte(transactions.txnDate, fy.startDate),
                 lte(transactions.txnDate, fy.endDate),
+                isNotDeleted(accounts),
                 eq(accounts.accountType, 1),
                 eq(accounts.subtype, 14)
             ];
@@ -457,6 +465,7 @@ export const DashboardService = {
         // 2. Aggregate FY transactions by Category (Income/Expense/Investment)
         const whereClause = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1), // 1 = posted
             gte(transactions.txnDate, startDate),
             lte(transactions.txnDate, endDate)
@@ -511,6 +520,7 @@ export const DashboardService = {
         // GLOBAL: Accounts are unified organization-wide
         const accountFilters = [
             eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
             eq(accounts.status, 1)
         ];
 
@@ -529,6 +539,7 @@ export const DashboardService = {
 
         const movementWhere = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             lte(transactions.txnDate, endDate)
         ];
@@ -597,12 +608,14 @@ export const DashboardService = {
         const transferBalances: any[] = [];
 
         if (validTypes.length > 0) {
-            const transferWhereClause = [
-                eq(transactions.orgId, orgId),
-                eq(transactions.status, 1),
-                inArray(transactions.txnTypeId, validTypes),
-                lte(transactions.txnDate, endDate)  // Running lifetime balance up to end date
-            ];
+        const transferWhereClause = [
+            eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
+            eq(transactions.status, 1),
+            inArray(transactions.txnTypeId, validTypes),
+            isNotDeleted(accounts),
+            lte(transactions.txnDate, endDate)  // Running lifetime balance up to end date
+        ];
             applyTxnBranchFilter(transferWhereClause, branchId, user);
 
             const transferEntriesQuery = await db.select({

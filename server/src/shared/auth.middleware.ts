@@ -106,41 +106,50 @@ export const authMiddleware = (app: Elysia) => app
     })
     .macro(({ onBeforeHandle }) => ({
         validateAccess: (accessType: 'org' | 'branch') => {
-            onBeforeHandle(async ({ user, orgId, branchId, authError, request }: { user: AuthenticatedUser | null, orgId: number | null, branchId: number | 'all' | null, authError: string | null, request: Request }) => {
-                // If authentication failed in the derive step, throw the error now
+            onBeforeHandle(async ({ user, orgId, branchId, authError, request, set }: { user: AuthenticatedUser | null, orgId: number | null, branchId: number | 'all' | null, authError: string | null, request: Request, set: any }) => {
+                // If authentication failed in the derive step, return 401 immediately
                 if (authError) {
-                    throw new Error(authError); // Elysia will catch this and use the status set in derive
+                    console.warn(`⚠️  [AuthMiddleware] Protected access denied for ${request.url}: ${authError}`);
+                    set.status = 401;
+                    return { success: false, message: authError || 'Unauthorized' };
                 }
 
-                // Ensure user is not null for subsequent checks
+                // Ensure user is not null
                 if (!user) {
-                    throw new Error('Unauthorized: User not available after authentication');
+                    set.status = 401;
+                    return { success: false, message: 'Unauthorized: User not available' };
                 }
 
+                // 1. Organization Access Check
                 if (!orgId) {
                     console.error(`❌ [AuthMiddleware] validateAccess(${accessType}) - Missing x-org-id header for ${request.url}`);
-                    throw new Error('Header "x-org-id" is required');
+                    set.status = 400;
+                    return { success: false, message: 'Header "x-org-id" is required' };
                 }
 
                 if (!user.orgIds.includes(orgId)) {
                     console.error(`❌ [AuthMiddleware] Forbidden: User ${user.email} (Orgs: [${user.orgIds}]) attempted to access Org ${orgId}`);
-                    throw new Error('Forbidden: You do not belong to this organization');
+                    set.status = 403;
+                    return { success: false, message: 'Forbidden: You do not belong to this organization' };
                 }
 
                 // 2. Branch Access Check (If requested)
                 if (accessType === 'branch') {
-                    if (!branchId) throw new Error('Header "x-branch-id" is required for this operation');
+                    if (!branchId) {
+                        set.status = 400;
+                        return { success: false, message: 'Header "x-branch-id" is required for this operation' };
+                    }
 
                     if (branchId === 'all') {
-                        // Only Owners and Admins can see "All Branches" by default in some contexts,
-                        // but for aggregation dashboards, we allow members if they have branches assigned.
-                        // Implementation logic will handle actual filtering in services.
+                        // All allowed for aggregation
                     } else if (user.role === 'owner' || user.role === 'admin') {
                         // Implicit allowed for specific branch
                     } else {
                         // MEMBER role check for specific branch
                         if (!user.branchIds.includes(branchId as number)) {
-                            throw new Error('Forbidden: You do not have access to this branch');
+                            console.error(`❌ [AuthMiddleware] Forbidden Branch: User ${user.email} attempted to access Branch ${branchId}`);
+                            set.status = 403;
+                            return { success: false, message: 'Forbidden: You do not have access to this branch' };
                         }
                     }
                 }

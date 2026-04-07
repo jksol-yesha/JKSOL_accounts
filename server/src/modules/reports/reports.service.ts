@@ -2,6 +2,7 @@ import { db } from '../../db';
 import { transactions, transactionEntries, categories, subCategories, accounts, transactionTypes, branches, organizations, currencies, parties } from '../../db/schema';
 import { eq, and, or, sql, gte, lte, lt, desc, asc, inArray } from 'drizzle-orm';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
+import { isNotDeleted } from '../../shared/soft-delete';
 
 const getUserBranchIds = (user?: any): number[] => (
     typeof user?.branchIds === 'string'
@@ -91,6 +92,7 @@ const fetchDetailedRows = async (
     const types = await db.select().from(transactionTypes);
     const conditions: any[] = [
         eq(transactions.orgId, orgId),
+        isNotDeleted(transactions),
         eq(transactions.status, 1),
         gte(transactions.txnDate, startDate),
         lte(transactions.txnDate, endDate)
@@ -750,6 +752,7 @@ export const ReportsService = {
         // 1. Calculate Global Opening Balance (Initial + Past Movements)
         const pastConditions = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             lt(transactions.txnDate, startDate)
         ];
@@ -776,7 +779,7 @@ export const ReportsService = {
             currencyCode: currencies.code
         }).from(accounts)
             .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-            .where(and(eq(accounts.orgId, orgId), eq(accounts.status, 1)));
+            .where(and(eq(accounts.orgId, orgId), isNotDeleted(accounts), eq(accounts.status, 1)));
 
         let initialAccountBalance = 0;
         for (const acc of accountRows) {
@@ -788,6 +791,7 @@ export const ReportsService = {
         // 2. Current Period Totals
         const conditions = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             gte(transactions.txnDate, startDate),
             lte(transactions.txnDate, endDate)
@@ -877,6 +881,7 @@ export const ReportsService = {
 
         const accountConditions: any[] = [
             eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
             eq(accounts.status, 1)
         ];
         // GLOBAL: Accounts are unified
@@ -917,6 +922,7 @@ export const ReportsService = {
 
         const openingMovementConditions: any[] = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             lt(transactions.txnDate, startDate)
         ];
@@ -949,6 +955,7 @@ export const ReportsService = {
 
         const periodMovementConditions: any[] = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             gte(transactions.txnDate, startDate),
             lte(transactions.txnDate, endDate)
@@ -1071,7 +1078,7 @@ export const ReportsService = {
             })
                 .from(accounts)
                 .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-                .where(and(eq(accounts.orgId, orgId), eq(accounts.id, filters.accountId), eq(accounts.status, 1)))
+                .where(and(eq(accounts.orgId, orgId), eq(accounts.id, filters.accountId), isNotDeleted(accounts), eq(accounts.status, 1)))
                 .limit(1);
 
             if (!selectedAccount) {
@@ -1092,6 +1099,7 @@ export const ReportsService = {
 
             const accountPastConditions: any[] = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 lt(transactions.txnDate, startDate),
                 eq(transactionEntries.accountId, filters.accountId)
@@ -1120,6 +1128,7 @@ export const ReportsService = {
 
             const accountLedgerConditions: any[] = [
                 eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 gte(transactions.txnDate, startDate),
                 lte(transactions.txnDate, endDate),
@@ -1185,6 +1194,7 @@ export const ReportsService = {
 
         const pastConditions: any[] = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             lt(transactions.txnDate, startDate)
         ];
@@ -1217,6 +1227,7 @@ export const ReportsService = {
 
         const accountConditions: any[] = [
             eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
             eq(accounts.status, 1)
         ];
         // GLOBAL: Accounts are unified
@@ -1239,6 +1250,7 @@ export const ReportsService = {
 
         const ledgerConditions: any[] = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             gte(transactions.txnDate, startDate),
             lte(transactions.txnDate, endDate)
@@ -1355,6 +1367,7 @@ export const ReportsService = {
 
         const baseConditions: any[] = [
             eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
             eq(transactions.status, 1),
             gte(transactions.txnDate, startDate),
             lte(transactions.txnDate, endDate)
@@ -1500,4 +1513,3 @@ export const ReportsService = {
         };
     }
 };
-

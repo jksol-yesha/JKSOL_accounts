@@ -6,6 +6,7 @@ import { AuditService } from '../audit/audit.service';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { resolveBankFromIfsc } from '../../shared/ifsc-bank';
+import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 import {
     validateSubtypeMatchesType,
     getAccountTypeName,
@@ -26,14 +27,22 @@ const REAL_ACCOUNT_BALANCE_ENTRY_DESCRIPTIONS = [
     'Investment'
 ] as const;
 
+const buildDeletedAccountName = (name: string) => {
+    const suffix = ` [DELETED ${Date.now()}]`;
+    const maxLength = 120;
+    const trimmedName = String(name || '').trim();
+    const baseName = trimmedName.slice(0, Math.max(0, maxLength - suffix.length)).trim();
+    return `${baseName || 'Account'}${suffix}`;
+};
+
 export const getAllAccounts = async (
     orgId: number = DEFAULT_ORG_ID,
-    status?: 1 | 2,
+    status?: 1 | 2 | 3,
     targetCurrency?: string,
     user?: any,
     financialYearId?: number
 ) => {
-    const filters: (SQL | undefined)[] = [eq(accounts.orgId, orgId)];
+    const filters: (SQL | undefined)[] = [eq(accounts.orgId, orgId), isNotDeleted(accounts)];
 
     // Accounts are global across the organization.
 
@@ -111,7 +120,8 @@ export const getAllAccounts = async (
         .leftJoin(transactions, and(
             eq(transactions.id, transactionEntries.transactionId),
             eq(transactions.orgId, orgId),
-            eq(transactions.status, 1)
+            eq(transactions.status, 1),
+            isNotDeleted(transactions)
         ))
         .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
         .where(and(...filters.filter((f): f is SQL => f !== undefined)))
@@ -139,7 +149,8 @@ export const getAllAccounts = async (
                 eq(transactions.id, transactionEntries.transactionId),
                 eq(transactions.orgId, orgId),
                 eq(transactions.status, 1),
-                lt(transactions.txnDate, selectedFinancialYear.startDate)
+                lt(transactions.txnDate, selectedFinancialYear.startDate),
+                isNotDeleted(transactions)
             ))
             .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
             .where(and(...filters.filter((f): f is SQL => f !== undefined)))
@@ -168,7 +179,8 @@ export const getAllAccounts = async (
                 eq(transactions.id, transactionEntries.transactionId),
                 eq(transactions.orgId, orgId),
                 eq(transactions.status, 1),
-                eq(transactions.financialYearId, selectedFinancialYear.id)
+                eq(transactions.financialYearId, selectedFinancialYear.id),
+                isNotDeleted(transactions)
             ))
             .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
             .where(and(...filters.filter((f): f is SQL => f !== undefined)))
@@ -329,7 +341,9 @@ export const createAccount = async (data: {
 
 
     // Check Uniqueness
-    const [existing] = await db.select().from(accounts).where(and(eq(accounts.orgId, orgId), eq(accounts.name, data.name)));
+    const [existing] = await db.select()
+        .from(accounts)
+        .where(and(eq(accounts.orgId, orgId), eq(accounts.name, data.name), isNotDeleted(accounts)));
     if (existing) throw new Error(`Account '${data.name}' already exists in this organization.`);
 
     // 2. Insert Account
@@ -430,13 +444,13 @@ export const updateAccount = async (id: number, data: {
     bankBranchName?: string | null;
     status?: 1 | 2;
 }, orgId: number = DEFAULT_ORG_ID, userId?: number) => {
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    const [account] = await db.select().from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
     if (!account) throw new Error('Account not found');
     if (account.orgId !== orgId) throw new Error('Unauthorized access to this account');
 
     // Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-    if (org && org.status === 2) throw new Error('Cannot update account for an inactive organization');
+    if (org && !isActiveStatus(org.status)) throw new Error('Cannot update account for an inactive organization');
 
     // Uniqueness check only if name changes
     if (data.name && data.name !== account.name) {
@@ -445,7 +459,8 @@ export const updateAccount = async (id: number, data: {
             .where(
                 and(
                     eq(accounts.orgId, account.orgId),
-                    eq(accounts.name, data.name)
+                    eq(accounts.name, data.name),
+                    isNotDeleted(accounts)
                 )
             );
         if (existing) throw new Error(`Account '${data.name}' already exists in this organization.`);
@@ -548,13 +563,13 @@ export const updateOpeningBalance = async (id: number, data: {
     openingBalance: string;
     openingBalanceDate: string;
 }, orgId: number = DEFAULT_ORG_ID) => {
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    const [account] = await db.select().from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
     if (!account) throw new Error('Account not found');
     if (account.orgId !== orgId) throw new Error('Unauthorized access to this account');
 
     // Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-    if (org && org.status === 2) throw new Error('Cannot update account for an inactive organization');
+    if (org && !isActiveStatus(org.status)) throw new Error('Cannot update account for an inactive organization');
 
     await db.update(accounts)
         .set({
@@ -568,26 +583,36 @@ export const updateOpeningBalance = async (id: number, data: {
 };
 
 export const deleteAccount = async (id: number, orgId: number = DEFAULT_ORG_ID, userId?: number) => {
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, id));
+    const [account] = await db.select().from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
     if (!account) throw new Error('Account not found');
 
     if (account.orgId !== orgId) throw new Error('Unauthorized access to this account');
 
     // Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-    if (org && org.status === 2) throw new Error('Cannot delete account for an inactive organization');
+    if (org && !isActiveStatus(org.status)) throw new Error('Cannot delete account for an inactive organization');
 
-    // Proactive check for usage in transactions
     const [usage] = await db.select({ id: transactionEntries.id })
         .from(transactionEntries)
-        .where(eq(transactionEntries.accountId, id))
+        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+        .where(and(
+            eq(transactionEntries.accountId, id),
+            eq(transactions.orgId, orgId),
+            isNotDeleted(transactions)
+        ))
         .limit(1);
 
     if (usage) {
-        throw new Error("Cannot delete this account because it is used in associated records (Transactions). Please modify the Status to 'Inactive' instead.");
+        throw new Error("Cannot delete this account because it is used in associated records (Transactions).");
     }
 
-    await db.delete(accounts).where(eq(accounts.id, id));
+    await db.update(accounts)
+        .set({
+            name: buildDeletedAccountName(account.name),
+            status: DELETED_STATUS,
+            updatedAt: new Date()
+        })
+        .where(eq(accounts.id, id));
 
     // Audit Log
     if (userId) {
@@ -610,7 +635,7 @@ export const getAccountNetSettlement = async (
     targetCurrency?: string,
     user?: any
 ) => {
-    const [account] = await db.select().from(accounts).where(eq(accounts.id, accountId));
+    const [account] = await db.select().from(accounts).where(and(eq(accounts.id, accountId), isNotDeleted(accounts)));
     if (!account) throw new Error('Account not found');
     if (account.orgId !== orgId) throw new Error('Unauthorized access to this account');
 
@@ -627,7 +652,8 @@ export const getAccountNetSettlement = async (
         .innerJoin(transactions, and(
             eq(transactions.id, transactionEntries.transactionId),
             eq(transactions.orgId, orgId),
-            eq(transactions.status, 1)
+            eq(transactions.status, 1),
+            isNotDeleted(transactions)
         ))
         .innerJoin(counterpartEntries, and(
             eq(counterpartEntries.transactionId, transactionEntries.transactionId),

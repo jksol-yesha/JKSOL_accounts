@@ -1,9 +1,10 @@
 import { db } from '../../db';
-import { organizations, users, financialYears, branches, categories, exchangeRates, accounts, transactions, auditLogs, monthlyBranchSummary, yearlyBranchSummary, roles } from '../../db/schema';
+import { organizations, users, financialYears, branches, categories, exchangeRates, accounts, transactions, auditLogs, monthlyBranchSummary, yearlyBranchSummary, roles, parties } from '../../db/schema';
 import { alias } from 'drizzle-orm/mysql-core';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import * as EmailService from '../../shared/email.service';
 import { AuditService } from '../audit/audit.service';
+import { DELETED_STATUS, isNotDeleted } from '../../shared/soft-delete';
 
 export const OrganizationService = {
     // Create new organization and owner link
@@ -135,7 +136,10 @@ export const OrganizationService = {
 
         const result = await db.select()
             .from(organizations)
-            .where(inArray(organizations.id, orgIds));
+            .where(and(
+                inArray(organizations.id, orgIds),
+                sql`${organizations.status} != ${DELETED_STATUS}`
+            ));
 
         return result.map(org => ({
             ...org,
@@ -196,7 +200,9 @@ export const OrganizationService = {
         if (members.length === 0) return [];
 
         // Fetch all branch names for this org to resolve member branch names
-        const orgBranches = await db.select().from(branches).where(eq(branches.orgId, orgId));
+        const orgBranches = await db.select()
+            .from(branches)
+            .where(and(eq(branches.orgId, orgId), isNotDeleted(branches)));
 
         return members.map(member => {
             const memberRole = member.role;
@@ -270,6 +276,7 @@ export const OrganizationService = {
                 .from(branches)
                 .where(and(
                     eq(branches.orgId, orgId),
+                    isNotDeleted(branches),
                     inArray(branches.id, branchIds)
                 ));
 
@@ -421,7 +428,7 @@ export const OrganizationService = {
                 const inviterBranches = await db
                     .select({ id: branches.id })
                     .from(branches)
-                    .where(inArray(branches.orgId, inviterOrgIds.map(Number)));
+                    .where(and(inArray(branches.orgId, inviterOrgIds.map(Number)), isNotDeleted(branches)));
                 const inviterBranchIds = inviterBranches.map(b => String(b.id)).join(',');
 
                 await db.insert(users).values({
@@ -496,48 +503,71 @@ export const OrganizationService = {
             throw new Error('Only the Organization Owner can perform this action');
         }
 
+        const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
+        if (!org || Number(org.status) === DELETED_STATUS) {
+            throw new Error('Organization not found');
+        }
+
         // 2. Strict Check for Branches
         const branchCount = await db.select({ count: sql`count(*)` })
             .from(branches)
-            .where(eq(branches.orgId, orgId));
+            .where(and(eq(branches.orgId, orgId), isNotDeleted(branches)));
 
         if (branchCount && branchCount[0] && Number(branchCount[0].count) > 0) {
             throw new Error(`Cannot delete organization. It has ${branchCount[0].count} active branches.`);
         }
 
-        // 3. Cascade Delete "Config" Data
+        const orgBranchIds = (await db.select({ id: branches.id })
+            .from(branches)
+            .where(eq(branches.orgId, orgId)))
+            .map((branch) => Number(branch.id))
+            .filter(Boolean);
+
+        // 3. Soft-delete org access and reusable child masters
         return await db.transaction(async (tx) => {
-            // Update Users (Remove orgId from orgIds)
-            // Note: In a real production app, you might want to fetch all users and update them carefully.
-            // For now, using SQL logic.
             await tx.execute(sql`
                 UPDATE users 
                 SET org_ids = TRIM(BOTH ',' FROM REPLACE(CONCAT(',', org_ids, ','), CONCAT(',', ${orgId}, ','), ','))
                 WHERE FIND_IN_SET(${orgId}, org_ids)
             `);
 
-            // Delete Audit Logs
-            await tx.delete(auditLogs).where(eq(auditLogs.orgId, orgId));
-            // Delete Branch Summaries (Wrapped in try-catch as these tables might not be created in MariaDB 10.4 yet)
-            try {
-                await tx.delete(monthlyBranchSummary).where(eq(monthlyBranchSummary.orgId, orgId));
-                await tx.delete(yearlyBranchSummary).where(eq(yearlyBranchSummary.orgId, orgId));
-            } catch (e: any) {
-                const errorCode = e.code || e.cause?.code;
-                if (errorCode !== 'ER_NO_SUCH_TABLE') throw e;
-                console.warn(`[Cascade Delete] Skipped missing summary tables for org ${orgId}`);
+            if (orgBranchIds.length > 0) {
+                const branchCleanExpression = orgBranchIds.reduce(
+                    (expr, branchId) => sql`REPLACE(CONCAT(',', ${expr}, ','), CONCAT(',', ${branchId}, ','), ',')`,
+                    sql`COALESCE(branch_ids, '')`
+                );
+
+                await tx.execute(sql`
+                    UPDATE users
+                    SET branch_ids = TRIM(BOTH ',' FROM ${branchCleanExpression})
+                    WHERE branch_ids IS NOT NULL
+                `);
             }
-            await tx.delete(transactions).where(eq(transactions.orgId, orgId));
-            await tx.delete(accounts).where(eq(accounts.orgId, orgId));
-            await tx.delete(exchangeRates).where(eq(exchangeRates.orgId, orgId));
-            await tx.delete(financialYears).where(eq(financialYears.orgId, orgId));
-            await tx.delete(categories).where(eq(categories.orgId, orgId));
-            await tx.delete(organizations).where(eq(organizations.id, orgId));
+
+            await tx.update(transactions)
+                .set({ status: DELETED_STATUS, updatedAt: new Date() })
+                .where(and(eq(transactions.orgId, orgId), isNotDeleted(transactions)));
+
+            await tx.update(accounts)
+                .set({ status: DELETED_STATUS, updatedAt: new Date() })
+                .where(and(eq(accounts.orgId, orgId), isNotDeleted(accounts)));
+
+            await tx.update(categories)
+                .set({ status: DELETED_STATUS })
+                .where(and(eq(categories.orgId, orgId), isNotDeleted(categories)));
+
+            await tx.update(parties)
+                .set({ status: DELETED_STATUS, updatedAt: new Date() })
+                .where(and(eq(parties.orgId, orgId), isNotDeleted(parties)));
+
+            await tx.update(organizations)
+                .set({ status: DELETED_STATUS, updatedAt: new Date() })
+                .where(eq(organizations.id, orgId));
 
             // Audit Log: DELETE ORG
             await AuditService.log(orgId, 'organization', orgId, 'DELETE', userId, undefined, undefined, tx);
 
-            return { message: 'Organization deleted successfully' };
+            return { message: 'Organization archived successfully' };
         });
     },
 
@@ -585,7 +615,9 @@ export const OrganizationService = {
             const newOrgIdsStr = newOrgIds.join(',');
 
             // Remove branches of THIS org from member's branchIds
-            const orgBranches = await db.select({ id: branches.id }).from(branches).where(eq(branches.orgId, orgId));
+            const orgBranches = await db.select({ id: branches.id })
+                .from(branches)
+                .where(and(eq(branches.orgId, orgId), isNotDeleted(branches)));
             const orgBranchIds = orgBranches.map(b => b.id);
 
             // Parse branchIds from string if needed
@@ -748,7 +780,9 @@ export const OrganizationService = {
         }
 
         // Remove old branches of THIS org
-        const orgBranches = await db.select({ id: branches.id }).from(branches).where(eq(branches.orgId, orgId));
+        const orgBranches = await db.select({ id: branches.id })
+            .from(branches)
+            .where(and(eq(branches.orgId, orgId), isNotDeleted(branches)));
         const orgBranchIds = orgBranches.map(b => b.id);
         newBranchIdsArr = newBranchIdsArr.filter(id => !orgBranchIds.includes(id));
 
@@ -758,6 +792,7 @@ export const OrganizationService = {
                 .from(branches)
                 .where(and(
                     eq(branches.orgId, orgId),
+                    isNotDeleted(branches),
                     inArray(branches.id, branchIds)
                 ));
 
@@ -797,7 +832,7 @@ export const OrganizationService = {
                 if (newlyAddedIds.length > 0) {
                     const addedBranches = await db.select({ id: branches.id, name: branches.name })
                         .from(branches)
-                        .where(inArray(branches.id, newlyAddedIds));
+                        .where(and(inArray(branches.id, newlyAddedIds), isNotDeleted(branches)));
                     addedBranchNames = addedBranches.map(b => b.name);
                 }
             }

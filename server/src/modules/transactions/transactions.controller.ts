@@ -7,6 +7,7 @@ import { WebSocketService } from '../../shared/websocket.service';
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { resolve } from 'node:path';
+import { isNotDeleted } from '../../shared/soft-delete';
 
 const transactionUploadsDir = resolve(import.meta.dir, '../../../uploads/transactions');
 
@@ -16,6 +17,10 @@ export const getTransaction = async ({ params, set, user, orgId }: ElysiaContext
     try {
         const id = Number(params.id);
         const transaction = await TransactionService.getById(id, orgId);
+        if (!transaction) {
+            set.status = 404;
+            return { success: false, message: 'Transaction not found' };
+        }
 
         // Branch access check for MEMBERS
         if (user.role === 'member' && !user.branchIds.includes(transaction.branchId || 0)) {
@@ -131,7 +136,9 @@ export const updateTransaction = async ({ params, body, set, user, orgId }: Elys
         const id = Number(params.id);
         const requestData = body;
 
-        const [existingTxn] = await db.select({ branchId: transactions.branchId }).from(transactions).where(and(eq(transactions.id, id), eq(transactions.orgId, orgId)));
+        const [existingTxn] = await db.select({ branchId: transactions.branchId })
+            .from(transactions)
+            .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId), isNotDeleted(transactions)));
         if (!existingTxn) {
             set.status = 404;
             return { success: false, message: 'Transaction not found' };
@@ -200,7 +207,7 @@ export const deleteTransaction = async ({ params, set, user, orgId }: ElysiaCont
             branchId: transactions.branchId
         })
             .from(transactions)
-            .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId)));
+            .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId), isNotDeleted(transactions)));
 
         if (!transaction) {
             set.status = 404;
@@ -221,7 +228,7 @@ export const deleteTransaction = async ({ params, set, user, orgId }: ElysiaCont
             });
         }
 
-        return { success: true, message: 'Transaction deleted successfully' };
+        return { success: true, message: 'Transaction archived successfully' };
     } catch (error: any) {
         console.error('Delete Transaction Error:', error);
         set.status = 400;

@@ -1381,8 +1381,8 @@ const Accounts = () => {
                 open={deleteDialog.open}
                 title="Delete Account"
                 message={deleteDialog.name
-                    ? `Are you sure you want to delete "${deleteDialog.name}"? This action cannot be undone.`
-                    : 'Are you sure you want to delete this account? This action cannot be undone.'}
+                    ? `Are you sure you want to archive "${deleteDialog.name}"? It will be hidden from active lists.`
+                    : 'Are you sure you want to archive this account? It will be hidden from active lists.'}
                 confirmLabel="Yes, Delete Account"
                 isSubmitting={deleteDialog.loading}
                 onCancel={handleCloseDeleteDialog}

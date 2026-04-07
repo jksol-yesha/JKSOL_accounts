@@ -3,6 +3,7 @@ import { categories, subCategories, branches, organizations, transactionTypes, t
 import { eq, and, desc, inArray, sql } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import XLSX from 'xlsx';
+import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
 type BranchFilter = number | number[] | 'all';
 
@@ -28,9 +29,17 @@ type GroupedExportCategory = {
     }>;
 };
 
+const buildDeletedCategoryName = (name: string, fallbackLabel: string = 'Category') => {
+    const suffix = ` [DELETED ${Date.now()}]`;
+    const maxLength = 120;
+    const trimmedName = String(name || '').trim();
+    const baseName = trimmedName.slice(0, Math.max(0, maxLength - suffix.length)).trim();
+    return `${baseName || fallbackLabel}${suffix}`;
+};
+
 export class CategoryService {
     static async getAll(orgId: number, branchId: number | number[] | 'all', financialYearId?: number, user?: any) {
-        const conditions: any[] = [eq(categories.orgId, orgId)];
+        const conditions: any[] = [eq(categories.orgId, orgId), isNotDeleted(categories)];
 
         const results = await db.select({
             category: categories,
@@ -44,10 +53,10 @@ export class CategoryService {
         // Fetch subcategories separately to avoid JSON subquery issues
         const categoryIds = results.map(r => r.category.id);
         const allSubCats = categoryIds.length > 0
-            ? await db.select().from(subCategories).where(inArray(subCategories.categoryId, categoryIds))
+            ? await db.select().from(subCategories).where(and(inArray(subCategories.categoryId, categoryIds), isNotDeleted(subCategories)))
             : [];
 
-        const transactionConditions: any[] = [eq(transactions.orgId, orgId), eq(transactions.status, 1)];
+        const transactionConditions: any[] = [eq(transactions.orgId, orgId), eq(transactions.status, 1), isNotDeleted(transactions)];
         if (financialYearId) {
             transactionConditions.push(eq(transactions.financialYearId, financialYearId));
         }
@@ -130,7 +139,7 @@ export class CategoryService {
         const orgId = data.orgId || 1; // Default to 1 if not provided, mimicking schema default
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
         if (!org) throw new Error('Organization not found');
-        if (org.status === 2) throw new Error('Cannot create category for an inactive organization');
+        if (!isActiveStatus(org.status)) throw new Error('Cannot create category for an inactive organization');
 
         // Resolve txnTypeId
         let txnTypeId = data.txnTypeId;
@@ -171,12 +180,12 @@ export class CategoryService {
     }
 
     static async update(id: number, data: Partial<typeof categories.$inferInsert & { txnType?: string }>, userId: number) {
-        const [category] = await db.select().from(categories).where(eq(categories.id, id));
+        const [category] = await db.select().from(categories).where(and(eq(categories.id, id), isNotDeleted(categories)));
         if (!category) throw new Error('Category not found');
 
         // Check Org Status
         const [org] = await db.select().from(organizations).where(eq(organizations.id, category.orgId));
-        if (org && org.status === 2) throw new Error('Cannot update category for an inactive organization');
+        if (org && !isActiveStatus(org.status)) throw new Error('Cannot update category for an inactive organization');
 
         const updateData: any = { ...data };
         const previousTxnTypeId = Number(category.txnTypeId || 0);
@@ -208,7 +217,7 @@ export class CategoryService {
             if (data.status) {
                 await tx.update(subCategories)
                     .set({ status: data.status })
-                    .where(eq(subCategories.categoryId, id));
+                    .where(and(eq(subCategories.categoryId, id), isNotDeleted(subCategories)));
             }
 
             await AuditService.log(
@@ -226,16 +235,56 @@ export class CategoryService {
     }
 
     static async delete(id: number, userId: number) {
-        const [category] = await db.select().from(categories).where(eq(categories.id, id));
+        const [category] = await db.select().from(categories).where(and(eq(categories.id, id), isNotDeleted(categories)));
         if (!category) throw new Error('Category not found');
 
         // Check Org Status
         const [org] = await db.select().from(organizations).where(eq(organizations.id, category.orgId));
-        if (org && org.status === 2) throw new Error('Cannot delete category for an inactive organization');
+        if (org && !isActiveStatus(org.status)) throw new Error('Cannot delete category for an inactive organization');
+
+        const subCategoryRows = await db.select({ id: subCategories.id })
+            .from(subCategories)
+            .where(and(eq(subCategories.categoryId, id), isNotDeleted(subCategories)));
+        const subCategoryIds = subCategoryRows.map((row) => Number(row.id)).filter(Boolean);
+
+        const [categoryUsage] = await db.select({ id: transactions.id })
+            .from(transactions)
+            .where(and(
+                eq(transactions.orgId, category.orgId),
+                eq(transactions.categoryId, id),
+                isNotDeleted(transactions)
+            ))
+            .limit(1);
+
+        const [subCategoryUsage] = subCategoryIds.length > 0
+            ? await db.select({ id: transactions.id })
+                .from(transactions)
+                .where(and(
+                    eq(transactions.orgId, category.orgId),
+                    inArray(transactions.subCategoryId, subCategoryIds),
+                    isNotDeleted(transactions)
+                ))
+                .limit(1)
+            : [];
+
+        if (categoryUsage || subCategoryUsage) {
+            throw new Error("Cannot delete this category because it is used in associated records (Transactions).");
+        }
 
         await db.transaction(async (tx) => {
-            // Hard delete the category after capturing its previous state for the audit trail.
-            await tx.delete(categories).where(eq(categories.id, id));
+            await tx.update(categories)
+                .set({
+                    name: buildDeletedCategoryName(category.name),
+                    status: DELETED_STATUS,
+                })
+                .where(eq(categories.id, id));
+
+            await tx.update(subCategories)
+                .set({
+                    status: DELETED_STATUS,
+                })
+                .where(and(eq(subCategories.categoryId, id), isNotDeleted(subCategories)));
+
             await AuditService.log(
                 category.orgId,
                 'category',
@@ -253,7 +302,7 @@ export class CategoryService {
 
     // Subcategories
     static async createSub(data: typeof subCategories.$inferInsert, userId: number) {
-        const [category] = await db.select().from(categories).where(eq(categories.id, data.categoryId));
+        const [category] = await db.select().from(categories).where(and(eq(categories.id, data.categoryId), isNotDeleted(categories)));
         if (!category) throw new Error('Category not found');
 
         const [result] = await db.insert(subCategories).values(data).$returningId();
@@ -276,10 +325,10 @@ export class CategoryService {
     }
 
     static async updateSub(id: number, data: Partial<typeof subCategories.$inferInsert>, userId: number) {
-        const [subCategory] = await db.select().from(subCategories).where(eq(subCategories.id, id));
+        const [subCategory] = await db.select().from(subCategories).where(and(eq(subCategories.id, id), isNotDeleted(subCategories)));
         if (!subCategory) throw new Error('Subcategory not found');
 
-        const [category] = await db.select().from(categories).where(eq(categories.id, subCategory.categoryId));
+        const [category] = await db.select().from(categories).where(and(eq(categories.id, subCategory.categoryId), isNotDeleted(categories)));
         if (!category) throw new Error('Category not found');
 
         await db.transaction(async (tx) => {
@@ -309,15 +358,32 @@ export class CategoryService {
     }
 
     static async deleteSub(id: number, userId: number) {
-        const [subCategory] = await db.select().from(subCategories).where(eq(subCategories.id, id));
+        const [subCategory] = await db.select().from(subCategories).where(and(eq(subCategories.id, id), isNotDeleted(subCategories)));
         if (!subCategory) throw new Error('Subcategory not found');
 
-        const [category] = await db.select().from(categories).where(eq(categories.id, subCategory.categoryId));
+        const [category] = await db.select().from(categories).where(and(eq(categories.id, subCategory.categoryId), isNotDeleted(categories)));
         if (!category) throw new Error('Category not found');
 
+        const [usage] = await db.select({ id: transactions.id })
+            .from(transactions)
+            .where(and(
+                eq(transactions.orgId, category.orgId),
+                eq(transactions.subCategoryId, id),
+                isNotDeleted(transactions)
+            ))
+            .limit(1);
+
+        if (usage) {
+            throw new Error("Cannot delete this subcategory because it is used in associated records (Transactions).");
+        }
+
         await db.transaction(async (tx) => {
-            // Hard delete the subcategory after capturing the previous row for audit history.
-            await tx.delete(subCategories).where(eq(subCategories.id, id));
+            await tx.update(subCategories)
+                .set({
+                    name: buildDeletedCategoryName(subCategory.name, 'Subcategory'),
+                    status: DELETED_STATUS,
+                })
+                .where(eq(subCategories.id, id));
             await AuditService.log(
                 category.orgId,
                 'subcategory',
@@ -336,7 +402,7 @@ export class CategoryService {
     }
 
     static async getGroupedExportData(orgId: number, branchId: BranchFilter, filters: CategoryExportFilters = {}) {
-        const conditions: any[] = [eq(categories.orgId, orgId)];
+        const conditions: any[] = [eq(categories.orgId, orgId), isNotDeleted(categories)];
 
         const results = await db.select({
             category: categories,
@@ -349,10 +415,10 @@ export class CategoryService {
 
         const categoryIds = results.map((row) => row.category.id);
         const allSubCats = categoryIds.length > 0
-            ? await db.select().from(subCategories).where(inArray(subCategories.categoryId, categoryIds))
+            ? await db.select().from(subCategories).where(and(inArray(subCategories.categoryId, categoryIds), isNotDeleted(subCategories)))
             : [];
 
-        const transactionConditions: any[] = [eq(transactions.orgId, orgId), eq(transactions.status, 1)];
+        const transactionConditions: any[] = [eq(transactions.orgId, orgId), eq(transactions.status, 1), isNotDeleted(transactions)];
         if (branchId === 'all') {
             // no branch restriction
         } else if (Array.isArray(branchId)) {

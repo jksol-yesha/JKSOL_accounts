@@ -24,8 +24,8 @@ export class CryptoService {
     }
 
     private static loadKeysFromEnvironment() {
-        const publicKey = String(process.env.CRYPTO_PUBLIC_KEY || '').trim();
-        const privateKey = String(process.env.CRYPTO_PRIVATE_KEY || '').trim();
+        const publicKey = String(process.env.CRYPTO_PUBLIC_KEY || '').replace(/\\n/g, '\n').trim();
+        const privateKey = String(process.env.CRYPTO_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim();
 
         if (!publicKey || !privateKey) return null;
 

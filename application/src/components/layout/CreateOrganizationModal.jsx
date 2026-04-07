@@ -296,7 +296,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
 
     const handleDeleteOrg = async (e, org) => {
         e.stopPropagation();
-        if (!window.confirm(`Are you sure you want to PERMANENTLY delete organization "${org.name}"? This cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to archive organization "${org.name}"? It will be removed from active lists but kept in history.`)) {
             return;
         }
 
@@ -306,7 +306,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                 window.location.reload();
             } else {
                 refreshOrganizations();
-                setSuccessMessage(`Organization '${org.name}' deleted successfully.`);
+                setSuccessMessage(`Organization '${org.name}' archived successfully.`);
             }
         } catch (error) {
             console.error('Failed to delete org:', error);

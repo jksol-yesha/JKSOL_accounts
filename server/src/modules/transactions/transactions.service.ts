@@ -8,6 +8,7 @@ import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { read, utils } from 'xlsx';
 import { WebSocketService } from '../../shared/websocket.service';
+import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
 interface ImportError {
     row: number;
@@ -398,17 +399,23 @@ export class TransactionService {
         });
 
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-        if (!org || org.status === 2) throw new Error('Organization is inactive or not found');
+        if (!org || !isActiveStatus(org.status)) throw new Error('Organization is inactive or not found');
 
-        const allBranches = await db.query.branches.findMany({ where: eq(branches.orgId, orgId) });
+        const allBranches = await db.query.branches.findMany({
+            where: and(eq(branches.orgId, orgId), isNotDeleted(branches))
+        });
         const branchMap = new Map(allBranches.map(b => [b.id, b]));
 
         // Caches for lookups
-        let allCategories = await db.query.categories.findMany({ where: eq(categories.orgId, orgId) });
+        let allCategories = await db.query.categories.findMany({
+            where: and(eq(categories.orgId, orgId), isNotDeleted(categories))
+        });
         let categoryMap = new Map(allCategories.map(c => [c.id, c]));
         let categoryNameMap = new Map(allCategories.map(c => [c.name.toLowerCase(), c]));
 
-        let allAccounts = await db.query.accounts.findMany({ where: eq(accounts.orgId, orgId) });
+        let allAccounts = await db.query.accounts.findMany({
+            where: and(eq(accounts.orgId, orgId), isNotDeleted(accounts))
+        });
         let accountMap = new Map(allAccounts.map(a => [a.id, a]));
         let accountNameMap = new Map(allAccounts.map(a => [a.name.toLowerCase(), a]));
 
@@ -495,10 +502,14 @@ export class TransactionService {
                 }
             });
             // Refresh caches
-            allCategories = await db.query.categories.findMany({ where: eq(categories.orgId, orgId) });
+            allCategories = await db.query.categories.findMany({
+                where: and(eq(categories.orgId, orgId), isNotDeleted(categories))
+            });
             categoryNameMap = new Map(allCategories.map(c => [c.name.toLowerCase(), c]));
             categoryMap = new Map(allCategories.map(c => [c.id, c]));
-            allAccounts = await db.query.accounts.findMany({ where: eq(accounts.orgId, orgId) });
+            allAccounts = await db.query.accounts.findMany({
+                where: and(eq(accounts.orgId, orgId), isNotDeleted(accounts))
+            });
             accountNameMap = new Map(allAccounts.map(a => [a.name.toLowerCase(), a]));
             accountMap = new Map(allAccounts.map(a => [a.id, a]));
         }
@@ -806,12 +817,16 @@ export class TransactionService {
         defaultBranchId?: number
     ) {
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-        if (!org || org.status === 2) throw new Error('Organization is inactive or not found');
+        if (!org || !isActiveStatus(org.status)) throw new Error('Organization is inactive or not found');
 
-        const allBranches = await db.query.branches.findMany({ where: eq(branches.orgId, orgId) });
+        const allBranches = await db.query.branches.findMany({
+            where: and(eq(branches.orgId, orgId), isNotDeleted(branches))
+        });
         const branchMap = new Map(allBranches.map(b => [b.id, b]));
 
-        let allAccounts = await db.query.accounts.findMany({ where: eq(accounts.orgId, orgId) });
+        let allAccounts = await db.query.accounts.findMany({
+            where: and(eq(accounts.orgId, orgId), isNotDeleted(accounts))
+        });
         let accountMap = new Map(allAccounts.map(a => [a.id, a]));
         let accountNameMap = new Map(allAccounts.map(a => [a.name.toLowerCase(), a]));
 
@@ -835,7 +850,7 @@ export class TransactionService {
                 const branch = branchMap.get(branchId);
                 if (!branch) {
                     rowErrors.push(`Branch ID ${branchId} not found`);
-                } else if (branch.status === 2) {
+                } else if (!isActiveStatus(branch.status)) {
                     rowErrors.push(`Branch ${branch.name} is inactive`);
                 } else {
                     const userBranchIds = typeof user.branchIds === 'string'
@@ -1040,7 +1055,8 @@ export class TransactionService {
                 .from(parties)
                 .where(and(
                     eq(parties.id, Number(contactId)),
-                    eq(parties.orgId, orgId)
+                    eq(parties.orgId, orgId),
+                    isNotDeleted(parties)
                 ))
                 .limit(1);
             if (partyById?.id) return partyById.id;
@@ -1052,6 +1068,7 @@ export class TransactionService {
             .from(parties)
             .where(and(
                 eq(parties.orgId, orgId),
+                isNotDeleted(parties),
                 sql`lower(${parties.name}) = ${normalized}`
             ))
             .limit(1);
@@ -1064,17 +1081,94 @@ export class TransactionService {
         return party?.companyName || party?.name || txn?.name || null;
     }
 
+    private static async ensureActiveAccount(
+        tx: any,
+        accountId: number | null | undefined,
+        orgId: number,
+        label: string
+    ) {
+        if (!accountId) return null;
+
+        const [account] = await tx.select({
+            id: accounts.id,
+            status: accounts.status
+        })
+            .from(accounts)
+            .where(and(
+                eq(accounts.id, accountId),
+                eq(accounts.orgId, orgId),
+                isNotDeleted(accounts)
+            ))
+            .limit(1);
+
+        if (!account) throw new Error(`${label} account not found`);
+        if (!isActiveStatus(account.status)) throw new Error(`${label} account is inactive`);
+        return account;
+    }
+
+    private static async ensureActiveCategory(
+        tx: any,
+        categoryId: number | null | undefined,
+        orgId: number
+    ) {
+        if (!categoryId) return null;
+
+        const [category] = await tx.select({
+            id: categories.id,
+            status: categories.status
+        })
+            .from(categories)
+            .where(and(
+                eq(categories.id, categoryId),
+                eq(categories.orgId, orgId),
+                isNotDeleted(categories)
+            ))
+            .limit(1);
+
+        if (!category) throw new Error('Category not found');
+        if (!isActiveStatus(category.status)) throw new Error('Category is inactive');
+        return category;
+    }
+
+    private static async ensureActiveSubCategory(
+        tx: any,
+        subCategoryId: number | null | undefined,
+        categoryId: number | null | undefined
+    ) {
+        if (!subCategoryId) return null;
+
+        const [subCategory] = await tx.select({
+            id: subCategories.id,
+            status: subCategories.status,
+            categoryId: subCategories.categoryId
+        })
+            .from(subCategories)
+            .where(and(
+                eq(subCategories.id, subCategoryId),
+                isNotDeleted(subCategories)
+            ))
+            .limit(1);
+
+        if (!subCategory) throw new Error('Subcategory not found');
+        if (!isActiveStatus(subCategory.status)) throw new Error('Subcategory is inactive');
+        if (categoryId && Number(subCategory.categoryId) !== Number(categoryId)) {
+            throw new Error('Subcategory does not belong to the selected category');
+        }
+
+        return subCategory;
+    }
+
     static async create(data: any) {
         return await db.transaction(async (tx) => {
             const [org] = await tx.select().from(organizations).where(eq(organizations.id, data.orgId!));
             if (!org) throw new Error('Organization not found');
-            if (org.status === 2) throw new Error('Cannot create transaction for an inactive organization');
+            if (!isActiveStatus(org.status)) throw new Error('Cannot create transaction for an inactive organization');
 
             const branch = await tx.query.branches.findFirst({
-                where: eq(branches.id, data.branchId)
+                where: and(eq(branches.id, data.branchId), isNotDeleted(branches))
             });
             if (!branch) throw new Error('Branch not found');
-            if (branch.status === 2) throw new Error('Cannot create transaction for an inactive branch');
+            if (!isActiveStatus(branch.status)) throw new Error('Cannot create transaction for an inactive branch');
 
             const txnDate = data.txnDate;
             const fy = await tx.query.financialYears.findFirst({
@@ -1112,6 +1206,22 @@ export class TransactionService {
             if (!txnType) throw new Error('Invalid Transaction Type ID');
 
             const typeName = txnType.name.toLowerCase();
+
+            if (data.categoryId) {
+                await this.ensureActiveCategory(tx, Number(data.categoryId), data.orgId);
+            }
+            if (data.subCategoryId) {
+                await this.ensureActiveSubCategory(tx, Number(data.subCategoryId), Number(data.categoryId || 0) || null);
+            }
+            if (data.accountId) {
+                await this.ensureActiveAccount(tx, Number(data.accountId), data.orgId, 'Selected');
+            }
+            if (data.fromAccountId) {
+                await this.ensureActiveAccount(tx, Number(data.fromAccountId), data.orgId, 'Source');
+            }
+            if (data.toAccountId) {
+                await this.ensureActiveAccount(tx, Number(data.toAccountId), data.orgId, 'Destination');
+            }
 
             // Prepare Header Payload
             const resolvedContactId = await this.resolvePartyId(
@@ -1290,7 +1400,8 @@ export class TransactionService {
     static async getAll(orgId: number, branchId: number | number[] | 'all' | null, financialYearId: number, limit?: number, targetCurrency?: string, user?: any) {
         const filters = [
             eq(transactions.orgId, orgId),
-            eq(transactions.financialYearId, financialYearId)
+            eq(transactions.financialYearId, financialYearId),
+            isNotDeleted(transactions)
         ];
 
         if (Array.isArray(branchId)) {
@@ -1467,7 +1578,7 @@ export class TransactionService {
             .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
             .leftJoin(users, eq(transactions.createdBy, users.id))
             .leftJoin(parties, eq(transactions.contactId, parties.id))
-            .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId)))
+            .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId), isNotDeleted(transactions)))
             .limit(1);
 
         if (!txnRow) return null;
@@ -1543,7 +1654,7 @@ export class TransactionService {
                 .from(transactions)
                 .leftJoin(transactionTypes, eq(transactions.txnTypeId, transactionTypes.id))
                 .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
-                .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId)))
+                .where(and(eq(transactions.id, id), eq(transactions.orgId, orgId), isNotDeleted(transactions)))
                 .limit(1);
 
             if (!existingRow) throw new Error('Transaction not found');
@@ -1564,7 +1675,10 @@ export class TransactionService {
             }
 
             let finalFxRate = existing.fxRate;
-            const [branch] = await tx.select().from(branches).where(eq(branches.id, existing.branchId)).limit(1);
+            const [branch] = await tx.select()
+                .from(branches)
+                .where(and(eq(branches.id, existing.branchId), isNotDeleted(branches)))
+                .limit(1);
             const branchCurrency = String(branch?.currencyCode || '').toUpperCase();
             const nextCurrencyCode = String(data.currencyCode || (existing as any).currency?.code || '').toUpperCase();
 
@@ -1619,6 +1733,25 @@ export class TransactionService {
             if (data.currencyCode) {
                 const resolvedCurrency = await CurrencyMasterService.ensureCurrencyExists(data.currencyCode, tx);
                 headerPayload.currencyId = resolvedCurrency.id;
+            }
+
+            const resolvedCategoryId = data.categoryId !== undefined ? data.categoryId : existing.categoryId;
+            const resolvedSubCategoryId = data.subCategoryId !== undefined ? data.subCategoryId : existing.subCategoryId;
+
+            if (resolvedCategoryId) {
+                await this.ensureActiveCategory(tx, Number(resolvedCategoryId), orgId);
+            }
+            if (resolvedSubCategoryId) {
+                await this.ensureActiveSubCategory(tx, Number(resolvedSubCategoryId), Number(resolvedCategoryId || 0) || null);
+            }
+            if (data.accountId) {
+                await this.ensureActiveAccount(tx, Number(data.accountId), orgId, 'Selected');
+            }
+            if (data.fromAccountId) {
+                await this.ensureActiveAccount(tx, Number(data.fromAccountId), orgId, 'Source');
+            }
+            if (data.toAccountId) {
+                await this.ensureActiveAccount(tx, Number(data.toAccountId), orgId, 'Destination');
             }
 
             await tx.update(transactions)
@@ -1735,14 +1868,17 @@ export class TransactionService {
 
     static async delete(id: number, orgId: number, userId: number) {
         const existing = await db.query.transactions.findFirst({
-            where: and(eq(transactions.id, id), eq(transactions.orgId, orgId))
+            where: and(eq(transactions.id, id), eq(transactions.orgId, orgId), isNotDeleted(transactions))
         });
 
         if (!existing) throw new Error('Transaction not found');
 
-        // Entries should cascade delete if schema defined, but manual delete is safe
-        await db.delete(transactionEntries).where(eq(transactionEntries.transactionId, id));
-        await db.delete(transactions).where(eq(transactions.id, id));
+        await db.update(transactions)
+            .set({
+                status: DELETED_STATUS,
+                updatedAt: new Date()
+            })
+            .where(eq(transactions.id, id));
 
         await AuditService.log(
             orgId,

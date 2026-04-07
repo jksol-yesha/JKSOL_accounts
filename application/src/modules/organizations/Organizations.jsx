@@ -76,7 +76,7 @@ const Organizations = () => {
     };
 
     const handleDelete = async (id) => {
-        if (!window.confirm("Are you sure you want to delete this organization?")) return;
+        if (!window.confirm("Are you sure you want to archive this organization? It will be removed from active lists.")) return;
 
         try {
             await apiService.orgs.delete(id);

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Save, Calendar, DollarSign, Wallet, Check, ChevronDown, Download } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { useBranch } from '../../../context/BranchContext';
@@ -619,8 +620,6 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
         if (isOpen && initialData) fetchTxnDetails();
     }, [isOpen, initialData]);
 
-    if (!isOpen) return null;
-
     // Helper options
     // Filter accounts by type for better UX
     // Filter accounts by type for better UX
@@ -717,6 +716,8 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
             setFormData((prev) => ({ ...prev, subCategoryId: defaultSubCategoryId || '' }));
         }
     }, [categories.length, formData.categoryId, selectedCategoryObj, currentSubcategories, formData.subCategoryId]);
+
+    if (!isOpen) return null;
 
     return createPortal(
         <div className={cn("fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-md transition-opacity", isOpen ? "opacity-100" : "opacity-0 pointer-events-none")}>

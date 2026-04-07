@@ -113,7 +113,7 @@ export const deleteOrganization = async ({ user, body, set }: ElysiaContext & { 
     }
     try {
         const result = await OrganizationService.delete(user.id, body.id);
-        return successResponse('Organization deleted successfully', result);
+        return successResponse('Organization archived successfully', result);
     } catch (err: any) {
         set.status = 400;
         return { message: err.message };

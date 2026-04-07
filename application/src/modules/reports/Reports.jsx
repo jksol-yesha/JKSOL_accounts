@@ -19,8 +19,6 @@ import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import CustomSelect from '../../components/common/CustomSelect';
 import StatCard from '../dashboard/components/StatCard';
-import { cn } from '../../utils/cn';
-import { getTransactions, getCategories, getAccounts } from '../../utils/storage';
 import ReportTableScreen from './components/ReportTableScreen';
 import ReportTablePrint from './components/ReportTablePrint';
 import DateRangePicker from '../../components/common/DateRangePicker';
@@ -578,15 +576,6 @@ const Reports = () => {
         }
     };
 
-    const handleDatePresetChange = (preset) => {
-        const range = getPresetDateRange(preset);
-        setFilters((prev) => ({
-            ...prev,
-            ...range,
-            datePreset: preset
-        }));
-    };
-
     const handleDateRangeChange = (range) => {
         const normalizedRange = normalizeSingleDateRange(range);
         setFilters((prev) => ({
@@ -792,28 +781,6 @@ const Reports = () => {
         return income - expense;
     }, [reportData]);
     const displayFilters = isGenerated && appliedFilters ? appliedFilters : filters;
-
-    const selectedPeriodLabel = useMemo(() => {
-        const formatPeriodDate = (value) => {
-            if (!value) return '';
-            const [year, month, day] = String(value).split('-').map(Number);
-            if (!year || !month || !day) return '';
-            const date = new Date(year, month - 1, day);
-            return new Intl.DateTimeFormat('en-GB', {
-                day: '2-digit',
-                month: 'short',
-                year: 'numeric'
-            }).format(date);
-        };
-
-        if (displayFilters.startDate && displayFilters.endDate) {
-            if (displayFilters.startDate === displayFilters.endDate) {
-                return formatPeriodDate(displayFilters.startDate);
-            }
-            return `${formatPeriodDate(displayFilters.startDate)} to ${formatPeriodDate(displayFilters.endDate)}`;
-        }
-        return 'Selected Period';
-    }, [displayFilters.endDate, displayFilters.startDate]);
 
     return (
         <div className="flex flex-col min-h-full">

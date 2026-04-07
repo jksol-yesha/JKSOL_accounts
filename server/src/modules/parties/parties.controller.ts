@@ -62,7 +62,7 @@ export const deleteParty = async ({ body, user, orgId, set }: ElysiaContext & { 
             data: { id }
         });
 
-        return successResponse('Party deleted successfully');
+        return successResponse('Party archived successfully');
     } catch (e: any) {
         console.error("Delete party error:", e);
         const errMessage = e.message || "";
@@ -74,12 +74,15 @@ export const deleteParty = async ({ body, user, orgId, set }: ElysiaContext & { 
             errCode === 'ER_ROW_IS_REFERENCED_2' ||
             errMessage.includes('foreign key constraint fails') ||
             causeMessage.includes('foreign key constraint fails') ||
+            errMessage.includes('used in associated records') ||
             errMessage.includes('constraint')
         ) {
             set.status = 400;
             return {
                 success: false,
-                message: "Cannot delete this party because it is used in associated records. Please modify Status to 'Inactive' instead."
+                message: errMessage.includes('used in associated records')
+                    ? e.message
+                    : "Cannot delete this party because it is used in associated records. Please modify Status to 'Inactive' instead."
             };
         }
         throw e;

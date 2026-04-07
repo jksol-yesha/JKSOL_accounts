@@ -193,7 +193,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
     const handleDeleteBranch = async (e, branch) => {
         e.stopPropagation();
 
-        if (!window.confirm(`Are you sure you want to PERMANENTLY delete branch "${branch.name}"? This cannot be undone.`)) {
+        if (!window.confirm(`Are you sure you want to archive branch "${branch.name}"? It will be hidden from active lists.`)) {
             return;
         }
 
@@ -221,7 +221,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
             }
         } catch (error) {
             console.error('Failed to delete branch:', error);
-            alert(error.response?.data?.message || 'Failed to delete branch. Ensure it has no active accounts.');
+            alert(error.response?.data?.message || 'Failed to archive branch.');
         }
     };
 

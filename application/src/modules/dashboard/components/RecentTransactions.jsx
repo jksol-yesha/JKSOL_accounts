@@ -516,7 +516,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                 setTransactions(parsed);
                 setHasFetchedOnce(true);
             }
-        } catch (e) {
+        } catch {
             // Ignore cache parse errors and continue with live fetch
         }
     }, [cacheKey]);
@@ -535,7 +535,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
             }
 
             setVisibleColumns(normalizeRecentTxColumns(JSON.parse(raw)));
-        } catch (e) {
+        } catch {
             setVisibleColumns(DEFAULT_VISIBLE_RECENT_TXN_COLUMNS);
         }
     }, [columnSettingsKey]);
@@ -545,7 +545,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
 
         try {
             localStorage.setItem(columnSettingsKey, JSON.stringify(visibleColumns));
-        } catch (e) {
+        } catch {
             // Ignore storage errors
         }
     }, [columnSettingsKey, user?.id, visibleColumns]);
@@ -655,7 +655,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                         setTransactions(mapped);
                         try {
                             sessionStorage.setItem(cacheKey, JSON.stringify(mapped));
-                        } catch (e) {
+                        } catch {
                             // Ignore storage errors
                         }
                     }
@@ -881,7 +881,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                 const next = current.filter((tx) => tx.id !== deleteDialog.id);
                 try {
                     sessionStorage.setItem(cacheKey, JSON.stringify(next));
-                } catch (e) {
+                } catch {
                     // Ignore storage errors
                 }
                 return next;
@@ -1091,8 +1091,8 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                 open={deleteDialog.open}
                 title="Delete transaction?"
                 message={deleteDialog.label
-                    ? `Are you sure you want to delete "${deleteDialog.label}"? This action cannot be undone.`
-                    : 'Are you sure you want to delete this transaction? This action cannot be undone.'}
+                    ? `Are you sure you want to archive "${deleteDialog.label}"? It will be hidden from active lists.`
+                    : 'Are you sure you want to archive this transaction? It will be hidden from active lists.'}
                 confirmLabel="Delete"
                 cancelLabel="Cancel"
                 isSubmitting={deleteDialog.loading}

@@ -3,31 +3,46 @@ import type { ElysiaContext } from '../../shared/auth.middleware';
 
 export const getBranches = async ({ headers, user, orgId, set }: ElysiaContext) => {
     try {
-        if (!orgId) throw new Error("Organization ID is required");
+        if (!user) {
+            set.status = 401;
+            return { success: false, message: "Unauthorized" };
+        }
+        if (!orgId) {
+            set.status = 400;
+            return { success: false, message: "Organization ID is required" };
+        }
 
         const branches = await BranchService.getAllBranches(orgId, undefined, user?.id);
         return { success: true, data: branches };
     } catch (err: any) {
         console.error("❌ [BranchesController] getBranches Error:", err);
-        set.status = 400;
-        return { success: false, message: err.message };
+        set.status = 500;
+        return { success: false, message: err.message || "Internal Server Error" };
     }
 };
 
 export const getBranchesQuery = async ({ body, headers, branchId, user, orgId, set }: ElysiaContext & { body: { orgId?: string, skipBranch?: boolean } }) => {
     try {
-        const finalOrgId = orgId || (body.orgId ? parseInt(body.orgId) : undefined);
-        if (!finalOrgId) throw new Error("Organization ID is required");
+        if (!user) {
+            set.status = 401;
+            return { success: false, message: "Unauthorized" };
+        }
 
-        // Resolve context branch for exclusion
-        const excludeId = body.skipBranch && branchId ? branchId : undefined;
+        const finalOrgId = orgId || (body.orgId ? parseInt(body.orgId) : undefined);
+        if (!finalOrgId) {
+            set.status = 400;
+            return { success: false, message: "Organization ID is required" };
+        }
+
+        // Resolve context branch for exclusion (only if it's a specific number)
+        const excludeId = (body.skipBranch && typeof branchId === 'number') ? branchId : undefined;
 
         const branches = await BranchService.getAllBranches(finalOrgId, excludeId, user?.id);
         return { success: true, data: branches };
     } catch (err: any) {
         console.error("❌ [BranchesController] getBranchesQuery Error:", err);
-        set.status = 400;
-        return { success: false, message: err.message };
+        set.status = 500;
+        return { success: false, message: err.message || "Internal Server Error" };
     }
 };
 

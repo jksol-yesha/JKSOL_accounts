@@ -2,6 +2,7 @@ import { db } from '../../db';
 import { branches, organizations, transactions, monthlyBranchSummary, yearlyBranchSummary, users, roles } from '../../db/schema';
 import { eq, and, sql, inArray } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
+import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
 // REMOVED DEFAULT_ORG_ID to prevent data leaks
 // const DEFAULT_ORG_ID = 1;
@@ -9,9 +10,13 @@ import { AuditService } from '../audit/audit.service';
 export const getAllBranches = async (orgId: number, excludeBranchId?: number, userId?: number) => {
     if (!orgId) throw new Error("Org ID is required for fetching branches");
 
-    let whereClause = eq(branches.orgId, orgId);
+    let whereClause = and(eq(branches.orgId, orgId), isNotDeleted(branches))!;
     if (excludeBranchId) {
-        whereClause = and(eq(branches.orgId, orgId), sql`${branches.id} != ${excludeBranchId}`)!;
+        whereClause = and(
+            eq(branches.orgId, orgId),
+            isNotDeleted(branches),
+            sql`${branches.id} != ${excludeBranchId}`
+        )!;
     }
 
     if (userId) {
@@ -62,7 +67,7 @@ export const createBranch = async (data: {
     // Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
     if (!org) throw new Error('Organization not found');
-    if (org.status === 2) throw new Error('Cannot create branch for an inactive organization');
+    if (!isActiveStatus(org.status)) throw new Error('Cannot create branch for an inactive organization');
 
     // Check if branch name exists for this org
     const existing = await db.select()
@@ -70,7 +75,8 @@ export const createBranch = async (data: {
         .where(
             and(
                 eq(branches.orgId, orgId),
-                eq(branches.name, data.name)
+                eq(branches.name, data.name),
+                isNotDeleted(branches)
             )
         );
 
@@ -110,12 +116,12 @@ export const updateBranch = async (id: number, data: {
     country?: string;
     status?: 1 | 2;
 }, userId: number) => {
-    const [branch] = await db.select().from(branches).where(eq(branches.id, id));
+    const [branch] = await db.select().from(branches).where(and(eq(branches.id, id), isNotDeleted(branches)));
     if (!branch) throw new Error('Branch not found');
 
     // Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, branch.orgId));
-    if (org && org.status === 2) throw new Error('Cannot update branch for an inactive organization');
+    if (org && !isActiveStatus(org.status)) throw new Error('Cannot update branch for an inactive organization');
 
     const updateData = { ...data };
 
@@ -141,17 +147,19 @@ export const updateBranch = async (id: number, data: {
 
 export const deleteBranch = async (id: number, userId: number) => {
     // 1. Check if branch exists
-    const [branch] = await db.select().from(branches).where(eq(branches.id, id));
+    const [branch] = await db.select().from(branches).where(and(eq(branches.id, id), isNotDeleted(branches)));
     if (!branch) throw new Error('Branch not found');
 
     // 2. Check Org Status
     const [org] = await db.select().from(organizations).where(eq(organizations.id, branch.orgId));
-    if (org && org.status === 2) throw new Error('Cannot delete branch for an inactive organization');
+    if (org && !isActiveStatus(org.status)) throw new Error('Cannot delete branch for an inactive organization');
 
     // 3. Cascade Delete (Transactional)
     return await db.transaction(async (tx) => {
-        // A. Delete Transactions linked to this branch
-        await tx.delete(transactions).where(eq(transactions.branchId, id));
+        // A. Soft delete transactions linked to this branch.
+        await tx.update(transactions)
+            .set({ status: DELETED_STATUS, updatedAt: new Date() })
+            .where(and(eq(transactions.branchId, id), isNotDeleted(transactions)));
 
         // B. Delete Branch Summaries (Wrapped in try-catch as these tables might not be created in MariaDB 10.4 yet)
         try {
@@ -166,8 +174,13 @@ export const deleteBranch = async (id: number, userId: number) => {
         // C. Accounts and categories are organization-wide masters now,
         // so branch deletion must not try to remove them.
 
-        // D. Delete The Branch
-        await tx.delete(branches).where(eq(branches.id, id));
+        // D. Soft delete the branch itself.
+        await tx.update(branches)
+            .set({
+                status: DELETED_STATUS,
+                updatedAt: new Date()
+            })
+            .where(eq(branches.id, id));
 
         // Audit Log
         if (userId) {
@@ -182,6 +195,6 @@ export const deleteBranch = async (id: number, userId: number) => {
             );
         }
 
-        return { success: true, message: "Branch and all associated data (Accounts, Transactions, Categories) deleted successfully." };
+        return { success: true, message: "Branch archived successfully." };
     });
 };

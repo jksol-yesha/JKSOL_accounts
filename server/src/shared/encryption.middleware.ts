@@ -70,6 +70,7 @@ export const encryptionMiddleware = (app: Elysia) =>
                     }
 
                     set.status = 400;
+                    set.headers['x-crypto-key-refresh'] = '1';
                     // Return the specific error message to the client for debugging
                     throw new Error(`Decryption failed: ${(error as any).message}`);
                 }

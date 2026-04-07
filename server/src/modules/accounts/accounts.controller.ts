@@ -3,8 +3,9 @@ import { successResponse } from '../../shared/response';
 import type { AuthenticatedUser, ElysiaContext } from '../../shared/auth.middleware';
 import { db } from '../../db';
 import { accounts } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { WebSocketService } from '../../shared/websocket.service';
+import { isNotDeleted } from '../../shared/soft-delete';
 
 export const getAccounts = async ({ user, orgId, body, headers }: ElysiaContext & { body: { status?: 1 | 2, financialYearId?: number } }) => {
     if (!user || !orgId) throw new Error("Unauthorized: User or Organization not identified");
@@ -65,7 +66,7 @@ export const updateAccount = async ({ params, body, user, orgId, set }: ElysiaCo
     const id = parseInt(params.id);
 
     // 1. Fetch Account
-    const [account] = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, id));
+    const [account] = await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
     if (!account) {
         set.status = 404;
         return { success: false, message: "Account not found" };
@@ -126,7 +127,7 @@ export const deleteAccount = async ({ body, user, orgId, set }: ElysiaContext & 
         const id = body.id;
 
         // 1. Fetch Account
-        const [account] = await db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, id));
+        const [account] = await db.select({ id: accounts.id }).from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
 
         if (!account) {
             set.status = 404;
@@ -147,7 +148,7 @@ export const deleteAccount = async ({ body, user, orgId, set }: ElysiaContext & 
             data: { id }
         });
 
-        return successResponse('Account deleted successfully');
+        return successResponse('Account archived successfully');
     } catch (e: any) {
         console.error("Delete account error:", e);
         // Robust check for FK constraints
@@ -160,13 +161,16 @@ export const deleteAccount = async ({ body, user, orgId, set }: ElysiaContext & 
             errCode === 'ER_ROW_IS_REFERENCED_2' ||
             errMessage.includes('foreign key constraint fails') ||
             causeMessage.includes('foreign key constraint fails') ||
+            errMessage.includes('used in associated records') ||
             errMessage.includes('constraint') ||
             (errMessage.includes('Failed query') && errMessage.includes('delete from'))
         ) {
             set.status = 400;
             return {
                 success: false,
-                message: "Cannot delete this account because it is used in associated records. Please modify Status to 'Inactive' instead."
+                message: errMessage.includes('used in associated records')
+                    ? e.message
+                    : "Cannot delete this account because it is used in associated records. Please modify Status to 'Inactive' instead."
             };
         }
         throw e;

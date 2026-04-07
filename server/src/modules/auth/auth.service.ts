@@ -6,6 +6,8 @@ import { users, organizations, financialYears, branches, roles } from '../../db/
 import { eq, and } from 'drizzle-orm';
 import { sql } from "drizzle-orm";
 
+const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+
 const sendOtpEmailInBackground = (email: string, otp: string) => {
     EmailService.sendOtpEmail(email, otp).catch((error) => {
         console.error(`[OTP EMAIL ERROR] Failed to send OTP email to ${email}:`, error);
@@ -258,7 +260,7 @@ export const refreshToken = async (incomingRefreshToken: string, jwt: any) => {
         role: user.role ? user.role.toLowerCase() : null,
         orgIds: orgIdsParsed,
         branchIds: branchIdsParsed,
-        exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+        exp: Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL_SECONDS // 7 days
     });
 
     return {
@@ -423,7 +425,7 @@ export const verifyLoginOtp = async (email: string, otp: string, jwt: any) => {
             role: user.role || 'member',
             orgIds: orgIdsParsed,
             branchIds: branchIdsParsed,
-            exp: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours
+            exp: Math.floor(Date.now() / 1000) + ACCESS_TOKEN_TTL_SECONDS // 7 days
         });
 
         const refreshTokenStr = crypto.randomUUID();
