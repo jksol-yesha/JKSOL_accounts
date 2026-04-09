@@ -42,7 +42,10 @@ export const getSummary = async ({ body, set, user, orgId, branchId: contextBran
             }
         }
 
-        const summary = await DashboardService.getSummary(orgId, finalBranchId, financialYearId, targetCurrency, user);
+        const startDate = body.startDate || undefined;
+        const endDate = body.endDate || undefined;
+
+        const summary = await DashboardService.getSummary(orgId, finalBranchId, financialYearId, targetCurrency, user, startDate, endDate);
         return { success: true, data: summary };
     } catch (error: any) {
         console.error('Dashboard Summary Error:', error);
@@ -91,13 +94,18 @@ export const getTrends = async ({ body, set, user, orgId, branchId: contextBranc
             }
         }
 
+        const startDate = body.startDate || undefined;
+        const endDate = body.endDate || undefined;
+
         const trends = await DashboardService.getTrends(
             orgId,
             finalBranchId,
             financialYearId,
             compareFinancialYearId,
             targetCurrency,
-            user
+            user,
+            startDate,
+            endDate
         );
 
         return { success: true, data: trends };
@@ -148,7 +156,10 @@ export const getRankings = async ({ body, set, user, orgId, branchId: contextBra
             }
         }
 
-        const rankings = await DashboardService.getCategoryRankings(orgId, finalBranchId, financialYearId, targetCurrency, user);
+        const startDate = body.startDate || undefined;
+        const endDate = body.endDate || undefined;
+
+        const rankings = await DashboardService.getCategoryRankings(orgId, finalBranchId, financialYearId, targetCurrency, user, startDate, endDate);
         return { success: true, data: rankings };
     } catch (error: any) {
         console.error('Dashboard Rankings Error:', error);

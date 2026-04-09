@@ -13,11 +13,17 @@ const formatYAxis = (value) => {
 const CustomTooltip = ({ active, payload, label, formatCurrency }) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-white px-3 py-2 border border-slate-200 rounded-md shadow-sm">
-                <p className="text-[11px] text-slate-500 font-semibold mb-1">{label}</p>
-                <p className="text-[12px] font-bold text-[#111827]">
-                    {formatCurrency(payload[0].value)}
-                </p>
+            <div className="bg-white px-4 py-3 border border-slate-200 rounded-md shadow-sm min-w-[110px]">
+                <p className="text-[11px] text-slate-500 font-semibold mb-2">{label}</p>
+                <div className="flex flex-col gap-1.5">
+                    {payload.map((entry, index) => (
+                        <div key={index} className="flex items-center justify-end">
+                            <span className="text-[13px] font-bold" style={{ color: entry.color }}>
+                                {formatCurrency(entry.value)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
             </div>
         );
     }
@@ -37,7 +43,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-2 overflow-hidden min-h-[360px]">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0">
+            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50">
                 <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
                     Cash Flow
                 </h3>
@@ -51,9 +57,13 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <defs>
-                                <linearGradient id="colorCashFlow" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                                <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.15}/>
+                                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
@@ -70,16 +80,28 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                                 tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
                                 tickFormatter={formatYAxis}
                             />
-                            <Tooltip content={<CustomTooltip formatCurrency={formatCurrency} />} />
+                            <Tooltip content={<CustomTooltip formatCurrency={formatCurrency} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
                             <Area 
                                 type="monotone" 
-                                dataKey="value" 
-                                stroke="#3b82f6" 
+                                name="Income"
+                                dataKey="income" 
+                                stroke="#10b981" 
                                 strokeWidth={2.5}
                                 fillOpacity={1} 
-                                fill="url(#colorCashFlow)" 
-                                activeDot={{ r: 5, fill: "#3b82f6", stroke: "#fff", strokeWidth: 2 }}
-                                dot={{ r: 3, fill: "#3b82f6", stroke: "#fff", strokeWidth: 1.5 }}
+                                fill="url(#colorIncome)" 
+                                activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
+                                dot={{ r: 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1.5 }}
+                            />
+                            <Area 
+                                type="monotone" 
+                                name="Expense"
+                                dataKey="expense" 
+                                stroke="#f43f5e" 
+                                strokeWidth={2.5}
+                                fillOpacity={1} 
+                                fill="url(#colorExpense)" 
+                                activeDot={{ r: 4, fill: "#f43f5e", stroke: "#fff", strokeWidth: 2 }}
+                                dot={{ r: 3, fill: "#f43f5e", stroke: "#fff", strokeWidth: 1.5 }}
                             />
                         </AreaChart>
                     </ResponsiveContainer>

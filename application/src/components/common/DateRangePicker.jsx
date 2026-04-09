@@ -52,7 +52,7 @@ const DateRangePicker = forwardRef(({
         const rect = inputRef.current.getBoundingClientRect();
         const viewportPadding = 12;
         const popupWidth = Math.min(
-            presetOptions.length > 0 ? 472 : 280,
+            presetOptions.length > 0 ? 360 : 224,
             window.innerWidth - (viewportPadding * 2)
         );
         const spaceBelow = window.innerHeight - rect.bottom;
@@ -228,52 +228,49 @@ const DateRangePicker = forwardRef(({
 
     return (
         <div className={`relative ${className}`} ref={containerRef} onClick={(e) => e.stopPropagation()}>
-            <div
+            <button
+                type="button"
                 ref={inputRef}
                 tabIndex={0}
                 onKeyDown={handleKeyDownInternal}
-                className="flex w-full h-[38px] shadow-sm rounded-lg cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20 group"
+                className="group relative flex items-center gap-2 px-3 w-full h-[38px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                 onClick={() => {
                     if (!isOpen) updatePosition();
                     setIsOpen(!isOpen);
                 }}
             >
-                <div className="flex-1 h-full flex items-center pl-2.5 pr-2 bg-[#f1f3f9] border border-gray-100 border-r-0 rounded-l-lg transition-all group-hover:border-gray-300 overflow-hidden font-medium text-sm text-gray-700">
-                    <div className="flex-1 truncate">
-                        {startDate ? (
-                            <span className="font-medium text-gray-800">
-                                {formatDisplayDate(startDate)}
-                                {endDate && endDate !== startDate ? ` to ${formatDisplayDate(endDate)}` : ''}
-                            </span>
-                        ) : (
-                            <span className="text-black font-normal">{placeholder}</span>
-                        )}
-                    </div>
+                <Calendar size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
+                <div className="flex-1 text-left truncate">
+                    {startDate ? (
+                        <span className="text-sm font-semibold text-slate-800">
+                            {formatDisplayDate(startDate)}
+                            {endDate && endDate !== startDate ? ` to ${formatDisplayDate(endDate)}` : ''}
+                        </span>
+                    ) : (
+                        <span className="text-sm font-semibold text-slate-400">{placeholder}</span>
+                    )}
                 </div>
-                <div className="h-full w-[38px] bg-black flex items-center justify-center text-white rounded-r-lg shrink-0 hover:bg-gray-800 transition-colors">
-                    <Calendar size={18} />
-                </div>
-            </div>
+            </button>
 
             {isOpen && typeof document !== 'undefined' && createPortal(
                 <div
                     data-date-range-dropdown="true"
                     style={dropdownStyles}
-                    className="bg-white rounded-xl shadow-xl border border-gray-100 p-4 min-w-[280px]"
+                    className="bg-white rounded-xl shadow-xl border border-gray-100 p-3 w-max"
                 >
                     <div className="flex flex-col">
-                        <div className={presetOptions.length > 0 ? 'flex gap-4' : ''}>
+                        <div className={presetOptions.length > 0 ? 'flex gap-2' : ''}>
                             {presetOptions.length > 0 && (
-                                <div className="w-[136px] border-r border-gray-100 pr-4 py-2">
-                                    <div className="space-y-1">
+                                <div className="w-[128px] border-r border-gray-100 pr-2 py-1 max-h-[214px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300">
+                                    <div className="space-y-0.5">
                                         {presetOptions.map((option) => (
                                             <button
                                                 key={option.value}
                                                 type="button"
                                                 onClick={() => handlePresetSelect(option)}
-                                                className={`flex w-full items-center rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors ${
+                                                className={`flex w-full items-center rounded-md px-2 py-1.5 text-left text-xs font-medium transition-colors ${
                                                     (usesDeferredApply ? draftPreset : selectedPreset) === option.value
-                                                        ? 'bg-black text-white'
+                                                        ? 'bg-black text-white shadow-sm'
                                                         : 'text-gray-600 hover:bg-gray-50'
                                                 }`}
                                             >
@@ -284,28 +281,28 @@ const DateRangePicker = forwardRef(({
                                 </div>
                             )}
 
-                            <div className="flex-1 min-w-0 py-2">
-                                <div className="flex items-center justify-between mb-4 px-2">
-                                    <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                                        <ChevronLeft size={16} className="text-gray-500" />
+                            <div className="w-[200px] shrink-0 py-1 px-1">
+                                <div className="flex items-center justify-between mb-2">
+                                    <button type="button" onClick={handlePrevMonth} className="p-1 hover:bg-gray-100 rounded-md transition-colors border border-transparent hover:border-gray-200">
+                                        <ChevronLeft size={14} className="text-gray-600" />
                                     </button>
-                                    <span className="text-sm font-bold text-gray-800">
+                                    <span className="text-[13px] font-bold text-gray-800 tracking-tight">
                                         {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                                     </span>
-                                    <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-gray-100 rounded-lg transition-colors">
-                                        <ChevronRight size={16} className="text-gray-500" />
+                                    <button type="button" onClick={handleNextMonth} className="p-1 hover:bg-gray-100 rounded-md transition-colors border border-transparent hover:border-gray-200">
+                                        <ChevronRight size={14} className="text-gray-600" />
                                     </button>
                                 </div>
 
-                                <div className="grid grid-cols-7 gap-1 mb-2 px-2">
+                                <div className="grid grid-cols-7 gap-0.5 mb-1">
                                     {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                                        <div key={d} className="text-center text-[10px] font-bold text-gray-400 uppercase">{d}</div>
+                                        <div key={d} className="text-center text-[9px] font-bold tracking-wider text-gray-400 uppercase pb-1">{d}</div>
                                     ))}
                                 </div>
 
-                                <div className="grid grid-cols-7 gap-1 px-2">
+                                <div className="grid grid-cols-7 gap-0.5">
                                     {Array.from({ length: firstDay }).map((_, i) => (
-                                        <div key={`empty-${i}`} />
+                                        <div key={`empty-${i}`} className="h-7 w-7" />
                                     ))}
                                     {Array.from({ length: days }).map((_, i) => {
                                         const day = i + 1;
@@ -319,11 +316,11 @@ const DateRangePicker = forwardRef(({
                                                 type="button"
                                                 onClick={() => handleDateClick(day)}
                                                 className={`
-                                                    h-8 w-8 rounded-lg text-xs font-medium transition-all flex items-center justify-center
-                                                    ${isSelected ? 'bg-black text-white shadow-md' : ''}
+                                                    h-7 w-7 rounded-md text-[12px] font-medium transition-all flex items-center justify-center
+                                                    ${isSelected ? 'bg-black text-white shadow-sm ring-1 ring-black ring-offset-1' : ''}
                                                     ${inRange ? 'bg-gray-100 text-gray-800 rounded-none' : ''}
-                                                    ${today && !isSelected && !inRange ? 'text-black font-bold bg-gray-100' : ''}
-                                                    ${!isSelected && !inRange && !today ? 'text-gray-600 hover:bg-gray-50' : ''}
+                                                    ${today && !isSelected && !inRange ? 'text-black font-bold bg-gray-100 ring-1 ring-gray-200' : ''}
+                                                    ${!isSelected && !inRange && !today ? 'text-gray-600 hover:bg-gray-100' : ''}
                                                 `}
                                             >
                                                 {day}
@@ -334,18 +331,18 @@ const DateRangePicker = forwardRef(({
                             </div>
                         </div>
 
-                        <div className="mt-4 pt-4 border-t border-gray-100 flex justify-end gap-2 px-2">
+                        <div className="mt-2 pt-2 border-t border-gray-100 flex justify-end gap-1.5 px-1">
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="h-9 px-4 text-sm font-semibold text-gray-500 hover:text-gray-800 transition-colors"
+                                className="h-7 px-2.5 rounded-md text-[12px] font-semibold text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={handleApply}
-                                className="h-9 rounded-lg bg-black px-6 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="h-7 rounded-md bg-black px-3 text-[12px] font-semibold text-white shadow-sm hover:bg-gray-800 transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Apply
                             </button>

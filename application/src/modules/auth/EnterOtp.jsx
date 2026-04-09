@@ -4,6 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import apiService from '../../services/api';
 import AuthLayout from './AuthLayout';
+import { Loader } from '../../components/common/Loader';
 
 const EnterOtp = () => {
     const location = useLocation();
@@ -127,6 +128,9 @@ const EnterOtp = () => {
         isSubmittingRef.current = true;
         setIsLoading(true);
 
+        // VIEW LOADER (REMOVE LATER)
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
         try {
             let response;
             if (flow === 'login') {
@@ -219,7 +223,7 @@ const EnterOtp = () => {
                     className="w-full h-10 bg-slate-900 text-white rounded-md text-sm font-semibold hover:bg-slate-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                     disabled={isLoading || otp.join('').length !== 6}
                 >
-                    {isLoading ? 'Verifying...' : 'Verify Code'}
+                    {isLoading ? <Loader className="h-5 w-5 text-emerald-400" /> : 'Verify'}
                 </button>
 
                 <div className="mt-6 text-center text-sm font-medium text-slate-500">

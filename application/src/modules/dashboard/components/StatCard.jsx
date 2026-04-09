@@ -282,11 +282,10 @@ const StatCard = ({
         <div
             className="
                 bg-white
-                p-3 lg:px-4 lg:py-3.5
-                rounded-md
-                border-2 border-transparent border-b-slate-100
-                shadow-[0_1px_3px_rgb(0,0,0,0.02)]
-                hover:border-slate-200
+                px-5 py-4
+                rounded-lg
+                border border-slate-200
+                shadow-sm
                 transition-all duration-300
                 flex flex-col
                 self-start
@@ -299,7 +298,7 @@ const StatCard = ({
                 className="flex justify-between items-start mb-1.5 lg:mb-1.5 dashboard-laptop-metric-header"
                 style={compact ? { marginBottom: '0.25rem' } : undefined}
             >
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide dashboard-laptop-metric-title">
+                <span className="text-[14px] font-medium text-slate-900 tracking-tight dashboard-laptop-metric-title">
                     {title}
                 </span>
 

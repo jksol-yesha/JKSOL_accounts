@@ -70,13 +70,14 @@ const resolveTxnCurrency = (currencyCode?: string | null, fallbackCurrency = 'IN
 };
 
 export const DashboardService = {
-    getSummary: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any) => {
+    getSummary: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any, customStartDate?: string, customEndDate?: string) => {
         // 1. Get Financial Year Details
         const fyList = await db.select().from(financialYears).where(eq(financialYears.id, financialYearId)).limit(1);
         const fy = fyList[0];
         if (!fy) throw new Error('Financial Year not found');
 
-        const { startDate, endDate } = fy;
+        const startDate = customStartDate || fy.startDate;
+        const endDate = customEndDate || fy.endDate;
 
         // 1b. Get Organization Base Currency AND Display Currency
         const orgList = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
@@ -282,7 +283,9 @@ export const DashboardService = {
         financialYearId: number,
         compareFinancialYearId?: number,
         targetCurrency?: string,
-        user?: any
+        user?: any,
+        customStartDate?: string,
+        customEndDate?: string
     ) => {
         const fyIds = [financialYearId, compareFinancialYearId].filter(Boolean) as number[];
         const fyRows = await db
@@ -309,12 +312,14 @@ export const DashboardService = {
         const expenseId = getTypeId('expense');
         const investmentId = getTypeId('investment', 'invest');
 
-        const buildPeriodSeries = async (fy: typeof currentFy) => {
-            const monthCount = Math.max(1, monthDiffInclusive(fy.startDate, fy.endDate));
-            const labels = Array.from({ length: monthCount }, (_, index) => addMonths(fy.startDate, index).label);
+        const buildPeriodSeries = async (fy: typeof currentFy, periodStart?: string, periodEnd?: string) => {
+            const start = periodStart || fy.startDate;
+            const end = periodEnd || fy.endDate;
+            const monthCount = Math.max(1, monthDiffInclusive(start, end));
+            const labels = Array.from({ length: monthCount }, (_, index) => addMonths(start, index).label);
             const monthKeyToIndex = new Map<string, number>();
 
-            Array.from({ length: monthCount }, (_, index) => addMonths(fy.startDate, index)).forEach((item, index) => {
+            Array.from({ length: monthCount }, (_, index) => addMonths(start, index)).forEach((item, index) => {
                 monthKeyToIndex.set(`${item.year}-${String(item.month).padStart(2, '0')}`, index);
             });
 
@@ -331,8 +336,8 @@ export const DashboardService = {
                 eq(transactions.orgId, orgId),
                 isNotDeleted(transactions),
                 eq(transactions.status, 1),
-                gte(transactions.txnDate, fy.startDate),
-                lte(transactions.txnDate, fy.endDate)
+                gte(transactions.txnDate, start),
+                lte(transactions.txnDate, end)
             ];
 
             applyTxnBranchFilter(whereClause, branchId, user);
@@ -357,8 +362,8 @@ export const DashboardService = {
                 eq(transactions.orgId, orgId),
                 isNotDeleted(transactions),
                 eq(transactions.status, 1),
-                gte(transactions.txnDate, fy.startDate),
-                lte(transactions.txnDate, fy.endDate),
+                gte(transactions.txnDate, start),
+                lte(transactions.txnDate, end),
                 isNotDeleted(accounts),
                 eq(accounts.accountType, 1),
                 eq(accounts.subtype, 14)
@@ -437,8 +442,14 @@ export const DashboardService = {
             };
         };
 
-        const currentSeries = await buildPeriodSeries(currentFy);
-        const compareSeries = compareFy ? await buildPeriodSeries(compareFy) : null;
+        const subtractYear = (dateStr?: string) => {
+            if (!dateStr) return undefined;
+            const [y, m, d] = dateStr.split('-');
+            return `${Number(y) - 1}-${m}-${d}`;
+        };
+
+        const currentSeries = await buildPeriodSeries(currentFy, customStartDate, customEndDate);
+        const compareSeries = compareFy ? await buildPeriodSeries(compareFy, subtractYear(customStartDate), subtractYear(customEndDate)) : null;
 
         return {
             baseCurrency: displayCurrency,
@@ -448,13 +459,14 @@ export const DashboardService = {
         };
     },
 
-    getCategoryRankings: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any) => {
+    getCategoryRankings: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any, customStartDate?: string, customEndDate?: string) => {
         // 1. Get Financial Year
         const fyList = await db.select().from(financialYears).where(eq(financialYears.id, financialYearId)).limit(1);
         const fy = fyList[0];
         if (!fy) throw new Error('Financial Year not found');
 
-        const { startDate, endDate } = fy;
+        const startDate = customStartDate || fy.startDate;
+        const endDate = customEndDate || fy.endDate;
 
         // 1b. Get Org Details for Base Currency
         const orgList = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);

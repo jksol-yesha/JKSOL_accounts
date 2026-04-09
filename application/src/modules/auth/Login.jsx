@@ -72,7 +72,7 @@ const Login = () => {
         setLoading(true);
         try {
             await apiService.auth.sendLoginOtp(email.toLowerCase());
-            showToast('OTP sent successfully. Redirecting to verification...', 'success');
+            showToast('OTP sent successfully.', 'success');
             redirectTimerRef.current = setTimeout(() => {
                 navigate('/enter-otp', { state: { email: email.toLowerCase(), flow: 'login' } });
             }, 900);

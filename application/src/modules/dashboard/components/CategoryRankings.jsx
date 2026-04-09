@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import LoadingOverlay from '../../../components/common/LoadingOverlay';
 import useDelayedOverlayLoader from '../../../hooks/useDelayedOverlayLoader';
 import isIgnorableRequestError from '../../../utils/isIgnorableRequestError';
 import { cn } from '../../../utils/cn';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Wallet } from 'lucide-react';
 import apiService from '../../../services/api';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
@@ -95,12 +96,17 @@ const getCurrentBalance = (account) => {
 };
 
 // --- CUSTOM CARD SHELL MATCHING REFERENCE IMAGE ---
-const CardShell = ({ title, children, className }) => (
+const CardShell = ({ title, headerRight, children, className }) => (
     <div className={cn("bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden", className)}>
-        <div className="px-5 py-4 border-b border-slate-100 bg-white shrink-0">
-            <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0 flex items-center justify-between gap-4">
+            <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
                 {title}
             </h3>
+            {headerRight && (
+                <div className="flex items-center justify-end pointer-events-none">
+                    {headerRight}
+                </div>
+            )}
         </div>
         <div className="flex-1 min-h-0 flex flex-col relative bg-white">
             {children}
@@ -134,10 +140,25 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
         .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
     const totalAbsoluteAmount = accountItems.reduce((sum, acc) => sum + Math.abs(acc.amount), 0);
+    const totalAvailableBalance = accountItems.reduce((sum, acc) => sum + acc.amount, 0);
     const topAccounts = accountItems.slice(0, 5);
 
+    const isTotalPositive = totalAvailableBalance >= 0;
+
+    const totalBalanceBadge = accountItems.length > 0 ? (
+        <div className="flex items-center gap-1.5" title="Total Available Balance">
+            <Wallet className="w-4 h-4 text-slate-400" />
+            <span className={cn(
+                "text-[14px] font-semibold tracking-tight",
+                isTotalPositive ? "text-slate-800" : "text-rose-600"
+            )}>
+                {formatCurrency(totalAvailableBalance)}
+            </span>
+        </div>
+    ) : null;
+
     return (
-        <CardShell title="Account Balances">
+        <CardShell title="Account Balances" headerRight={totalBalanceBadge}>
             <div className="flex-1 overflow-y-auto relative no-scrollbar pt-2">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -165,7 +186,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                         </span>
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
-                                        <span className="w-32 text-right text-[13px] font-medium text-blue-600">
+                                        <span className="w-32 text-right text-[13px] font-medium text-slate-800">
                                             {formatCurrency(cat.amount)}
                                         </span>
                                         <span className="w-8 text-right text-[12px] text-slate-400">
@@ -188,72 +209,103 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
 };
 
 // -------------------------------------------------------------
-// COLUMN 2: P&L Breakdown
+// COLUMN 2: Income vs Expenses
 // -------------------------------------------------------------
 const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetchedOnce }) => {
     const { formatCurrency } = usePreferences();
     
-    const incomeCats = categories.filter(c => String(c.type).toLowerCase() === 'income').sort((a, b) => b.amount - a.amount);
-    const topIncome = incomeCats.slice(0, 2);
-    const totalIncomeAbs = incomeCats.reduce((sum, c) => sum + Math.abs(c.amount), 0);
+    const totalIncomeApp = categories
+        .filter(c => String(c.type).toLowerCase() === 'income')
+        .reduce((sum, c) => sum + Math.abs(c.amount), 0);
+        
+    const totalExpenseApp = categories
+        .filter(c => String(c.type).toLowerCase() === 'expense')
+        .reduce((sum, c) => sum + Math.abs(c.amount), 0);
 
-    const expenseCats = categories.filter(c => String(c.type).toLowerCase() === 'expense').sort((a, b) => b.amount - a.amount);
-    const topExpense = expenseCats.slice(0, 2);
-    const totalExpenseAbs = expenseCats.reduce((sum, c) => sum + Math.abs(c.amount), 0);
-
-    const formatShorthand = (val) => {
-        return formatCurrency(val);
-    };
+    const total = totalIncomeApp + totalExpenseApp;
+    
+    const incomePercent = total > 0 ? Math.round((totalIncomeApp / total) * 100) : 0;
+    const expensePercent = total > 0 ? Math.round((totalExpenseApp / total) * 100) : 0;
+    
+    // Fallback if no data
+    const showChart = total > 0;
+    const pieData = showChart ? [
+        { name: 'Income', value: totalIncomeApp, color: '#4ade80' },
+        { name: 'Expenses', value: totalExpenseApp, color: '#f87171' }
+    ] : [{ name: 'Empty', value: 1, color: '#eff6ff' }];
 
     return (
-        <CardShell title="P&L Breakdown">
-            <div className="flex-1 overflow-y-auto px-5 py-5 relative no-scrollbar">
+        <CardShell title="Income vs Expenses">
+            <div className="flex-1 overflow-y-auto px-6 relative no-scrollbar flex flex-col justify-center py-5">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
                     </div>
                 ) : (
-                    <div className="space-y-6">
-                        <div>
-                            <div className="flex justify-between items-end mb-3">
-                                <span className="text-[11px] text-slate-500 uppercase tracking-widest font-medium">Top Income</span>
-                                <span className="text-[11px] text-slate-700 font-semibold tracking-wider">{formatShorthand(totalIncomeAbs)}</span>
-                            </div>
-                            <div className="space-y-4">
-                                {topIncome.length > 0 ? topIncome.map((cat, i) => {
-                                    const percent = totalIncomeAbs > 0 ? Math.round((Math.abs(cat.amount) / totalIncomeAbs) * 100) : 0;
-                                    return (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <span className="w-24 text-[13px] font-medium text-slate-800 truncate shrink-0">{cat.name}</span>
-                                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                                                <div className="h-full bg-emerald-600 rounded-full transition-all duration-1000" style={{ width: `${Math.max(percent, 2)}%` }} />
-                                            </div>
-                                            <span className="w-8 text-right text-[12px] font-medium text-slate-400 shrink-0">{percent}%</span>
-                                        </div>
-                                    );
-                                }) : <span className="text-[13px] text-slate-400">No income data</span>}
-                            </div>
+                    <div className="flex mx-auto items-center justify-center w-full max-w-[400px] gap-8">
+                        {/* Donut Chart */}
+                        <div className="w-[150px] h-[150px] flex-shrink-0 relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <PieChart>
+                                    <Pie
+                                        data={pieData}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={50}
+                                        outerRadius={70}
+                                        paddingAngle={0}
+                                        dataKey="value"
+                                        stroke="none"
+                                        isAnimationActive={true}
+                                        startAngle={showChart ? 90 : 0}
+                                        endAngle={showChart ? -270 : 360}
+                                    >
+                                        {pieData.map((entry, index) => (
+                                            <Cell key={`cell-${index}`} fill={entry.color} />
+                                        ))}
+                                    </Pie>
+                                </PieChart>
+                            </ResponsiveContainer>
+                            {!showChart && hasFetchedOnce && (
+                                <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
+                                    No Data
+                                </div>
+                            )}
                         </div>
-
-                        <div>
-                            <div className="flex justify-between items-end mb-3">
-                                <span className="text-[11px] text-slate-500 uppercase tracking-widest font-medium">Top Expenses</span>
-                                <span className="text-[11px] text-slate-700 font-semibold tracking-wider">{formatShorthand(totalExpenseAbs)}</span>
-                            </div>
-                            <div className="space-y-4">
-                                {topExpense.length > 0 ? topExpense.map((cat, i) => {
-                                    const percent = totalExpenseAbs > 0 ? Math.round((Math.abs(cat.amount) / totalExpenseAbs) * 100) : 0;
-                                    return (
-                                        <div key={i} className="flex items-center gap-3">
-                                            <span className="w-24 text-[13px] font-medium text-slate-800 truncate shrink-0">{cat.name}</span>
-                                            <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden flex items-center">
-                                                <div className="h-full bg-rose-600 rounded-full transition-all duration-1000" style={{ width: `${Math.max(percent, 2)}%` }} />
-                                            </div>
-                                            <span className="w-8 text-right text-[12px] font-medium text-slate-400 shrink-0">{percent}%</span>
-                                        </div>
-                                    );
-                                }) : <span className="text-[13px] text-slate-400">No expense data</span>}
-                            </div>
+                        
+                        {/* Legend */}
+                        <div className="flex-1 flex flex-col gap-6 w-full">
+                           {/* Income Legend */}
+                           <div className="flex flex-col">
+                               <div className="flex items-center gap-2 mb-1">
+                                   <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80]"></span>
+                                   <span className="text-[14px] font-medium text-slate-600">Income</span>
+                               </div>
+                               <div className="flex items-center justify-between ml-[18px]">
+                                   <div className="text-[17px] font-semibold text-slate-800 tracking-tight">
+                                       {formatCurrency(totalIncomeApp)}
+                                   </div>
+                                   <div className="text-[15px] font-medium text-slate-500">
+                                       {incomePercent}%
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           {/* Expenses Legend */}
+                           <div className="flex flex-col">
+                               <div className="flex items-center gap-2 mb-1">
+                                   <span className="w-2.5 h-2.5 rounded-full bg-[#f87171]"></span>
+                                   <span className="text-[14px] font-medium text-slate-600">Expenses</span>
+                               </div>
+                               <div className="flex items-center justify-between ml-[18px]">
+                                   <div className="text-[17px] font-semibold text-slate-800 tracking-tight">
+                                       {formatCurrency(totalExpenseApp)}
+                                   </div>
+                                   <div className="text-[15px] font-medium text-slate-500">
+                                       {expensePercent}%
+                                   </div>
+                               </div>
+                           </div>
                         </div>
                     </div>
                 )}
@@ -304,7 +356,7 @@ const InvestmentCardList = ({ categories, initialLoading, overlayLoading, hasFet
                                         )}>
                                             {isPositive ? '+' : ''}{mockReturn.toFixed(1)}%
                                         </span>
-                                        <span className="text-[11px] font-medium text-blue-600 mt-0.5">
+                                        <span className="text-[11px] font-medium text-slate-800 mt-0.5">
                                             {formatCurrency(cat.amount)}
                                         </span>
                                     </div>
@@ -326,7 +378,7 @@ const InvestmentCardList = ({ categories, initialLoading, overlayLoading, hasFet
 // -------------------------------------------------------------
 // MAIN LAYOUT WRAPPER
 // -------------------------------------------------------------
-const CategoryRankings = () => {
+const CategoryRankings = ({ dashboardFilters }) => {
     const location = useLocation();
     const { selectedBranch, loading: branchLoading, getBranchFilterValue } = useBranch();
     const { selectedYear, loading: yearLoading } = useYear();
@@ -339,7 +391,7 @@ const CategoryRankings = () => {
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
     
-    const cacheKey = `dashboard:rankings:layout_v5:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}`;
+    const cacheKey = `dashboard:rankings:layout_v6:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}:${dashboardFilters?.currency || preferences.currency}:${dashboardFilters?.dateRange?.startDate || 'all'}`;
     const rankingsContextReady = Boolean(
         location.pathname === '/dashboard' && !branchLoading && !yearLoading && selectedOrg?.id && selectedYear?.id &&
         (user?.role === 'member' || user?.role === 'owner' || selectedBranch?.id)
@@ -365,15 +417,24 @@ const CategoryRankings = () => {
             try {
                 const branchFilter = getBranchFilterValue();
                 if (!branchFilter) return;
-                const requestKey = JSON.stringify({ orgId: selectedOrg?.id, yearId: selectedYear?.id, branchFilter, currency: preferences.currency });
+                const requestKey = JSON.stringify({ orgId: selectedOrg?.id, yearId: selectedYear?.id, branchFilter, currency: dashboardFilters?.currency || preferences.currency, startDate: dashboardFilters?.dateRange?.startDate, endDate: dashboardFilters?.dateRange?.endDate });
                 const lastStartedAt = recentRankingFetches.get(requestKey) || 0;
                 if (Date.now() - lastStartedAt < 800) return;
                 recentRankingFetches.set(requestKey, Date.now());
 
                 didStartRequest = true;
                 const [rankingsResponse, accountsResponse] = await Promise.all([
-                    apiService.dashboard.getCategoryRankings({ branchId: branchFilter, financialYearId: selectedYear.id, targetCurrency: preferences.currency }, { signal: controller.signal }),
-                    apiService.accounts.getAll({ branchId: 'all', financialYearId: selectedYear.id, targetCurrency: preferences.currency }, { signal: controller.signal }).catch(() => ({ success: false, data: [] }))
+                    apiService.dashboard.getCategoryRankings({ 
+                        branchId: branchFilter, 
+                        financialYearId: selectedYear.id, 
+                        targetCurrency: dashboardFilters?.currency || preferences.currency,
+                        ...(dashboardFilters?.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
+                    }, { signal: controller.signal }),
+                    apiService.accounts.getAll({ 
+                        branchId: 'all', 
+                        financialYearId: selectedYear.id, 
+                        targetCurrency: preferences.currency 
+                    }, { signal: controller.signal }).catch(() => ({ success: false, data: [] }))
                 ]);
 
                 if (!controller.signal.aborted) {
@@ -398,7 +459,7 @@ const CategoryRankings = () => {
 
         const timeoutId = setTimeout(() => { if (rankingsContextReady) fetchRankings(); }, 100);
         return () => { clearTimeout(timeoutId); controller.abort(); };
-    }, [rankingsContextReady, location.pathname, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, preferences.currency, branchLoading, yearLoading, getBranchFilterValue, cacheKey]);
+    }, [rankingsContextReady, location.pathname, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, dashboardFilters, branchLoading, yearLoading, getBranchFilterValue, cacheKey]);
 
     const showInitialLoader = loading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);

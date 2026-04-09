@@ -12,6 +12,16 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 import BranchSelector from '../../components/layout/BranchSelector';
+import CurrencySelector from '../../components/layout/CurrencySelector';
+import DateRangePicker from '../../components/common/DateRangePicker';
+
+const CURRENCY_OPTIONS = [
+    { value: 'INR', label: '₹ - Indian Rupee (INR)' },
+    { value: 'USD', label: '$ - US Dollar (USD)' },
+    { value: 'EUR', label: '€ - Euro (EUR)' },
+    { value: 'GBP', label: '£ - British Pound (GBP)' },
+    { value: 'AED', label: 'د.إ - UAE Dirham (AED)' }
+];
 
 const recentDashboardFetches = new Map();
 
@@ -164,10 +174,16 @@ const Dashboard = () => {
     const [stats, setStats] = useState(EMPTY_STATS);
     const [previousStats, setPreviousStats] = useState(EMPTY_STATS);
     const [trends, setTrends] = useState(EMPTY_TRENDS);
+    const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+    const [dashboardFilters, setDashboardFilters] = useState({
+        dateRange: null,
+        currency: preferences.currency || 'INR'
+    });
+
     const branchCachePart = Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0
         ? selectedBranchIds.map(Number).sort((a, b) => a - b).join(',')
         : String(selectedBranch?.id || 'branch');
-    const statsCacheKey = `dashboard:summary:v5:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}:${branchCachePart}:${preferences.currency || 'cur'}`;
+    const statsCacheKey = `dashboard:summary:v6:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}:${branchCachePart}:${dashboardFilters.currency}:${dashboardFilters.dateRange?.startDate || 'all'}`;
 
     const sortedFinancialYears = [...(financialYears || [])].sort((a, b) => {
         const aDate = new Date(a.startDate || a.createdAt || 0).getTime();
@@ -190,6 +206,49 @@ const Dashboard = () => {
             (Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0)
         )
     );
+
+    const generateDatePresets = () => {
+        const today = new Date();
+        const formatDate = (d) => {
+            const year = d.getFullYear();
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const day = String(d.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        };
+        const getPastDate = (days) => {
+            const d = new Date(today);
+            d.setDate(d.getDate() - days);
+            return formatDate(d);
+        };
+        
+        return [
+            { label: 'Current FY', value: 'current', range: { startDate: selectedYear?.startDate, endDate: selectedYear?.endDate || formatDate(today), preset: 'current' } },
+            ...(previousYear?.startDate ? [{ label: 'Last FY', value: 'last_fy', range: { startDate: previousYear.startDate, endDate: previousYear.endDate, preset: 'last_fy' } }] : []),
+            { label: 'Today', value: 'today', range: { startDate: formatDate(today), endDate: formatDate(today), preset: 'today' } },
+            { label: 'Yesterday', value: 'yesterday', range: { startDate: getPastDate(1), endDate: getPastDate(1), preset: 'yesterday' } },
+            { label: 'Last 7 Days', value: 'last_7_days', range: { startDate: getPastDate(7), endDate: formatDate(today), preset: 'last_7_days' } },
+            { label: 'This Month', value: 'this_month', range: { startDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`, endDate: formatDate(today), preset: 'this_month' } },
+            { label: 'Last 30 Days', value: 'last_30_days', range: { startDate: getPastDate(30), endDate: formatDate(today), preset: 'last_30_days' } },
+            { label: 'Last Month', value: 'last_month', range: { startDate: formatDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endDate: formatDate(new Date(today.getFullYear(), today.getMonth(), 0)), preset: 'last_month' } },
+            { label: 'Last 90 Days', value: 'last_90_days', range: { startDate: getPastDate(90), endDate: formatDate(today), preset: 'last_90_days' } }
+        ];
+    };
+    
+    const datePresets = generateDatePresets();
+
+    // Default DateRangePicker to Current FY as requested
+    useEffect(() => {
+        if (selectedYear?.startDate && !dashboardFilters.dateRange) {
+            setDashboardFilters(prev => ({
+                ...prev,
+                dateRange: {
+                    startDate: selectedYear.startDate,
+                    endDate: selectedYear.endDate || new Date().toISOString().split('T')[0],
+                    preset: 'current'
+                }
+            }));
+        }
+    }, [selectedYear, dashboardFilters.dateRange]);
 
     useEffect(() => {
         try {
@@ -231,7 +290,9 @@ const Dashboard = () => {
                     yearId: selectedYear?.id || null,
                     previousYearId: previousYear?.id || null,
                     branchFilter,
-                    currency: preferences.currency || ''
+                    currency: dashboardFilters.currency,
+                    startDate: dashboardFilters.dateRange?.startDate,
+                    endDate: dashboardFilters.dateRange?.endDate
                 });
                 const lastStartedAt = recentDashboardFetches.get(requestKey) || 0;
                 if (Date.now() - lastStartedAt < 800) return;
@@ -243,7 +304,8 @@ const Dashboard = () => {
                     const response = await apiService.dashboard.getSummary({
                         branchId: branchFilter,
                         financialYearId,
-                        targetCurrency: preferences.currency
+                        targetCurrency: dashboardFilters.currency,
+                        ...(dashboardFilters.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
                     }, { signal: controller.signal });
 
                     return response?.success ? response.data : EMPTY_STATS;
@@ -254,7 +316,8 @@ const Dashboard = () => {
                         branchId: branchFilter,
                         financialYearId: selectedYear?.id,
                         compareFinancialYearId: previousYear?.id,
-                        targetCurrency: preferences.currency
+                        targetCurrency: dashboardFilters.currency,
+                        ...(dashboardFilters.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
                     }, { signal: controller.signal });
 
                     if (!response?.success || !response?.data) return EMPTY_TRENDS;
@@ -295,15 +358,17 @@ const Dashboard = () => {
 
         const timeoutId = setTimeout(() => {
             if (dashboardContextReady) {
-                fetchDashboardData();
+                setIsDashboardLoading(true);
+                fetchDashboardData().finally(() => setIsDashboardLoading(false));
             }
         }, 150);
 
         return () => {
             clearTimeout(timeoutId);
             controller.abort();
+            setIsDashboardLoading(false);
         };
-    }, [dashboardContextReady, user?.id, selectedBranch?.id, selectedYear?.id, previousYear?.id, selectedOrg?.id, preferences.currency, branchLoading, yearLoading, getBranchFilterValue, statsCacheKey]);
+    }, [dashboardContextReady, user?.id, selectedBranch?.id, selectedYear?.id, previousYear?.id, selectedOrg?.id, dashboardFilters, branchLoading, yearLoading, getBranchFilterValue, statsCacheKey]);
 
 
 
@@ -322,7 +387,7 @@ const Dashboard = () => {
     const allStats = [
         {
             title: 'Net Profit',
-            amount: formatCurrency(currentMetrics.netProfit, stats.baseCurrency),
+            amount: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
             previousSeries: [],
             currentSeries: netProfitTrail.map((point) => point.value),
             comparisonLabels: netProfitTrail.map((point) => point.label),
@@ -331,16 +396,16 @@ const Dashboard = () => {
             chartFillColor: METRIC_FILL_COLOR,
             previousSeriesLabel,
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, stats.baseCurrency),
+            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trend: null,
             trendType: currentMetrics.netProfit >= previousMetrics.netProfit ? 'up' : 'down',
-            secondaryText: formatCurrency(currentMetrics.netProfit, stats.baseCurrency),
+            secondaryText: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
             tertiaryText: netProfitChange.text,
             tertiaryTone: netProfitChange.tone
         },
         {
             title: 'Total Income',
-            amount: formatCurrency(currentMetrics.totalIncome, stats.baseCurrency),
+            amount: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
             previousSeries: [],
             currentSeries: incomeTrail.map((point) => point.value),
             comparisonLabels: incomeTrail.map((point) => point.label),
@@ -349,16 +414,16 @@ const Dashboard = () => {
             chartFillColor: METRIC_FILL_COLOR,
             previousSeriesLabel,
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, stats.baseCurrency),
+            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trend: null,
             trendType: currentMetrics.totalIncome >= previousMetrics.totalIncome ? 'up' : 'down',
-            secondaryText: formatCurrency(currentMetrics.totalIncome, stats.baseCurrency),
+            secondaryText: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
             tertiaryText: incomeChange.text,
             tertiaryTone: incomeChange.tone
         },
         {
             title: 'Total Expenses',
-            amount: formatCurrency(currentMetrics.totalExpense, stats.baseCurrency),
+            amount: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
             previousSeries: [],
             currentSeries: expenseTrail.map((point) => point.value),
             comparisonLabels: expenseTrail.map((point) => point.label),
@@ -367,16 +432,16 @@ const Dashboard = () => {
             chartFillColor: METRIC_FILL_COLOR,
             previousSeriesLabel,
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, stats.baseCurrency),
+            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trend: null,
             trendType: currentMetrics.totalExpense <= previousMetrics.totalExpense ? 'up' : 'down',
-            secondaryText: formatCurrency(currentMetrics.totalExpense, stats.baseCurrency),
+            secondaryText: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
             tertiaryText: expenseChange.text,
             tertiaryTone: expenseChange.tone
         },
         {
             title: 'Total Investments',
-            amount: formatCurrency(currentMetrics.totalInvestment, stats.baseCurrency),
+            amount: formatCurrency(currentMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency),
             previousSeries: [],
             currentSeries: investmentTrail.map((point) => point.value),
             comparisonLabels: investmentTrail.map((point) => point.label),
@@ -385,10 +450,10 @@ const Dashboard = () => {
             chartFillColor: METRIC_FILL_COLOR,
             previousSeriesLabel,
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, stats.baseCurrency),
+            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trend: null,
             trendType: currentMetrics.totalInvestment >= previousMetrics.totalInvestment ? 'up' : 'down',
-            secondaryText: formatCurrency(currentMetrics.totalInvestment, stats.baseCurrency),
+            secondaryText: formatCurrency(currentMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency),
             tertiaryText: investmentChange.text,
             tertiaryTone: investmentChange.tone
         }
@@ -398,28 +463,63 @@ const Dashboard = () => {
         <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-gray-50/30">
             <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-4 pb-4 animate-in fade-in duration-500 flex flex-col gap-2 md:gap-3 xl:gap-2">
                 {/* Top Action Row */}
-                <div className="flex justify-end items-center mb-1 w-full">
-                    <BranchSelector />
+                <div className="flex flex-col md:flex-row justify-end items-end md:items-center mb-1 w-full gap-2 md:gap-3">
+                    <div className="flex-shrink-0">
+                        <DateRangePicker 
+                            startDate={dashboardFilters.dateRange?.startDate}
+                            endDate={dashboardFilters.dateRange?.endDate}
+                            selectedPreset={dashboardFilters.dateRange?.preset}
+                            presetOptions={datePresets}
+                            onChange={(range) => setDashboardFilters(prev => ({ ...prev, dateRange: range }))}
+                            onApplyRange={(range) => setDashboardFilters(prev => ({ ...prev, dateRange: range }))}
+                            className=""
+                        />
+                    </div>
+                    
+                    <div className="flex-shrink-0 relative">
+                        <CurrencySelector 
+                            value={dashboardFilters.currency}
+                            onChange={(val) => setDashboardFilters(prev => ({ ...prev, currency: val }))}
+                            options={CURRENCY_OPTIONS}
+                        />
+                    </div>
+
+                    <div className="flex-shrink-0">
+                        <BranchSelector />
+                    </div>
                 </div>
 
                 {/* Stat Cards - 5 Column Grid */}
                 <div className="dashboard-tablet-stat-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-start gap-3 flex-none mt-1">
                     {allStats.map((stat, index) => (
-                        <div key={index} className="w-full self-start">
+                        <div key={`${statsCacheKey}-${index}`} className="w-full self-start">
                             <StatCard {...stat} />
                         </div>
                     ))}
                 </div>
 
                 {/* Category Rankings */}
-                <div className="flex-none min-h-[300px] mt-1 relative">
-                    <CategoryRankings />
+                <div className="flex-none min-h-[300px] mt-1 relative" key={`${statsCacheKey}-rankings`}>
+                    <CategoryRankings dashboardFilters={dashboardFilters} />
                 </div>
 
+                {isDashboardLoading && (
+                    <div className="absolute inset-0 z-50 bg-slate-50/40 backdrop-blur-[1px] flex items-center justify-center rounded-xl">
+                        <div className="flex bg-white shadow-md rounded-full px-4 py-2 items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-sm font-medium text-slate-700">Loading Dashboard...</span>
+                        </div>
+                    </div>
+                )}
+
                 {/* Additional Charts Row */}
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 xl:gap-4 flex-none mt-2">
-                    <CashFlowCard stats={stats} chartData={netProfitTrail} />
-                    <DashboardPieChart />
+                <div className={`grid grid-cols-1 lg:grid-cols-3 gap-3 xl:gap-4 flex-none mt-2 transition-opacity duration-300 ${isDashboardLoading ? 'opacity-50' : 'opacity-100'}`}>
+                    <CashFlowCard key={`${statsCacheKey}-cashflow`} stats={stats} chartData={netProfitTrail.map((p, i) => ({
+                        label: p.label,
+                        income: incomeTrail[i]?.value || 0,
+                        expense: expenseTrail[i]?.value || 0
+                    }))} />
+                    <DashboardPieChart key={`${statsCacheKey}-pie`} dashboardFilters={dashboardFilters} />
                 </div>
             </div>
         </div>

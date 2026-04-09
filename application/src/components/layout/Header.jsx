@@ -217,50 +217,7 @@ const Header = ({ onMenuClick, isCollapsed, toggleSidebar }) => {
 
 
 
-                {/* Year Selector */}
-                <div className="relative ml-1 md:ml-2 shrink-0" ref={yearRef}>
-                    <button
-                        onClick={() => setShowYearMenu(!showYearMenu)}
-                        className="hidden md:flex items-center gap-2.5 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm hover:shadow-md hover:border-emerald-200 cursor-pointer group transition-all duration-200"
-                    >
-                        <div className="flex items-center justify-center w-7 h-7 rounded bg-slate-50 border border-slate-100 text-slate-500 group-hover:text-emerald-600 group-hover:bg-emerald-50 group-hover:border-emerald-100 transition-colors">
-                            <Calendar size={14} strokeWidth={2.5} />
-                        </div>
-                        <div className="flex flex-col items-start min-w-0 pr-1 py-0.5">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-1">Financial Year</span>
-                            <span className="text-[13px] font-bold text-slate-800 leading-none group-hover:text-emerald-700 transition-colors">
-                                {selectedYear?.name || 'Select FY'}
-                            </span>
-                        </div>
-                        <ChevronDown size={14} className="text-slate-400 group-hover:text-emerald-600 transition-colors ml-1" />
-                    </button>
-
-                    {/* Year Dropdown (Conservative) */}
-                    {showYearMenu && (
-                        <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded shadow-[0_4px_24px_rgba(0,0,0,0.1)] border border-slate-200 py-1.5 animate-in fade-in slide-in-from-top-2 duration-200 z-50">
-                            <div className="max-h-64 overflow-y-auto no-scrollbar">
-                                {(financialYears || []).map((year) => {
-                                    const isActive = selectedYear?.id === year.id;
-                                    const range = year.name?.includes('-') ? `(Apr '${year.name.split('-')[0].slice(2)} - Mar '${year.name.split('-')[1]})` : '';
-                                    
-                                    return (
-                                        <button
-                                            key={year.id}
-                                            onClick={() => handleYearSelect(year)}
-                                            className={`w-full flex items-center justify-between px-4 py-2 hover:bg-slate-50 transition-colors ${isActive ? 'bg-slate-50/50' : ''}`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className={`text-[13px] font-medium ${isActive ? 'text-slate-900' : 'text-slate-700'}`}>{year.name}</span>
-                                                {range && <span className="text-[12px] text-slate-400">{range}</span>}
-                                            </div>
-                                            {isActive && <Check size={14} className="text-emerald-600" strokeWidth={2.5} />}
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                </div>
+                {/* Year Selector removed locally, relying on dashboard tools for date bounds */}
 
 
 
