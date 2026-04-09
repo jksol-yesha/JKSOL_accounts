@@ -89,6 +89,7 @@ const BranchSelector = () => {
     const remainingBranchCount = Math.max(0, displayNames.length - 2);
 
     const isAllStagedSelected = branches.length > 0 && branches.every(b => stagedIds.includes(Number(b.id)));
+    const isAllBranchesApplied = branches.length > 0 && branches.every(b => selectedBranchIds.includes(Number(b.id)));
     const canManageBranches = ['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase());
 
     const handleApply = () => {
@@ -113,14 +114,16 @@ const BranchSelector = () => {
                 <button
                     ref={buttonRef}
                     onClick={() => setIsOpen(!isOpen)}
-                    className="group relative flex items-center gap-1.5 md:gap-2 px-1.5 py-1 md:px-2 md:py-1.5 rounded-xl border border-gray-200 hover:border-gray-300 hover:bg-gray-100 hover:translate-x-1 hover:shadow-sm transition-all duration-200 text-xs md:text-sm font-medium text-gray-700"
+                    className="group relative flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
                 >
-                    <div className="w-6 h-6 md:w-8 md:h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500">
-                        <Building2 className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                    </div>
-                    {selectedBranch?.id === 'all' || selectedBranch?.id === 'multi' ? (
-                        <div className="flex items-center gap-1 md:gap-1.5 min-w-0">
-                            <span className="max-w-[80px] md:max-w-[140px] truncate text-xs md:text-sm font-bold text-slate-800">
+                    <Building2 size={16} className="text-gray-400 group-hover:text-primary transition-colors" />
+                    {isAllBranchesApplied ? (
+                        <span className="max-w-[150px] truncate text-sm font-semibold text-slate-800">
+                            All Branches
+                        </span>
+                    ) : selectedBranch?.id === 'all' || selectedBranch?.id === 'multi' ? (
+                        <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="max-w-[120px] truncate text-sm font-semibold text-slate-800">
                                 {allBranchLabel || 'All Branches'}
                             </span>
                             {remainingBranchCount > 0 && (
@@ -131,11 +134,11 @@ const BranchSelector = () => {
                             )}
                         </div>
                     ) : (
-                        <span className="max-w-[70px] md:max-w-[120px] truncate text-xs md:text-sm font-bold text-slate-800">
+                        <span className="max-w-[120px] truncate text-sm font-semibold text-slate-800">
                             {selectedBranch?.name || 'Select Branch'}
                         </span>
                     )}
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform ml-0.5 md:ml-1 ${isOpen ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={14} className={`text-gray-400 transition-transform ml-1 ${isOpen ? 'rotate-180 text-primary' : ''}`} />
                 </button>
 
                 {isOpen && (
@@ -145,58 +148,50 @@ const BranchSelector = () => {
                                 <div className="fixed inset-0 z-[90] bg-transparent" onClick={() => setIsOpen(false)} />
                                 <div
                                     ref={dropdownMenuRef}
-                                    className="fixed w-72 bg-white rounded-xl shadow-xl border border-gray-100 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                                    className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
                                     style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
                                 >
-                                    <div className="px-3 py-1.5 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
+                                    <div className="px-3 py-2.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
-                                            <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">Switch Branch</p>
-                                            <span className="text-[10px] text-gray-400 bg-white px-1.5 py-0.5 rounded border border-gray-100 font-medium">
-                                                Total-{(branches || []).length}
-                                            </span>
+                                            {branches.length > 0 && (
+                                                <button
+                                                    onClick={() => {
+                                                        if (isAllStagedSelected) {
+                                                            setStagedIds([Number(branches[0].id)]);
+                                                        } else {
+                                                            setStagedIds(branches.map(b => Number(b.id)));
+                                                        }
+                                                    }}
+                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors ${isAllStagedSelected ? 'text-emerald-700' : 'text-slate-500 hover:text-slate-800'} uppercase tracking-wider`}
+                                                >
+                                                    <div className="w-4 flex justify-center shrink-0">
+                                                        <Check 
+                                                            size={14} 
+                                                            className={`${isAllStagedSelected ? 'text-emerald-600' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`} 
+                                                            strokeWidth={isAllStagedSelected ? 3 : 2.5} 
+                                                        />
+                                                    </div>
+                                                    Select All
+                                                </button>
+                                            )}
                                         </div>
-                                        {canManageBranches && (
-                                            <button
-                                                onClick={() => {
-                                                    setIsOpen(false);
-                                                    setShowManageModal(true);
-                                                }}
-                                                className="group inline-flex h-7 w-7 items-center justify-center rounded-lg border border-transparent text-gray-400 transition-all hover:border-gray-200 hover:bg-white hover:text-primary"
-                                                title="Branch Settings"
-                                            >
-                                                <Settings size={15} strokeWidth={1.7} className="transition-colors" />
-                                            </button>
-                                        )}
+                                        <div className="flex items-center">
+                                            {canManageBranches && (
+                                                <button
+                                                    onClick={() => {
+                                                        setIsOpen(false);
+                                                        setShowManageModal(true);
+                                                    }}
+                                                    className="bg-slate-100 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition-colors p-1 rounded-md"
+                                                    title="Branch Settings"
+                                                >
+                                                    <Settings size={14} strokeWidth={2.5} />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
-                                    <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
-                                {/* All Branches Aggregation Option */}
-                                {branches.length > 0 && (
-                                    <button
-                                        onClick={() => {
-                                            if (isAllStagedSelected) {
-                                                setStagedIds([Number(branches[0].id)]);
-                                            } else {
-                                                setStagedIds(branches.map(b => Number(b.id)));
-                                            }
-                                        }}
-                                        className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors group hover:bg-gray-50 border-b border-gray-50`}
-                                    >
-                                        <div className="flex min-w-0 flex-1 items-center gap-3">
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isAllStagedSelected ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'}`}>
-                                                <Building2 size={16} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className={`text-sm font-bold truncate ${isAllStagedSelected ? 'text-gray-900' : 'text-gray-600'}`}>
-                                                    All Branches
-                                                </p>
-                                            </div>
-                                        </div>
-                                        {isAllStagedSelected && (
-                                            <Check size={16} className="text-primary" />
-                                        )}
-                                    </button>
-                                )}
 
+                                    <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
                                 {(branches || []).map(branch => {
                                     const isInactive = branch.status === 'inactive';
                                     const isStaged = stagedIds.includes(Number(branch.id));
@@ -208,49 +203,35 @@ const BranchSelector = () => {
                                                 if (isInactive) return;
                                                 toggleStagedBranch(branch.id);
                                             }}
-                                            className={`w-full flex items-center justify-between px-3 py-2.5 text-left transition-colors group ${isInactive
-                                                ? 'opacity-50 cursor-not-allowed bg-gray-50'
-                                                : 'hover:bg-gray-50'
-                                                }`}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isInactive ? 'opacity-50 bg-slate-50 cursor-not-allowed' : 'hover:bg-emerald-50/50'}`}
                                         >
-                                            <div className="flex min-w-0 flex-1 items-center gap-3">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${isStaged ? 'bg-primary/10 text-primary' : 'bg-gray-100 text-gray-400 group-hover:bg-gray-200'}`}>
-                                                    <Building2 size={16} />
+                                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                                <div className="w-4 flex justify-center shrink-0">
+                                                    {isStaged && <Check size={14} className="text-emerald-600" strokeWidth={2.5} />}
                                                 </div>
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex min-w-0 items-center gap-2">
-                                                        <p className={`min-w-0 flex-1 truncate text-sm font-medium ${isStaged && !isInactive ? 'text-gray-900' : 'text-gray-600'}`}>
-                                                            {branch.name}
-                                                        </p>
-                                                        {isInactive && (
-                                                            <span className="shrink-0 text-[9px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                                                Inactive
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                    <div className="flex items-center gap-2 text-xs text-gray-400 mt-0.5">
-                                                        <span className="truncate max-w-[80px] font-medium text-gray-400">{branch.currencyCode}</span>
-                                                        {branch.userRole && selectedOrg?.role !== 'owner' && (
-                                                            <>
-                                                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                                                <span className="capitalize text-indigo-600 font-medium bg-indigo-50 px-1.5 py-0 rounded text-[10px]">{branch.userRole}</span>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                    <p className={`min-w-0 truncate tracking-tight text-[13px] ${isStaged && !isInactive ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                        {branch.name}
+                                                    </p>
+                                                    {isInactive && (
+                                                        <span className="shrink-0 text-[10px] text-rose-500 font-medium ml-1">
+                                                            (Inactive)
+                                                        </span>
+                                                    )}
                                                 </div>
                                             </div>
-                                            {isStaged && (
-                                                <Check size={16} className="text-primary" />
-                                            )}
+                                            <span className="text-[10px] font-medium text-slate-400 group-hover:text-emerald-600/70 shrink-0 ml-2">
+                                                {branch.currencyCode}
+                                            </span>
                                         </button>
                                     );
                                 })}
                                     </div>
 
-                                    <div className="px-3 py-1.5 border-t border-gray-50 flex justify-end">
+                                    <div className="p-2 border-t border-slate-100 bg-white flex justify-end">
                                         <button
                                             onClick={handleApply}
-                                            className="bg-black text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-md active:scale-95 transition-all hover:bg-black/90"
+                                            className="bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all"
                                         >
                                             Apply
                                         </button>

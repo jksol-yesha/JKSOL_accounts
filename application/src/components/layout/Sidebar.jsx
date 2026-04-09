@@ -1,15 +1,14 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { X } from 'lucide-react';
 import {
-    LayoutDashboard,
-    Wallet,
-    ArrowLeftRight,
-    FolderTree,
-    FileBarChart,
-    Building2,
-    LogOut,
-    X,
-    Shield
+    Home,
+    Landmark,
+    ShoppingBag,
+    Users,
+    ArrowRightLeft,
+    BarChart2,
+    History
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import OrganizationSelector from './OrganizationSelector';
@@ -64,13 +63,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     }, [showHoverExpandPanel]);
 
     const menuItems = [
-        { icon: LayoutDashboard, label: 'Dashboard', path: '/dashboard', permission: 'DASHBOARD_VIEW' },
-        { icon: Wallet, label: 'Accounts', path: '/accounts' },
-        { icon: FolderTree, label: 'Category', path: '/category', permission: 'CATEGORY_MANAGE' },
-        { icon: Building2, label: 'Parties', path: '/parties' },
-        { icon: ArrowLeftRight, label: 'Transactions', path: '/transactions', permission: 'TXN_VIEW' },
-        { icon: FileBarChart, label: 'Reports', path: '/reports', permission: 'REPORT_VIEW' },
-        { icon: Shield, label: 'Audit Logs', path: '/audit-logs' },
+        { icon: Home, label: 'Home', path: '/dashboard', permission: 'DASHBOARD_VIEW' },
+        { icon: Landmark, label: 'Accounts', path: '/accounts' },
+        { icon: ArrowRightLeft, label: 'Transactions', path: '/transactions', permission: 'TXN_VIEW' },
+        { icon: Users, label: 'Parties', path: '/parties' },
+        { icon: ShoppingBag, label: 'Items', path: '/category', permission: 'CATEGORY_MANAGE' },
+        { icon: BarChart2, label: 'Reports', path: '/reports', permission: 'REPORT_VIEW' },
+        { icon: History, label: 'Activity', path: '/audit-logs' },
     ];
 
     const filteredMenuItems = menuItems.filter(item => {
@@ -98,7 +97,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             )}
 
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-[70] w-64 bg-white border-r border-gray-100 flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 h-full overflow-visible",
+                "fixed inset-y-0 left-0 z-[70] w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 h-full overflow-visible",
                 isTabletViewport ? (effectiveCollapsed ? "md:w-[78px]" : "md:w-64") : (isCollapsed && "lg:w-20"),
                 !isOpen && "-translate-x-full md:translate-x-0",
                 className
@@ -113,7 +112,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 {/* Mobile Close Button */}
                 <button
                     onClick={onClose}
-                    className="md:hidden p-2 -mr-2 text-gray-400 hover:text-gray-600 hover:bg-gray-50 rounded-lg transition-colors absolute top-4 right-4"
+                    className="md:hidden p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors absolute top-4 right-4"
                 >
                     <X size={20} />
                 </button>
@@ -124,12 +123,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     effectiveCollapsed && "no-scrollbar px-2"
                 )}>
 
-                    {/* Menu Label */}
-                    {!effectiveCollapsed && (
-                        <div className="px-3 mb-2 mt-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest sidebar-laptop-menu-label">Menu</span>
-                        </div>
-                    )}
+                    {/* Menu Label Removed for Minimalism */}
 
                     {filteredMenuItems.map((item) => {
                         const isActive = location.pathname.startsWith(item.path);
@@ -158,26 +152,29 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     }
                                 }}
                                 className={() => cn(
-                                    "flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all duration-200 group relative",
+                                    "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group relative border border-transparent",
                                     isActive
-                                        ? "bg-slate-900 text-white shadow-md shadow-slate-200 translate-x-1"
-                                        : "text-gray-500 hover:text-gray-900 hover:bg-gray-100 hover:translate-x-1 hover:shadow-sm",
-                                    effectiveCollapsed && "justify-center px-2 hover:translate-x-0 md:px-2.5",
+                                        ? "bg-white text-slate-800 font-semibold shadow-sm border-slate-200"
+                                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50",
+                                    effectiveCollapsed && "justify-center px-2 md:px-2.5",
                                     showHoverExpandPanel && "overflow-visible",
                                     showHoverExpandPanel && !isActive && "group-hover:rounded-r-none"
                                 )}
                             >
                                 <item.icon
-                                    size={20}
-                                    strokeWidth={2}
+                                    size={18}
+                                    strokeWidth={1.5}
                                     className={cn(
                                         "shrink-0 transition-colors",
-                                        isActive ? "text-white" : "text-gray-400 group-hover:text-gray-600"
+                                        isActive ? "text-slate-700" : "text-slate-400 group-hover:text-slate-500"
                                     )}
                                 />
 
                                 {!effectiveCollapsed && (
-                                    <span className="text-sm font-medium sidebar-laptop-item-label">{item.label}</span>
+                                    <span className={cn(
+                                        "text-[13px] tracking-tight sidebar-laptop-item-label",
+                                        isActive ? "font-bold" : "font-semibold"
+                                    )}>{item.label}</span>
                                 )}
 
                                 {/* Tooltip for collapsed state */}
@@ -205,11 +202,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     >
                         <div className="flex h-full items-center gap-4 px-4 bg-black text-white shadow-lg shadow-black/25 rounded-xl border border-black">
                             <hoveredItem.icon
-                                size={20}
-                                strokeWidth={2}
+                                size={18}
+                                strokeWidth={1.5}
                                 className={cn(
                                     "shrink-0",
-                                    "text-white"
+                                    "text-white/80"
                                 )}
                             />
                             <span className="text-base font-medium tracking-tight text-white">{hoveredItem.label}</span>

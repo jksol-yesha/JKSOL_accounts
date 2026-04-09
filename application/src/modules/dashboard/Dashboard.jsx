@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import StatCard from './components/StatCard';
 import CategoryRankings from './components/CategoryRankings';
+import CashFlowCard from './components/CashFlowCard';
+import DashboardPieChart from './components/DashboardPieChart';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
@@ -393,19 +395,15 @@ const Dashboard = () => {
     ];
 
     return (
-        <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0">
-            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-hidden px-4 md:px-4 xl:px-6 pt-2 pb-4 animate-in fade-in duration-500 flex flex-col gap-2 md:gap-3 xl:gap-2">
-                <div className="dashboard-tablet-insights-row flex items-center justify-between gap-2 md:gap-3 xl:gap-4 flex-none mt-0 mb-0 dashboard-laptop-hide-insights">
-                    <p className="dashboard-insights-text flex-1 min-w-0 text-sm md:text-base font-semibold text-gray-500">
-                        Here's your financial Insights
-                    </p>
-                    <div className="w-auto shrink-0 dashboard-insights-branch">
-                        <BranchSelector />
-                    </div>
+        <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-gray-50/30">
+            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-4 pb-4 animate-in fade-in duration-500 flex flex-col gap-2 md:gap-3 xl:gap-2">
+                {/* Top Action Row */}
+                <div className="flex justify-end items-center mb-1 w-full">
+                    <BranchSelector />
                 </div>
 
                 {/* Stat Cards - 5 Column Grid */}
-                <div className="dashboard-tablet-stat-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-start gap-3 flex-none">
+                <div className="dashboard-tablet-stat-grid grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 items-start gap-3 flex-none mt-1">
                     {allStats.map((stat, index) => (
                         <div key={index} className="w-full self-start">
                             <StatCard {...stat} />
@@ -414,8 +412,14 @@ const Dashboard = () => {
                 </div>
 
                 {/* Category Rankings */}
-                <div className="flex-1 min-h-0 mt-1 overflow-hidden">
+                <div className="flex-none min-h-[300px] mt-1 relative">
                     <CategoryRankings />
+                </div>
+
+                {/* Additional Charts Row */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 xl:gap-4 flex-none mt-2">
+                    <CashFlowCard stats={stats} chartData={netProfitTrail} />
+                    <DashboardPieChart />
                 </div>
             </div>
         </div>

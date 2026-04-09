@@ -372,8 +372,8 @@ const AuditLogs = () => {
         <PageContentShell
             header={(
                 <PageHeader
-                    title="Audit Logs"
-                    breadcrumbs={['System', 'Audit Logs']}
+                    title="User Activity"
+                    breadcrumbs={['System', 'User Activity']}
                     mobileSticky={false}
                 />
             )}

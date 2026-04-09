@@ -25,8 +25,13 @@ export const clearPublicKey = () => {
     cachedPublicKey = null;
 };
 
-// Fetch and Import Public Key
 export const fetchPublicKey = async (baseUrl) => {
+    if (!window.crypto || !window.crypto.subtle) {
+        console.error("CRITICAL: Web Crypto API is unavailable. You MUST access this site via http://localhost or HTTPS. IP addresses will block encryption.");
+        alert("Security Error: Please access the site via http://localhost instead of an IP address, or enable HTTPS.");
+        return null;
+    }
+
     if (cachedPublicKey) return cachedPublicKey;
     if (fetchPromise) return fetchPromise;
 

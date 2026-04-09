@@ -282,13 +282,11 @@ const StatCard = ({
         <div
             className="
                 bg-white
-                p-2.5 lg:px-3 lg:py-2.5
-                rounded-xl
-                border border-gray-100
-                shadow-sm
-                hover:-translate-y-0.5
+                p-3 lg:px-4 lg:py-3.5
+                rounded-md
+                border-2 border-transparent border-b-slate-100
+                shadow-[0_1px_3px_rgb(0,0,0,0.02)]
                 hover:border-slate-200
-                hover:shadow-[0_14px_32px_rgba(15,23,42,0.08)]
                 transition-all duration-300
                 flex flex-col
                 self-start
