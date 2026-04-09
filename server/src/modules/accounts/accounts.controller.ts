@@ -4,7 +4,7 @@ import type { AuthenticatedUser, ElysiaContext } from '../../shared/auth.middlew
 import { db } from '../../db';
 import { accounts } from '../../db/schema';
 import { eq, and } from 'drizzle-orm';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import { isNotDeleted } from '../../shared/soft-delete';
 
 export const getAccounts = async ({ user, orgId, body, headers }: ElysiaContext & { body: { status?: 1 | 2, financialYearId?: number } }) => {
@@ -52,11 +52,7 @@ export const createAccount = async ({ body, user, orgId, headers, set }: ElysiaC
         openingBalanceDate: body.openingBalanceDate
     });
 
-    // 🔥 Broadcast to all users in the org
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'account:created',
-        data: newAccount
-    });
+
 
     return successResponse('Account created successfully', newAccount);
 };
@@ -92,11 +88,7 @@ export const updateAccount = async ({ params, body, user, orgId, set }: ElysiaCo
         }
     };
 
-    // 🔥 Broadcast to all users in the org
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'account:updated',
-        data: updatedWithEditor
-    });
+
 
     return successResponse('Account updated successfully', updatedWithEditor);
 };
@@ -142,11 +134,7 @@ export const deleteAccount = async ({ body, user, orgId, set }: ElysiaContext & 
 
         await AccountService.deleteAccount(id, orgId, user.id);
 
-        // 🔥 Broadcast to all users in the org
-        WebSocketService.broadcastToOrg(orgId, {
-            event: 'account:deleted',
-            data: { id }
-        });
+
 
         return successResponse('Account archived successfully');
     } catch (e: any) {

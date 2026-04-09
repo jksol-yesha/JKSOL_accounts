@@ -66,7 +66,7 @@ const Login = () => {
             await apiService.auth.sendLoginOtp(email.toLowerCase());
             setSuccess('OTP sent successfully. Redirecting to verification...');
             redirectTimerRef.current = setTimeout(() => {
-                navigate('/enter-otp', { state: { email: email.toLowerCase(), flow: 'login' } });
+                navigate('/enter-otp', { state: { email: email.toLowerCase(), flow: 'login', isNewOtp: true } });
             }, 900);
         } catch (err) {
             if (!err.response || err.response.status >= 500) {

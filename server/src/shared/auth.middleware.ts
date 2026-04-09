@@ -22,6 +22,20 @@ export interface ElysiaContext {
     authError?: string | null;
 }
 
+const isExpectedAuthFailure = (value: unknown) => {
+    const message = String(
+        value instanceof Error ? value.message : (value || '')
+    ).toLowerCase();
+
+    return (
+        message.includes('expired') ||
+        message.includes('invalid') ||
+        message.includes('signature') ||
+        message.includes('token') ||
+        message.includes('jwt')
+    );
+};
+
 export const authMiddleware = (app: Elysia) => app
     .use(jwtConfig)
     .derive(async ({ jwt, headers, set, request }) => {
@@ -39,9 +53,8 @@ export const authMiddleware = (app: Elysia) => app
         try {
             const payload = await jwt.verify(token);
             if (!payload) {
-                console.error(`❌ [AuthMiddleware] Token Verification Failed for ${request.url}. Token: ${token?.substring(0, 15)}...`);
                 set.status = 401;
-                return { user: null, orgId: null, branchId: null, authError: 'Invalid or Expired Token' };
+                return { user: null, orgId: null, branchId: null, authError: "Authentication failed: Invalid or Expired Token" };
             }
 
             const userId = Number(payload.sub);
@@ -59,13 +72,13 @@ export const authMiddleware = (app: Elysia) => app
                 .where(eq(users.id, userId));
 
             if (!user) {
-                console.error(`❌ [AuthMiddleware] User not found in DB! ID: ${userId}, Token Email: ${payload.email}`);
+                console.error(` [AuthMiddleware] User not found in DB! ID: ${userId}, Token Email: ${payload.email}`);
                 set.status = 401;
                 return { user: null, orgId: null, branchId: null, authError: 'User not found' };
             }
 
             if (user.status !== 1) {
-                console.error(`❌ [AuthMiddleware] User INACTIVE in DB! ID: ${userId}`);
+                console.error(` [AuthMiddleware] User INACTIVE in DB! ID: ${userId}`);
                 set.status = 401;
                 return { user: null, orgId: null, branchId: null, authError: 'User inactive' };
             }
@@ -94,7 +107,9 @@ export const authMiddleware = (app: Elysia) => app
                 authError: null
             };
         } catch (error) {
-            console.error('❌ Auth Middleware - Error:', error);
+            if (!isExpectedAuthFailure(error)) {
+                console.error(' Auth Middleware - Error:', error);
+            }
             set.status = 401;
             return {
                 user: null,
@@ -109,7 +124,9 @@ export const authMiddleware = (app: Elysia) => app
             onBeforeHandle(async ({ user, orgId, branchId, authError, request, set }: { user: AuthenticatedUser | null, orgId: number | null, branchId: number | 'all' | null, authError: string | null, request: Request, set: any }) => {
                 // If authentication failed in the derive step, return 401 immediately
                 if (authError) {
-                    console.warn(`⚠️  [AuthMiddleware] Protected access denied for ${request.url}: ${authError}`);
+                    if (!isExpectedAuthFailure(authError)) {
+                        console.warn(`⚠️  [AuthMiddleware] Protected access denied for ${request.url}: ${authError}`);
+                    }
                     set.status = 401;
                     return { success: false, message: authError || 'Unauthorized' };
                 }
@@ -128,7 +145,7 @@ export const authMiddleware = (app: Elysia) => app
                 }
 
                 if (!user.orgIds.includes(orgId)) {
-                    console.error(`❌ [AuthMiddleware] Forbidden: User ${user.email} (Orgs: [${user.orgIds}]) attempted to access Org ${orgId}`);
+                    console.error(` [AuthMiddleware] Forbidden: User ${user.email} (Orgs: [${user.orgIds}]) attempted to access Org ${orgId}`);
                     set.status = 403;
                     return { success: false, message: 'Forbidden: You do not belong to this organization' };
                 }
@@ -147,7 +164,7 @@ export const authMiddleware = (app: Elysia) => app
                     } else {
                         // MEMBER role check for specific branch
                         if (!user.branchIds.includes(branchId as number)) {
-                            console.error(`❌ [AuthMiddleware] Forbidden Branch: User ${user.email} attempted to access Branch ${branchId}`);
+                            console.error(` [AuthMiddleware] Forbidden Branch: User ${user.email} attempted to access Branch ${branchId}`);
                             set.status = 403;
                             return { success: false, message: 'Forbidden: You do not have access to this branch' };
                         }

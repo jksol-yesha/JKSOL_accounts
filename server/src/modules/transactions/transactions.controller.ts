@@ -3,7 +3,7 @@ import { db } from '../../db';
 import { transactions } from '../../db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { ElysiaContext } from '../../shared/auth.middleware';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { resolve } from 'node:path';
@@ -117,10 +117,7 @@ export const createTransaction = async ({ body, set, user, orgId, branchId }: El
 
         const transaction = await TransactionService.create(payload);
 
-        WebSocketService.broadcastToBranch(bid, {
-            event: 'transaction:created',
-            data: transaction
-        });
+
 
         return { success: true, data: transaction };
     } catch (error: any) {
@@ -183,12 +180,7 @@ export const updateTransaction = async ({ params, body, set, user, orgId }: Elys
 
         const result = await TransactionService.update(id, orgId, requestData, user.id);
 
-        if (existingTxn.branchId) {
-            WebSocketService.broadcastToBranch(existingTxn.branchId, {
-                event: 'transaction:updated',
-                data: result
-            });
-        }
+
 
         return { success: true, data: result };
     } catch (error: any) {
@@ -221,12 +213,7 @@ export const deleteTransaction = async ({ params, set, user, orgId }: ElysiaCont
 
         await TransactionService.delete(id, orgId, user.id);
 
-        if (transaction.branchId) {
-            WebSocketService.broadcastToBranch(transaction.branchId, {
-                event: 'transaction:deleted',
-                data: { id }
-            });
-        }
+
 
         return { success: true, message: 'Transaction archived successfully' };
     } catch (error: any) {
@@ -401,7 +388,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
             }
         }
 
-        const groupedTransactions = await TransactionService.getGroupedExportData(
+        const exportRows = await TransactionService.getExportData(
             orgId,
             effectiveBranchId,
             financialYearId,
@@ -415,7 +402,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
         );
 
         if (format === 'pdf') {
-            const html = TransactionService.buildPrintableHtml(groupedTransactions);
+            const html = TransactionService.buildPrintableHtml(exportRows);
             set.headers['content-type'] = 'text/html; charset=utf-8';
             set.headers['content-disposition'] = 'inline; filename="transactions-export.html"';
             return new Response(html, {
@@ -426,7 +413,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
             });
         }
 
-        const csvContent = TransactionService.buildExportCsv(groupedTransactions);
+        const csvContent = TransactionService.buildExportCsv(exportRows);
         const fileName = `transactions-export-${new Date().toISOString().slice(0, 10)}.csv`;
 
         return {

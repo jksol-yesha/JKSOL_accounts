@@ -5,17 +5,6 @@ import { jwtConfig } from '../../shared/jwt.config';
 
 export const authRoutes = new Elysia({ prefix: '/auth' })
   .use(jwtConfig)
-  .get('/ping', AuthController.ping)
-  .post(
-    '/signup',
-    AuthController.signup,
-    {
-      body: t.Object({
-        email: t.String({ format: 'email' }),
-        name: t.String()
-      })
-    }
-  )
   .post(
     '/refresh',
     AuthController.refreshToken,
@@ -38,23 +27,8 @@ export const authRoutes = new Elysia({ prefix: '/auth' })
         })
       }
     )
-    .put(
-      '/preferences',
-      AuthController.updatePreferences,
-      {
-        body: t.Any() // Allow any json preference structure
-      }
-    )
+
     .get('/users', AuthController.getUsers)
-  )
-  .get(
-    '/verify-email',
-    AuthController.verifyEmail,
-    {
-      query: t.Object({
-        token: t.String()
-      })
-    }
   )
   .post(
     '/logout',

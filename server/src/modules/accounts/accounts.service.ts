@@ -393,7 +393,7 @@ export const createAccount = async (data: {
 
     // Return enriched format immediately? or just raw? 
     // Controller usually fetches fresh or we construct it.
-    // Return enriched row so websocket listeners can render converted values immediately.
+    // Return enriched row so the caller can render converted values immediately.
     const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     const baseCurrency = (data.targetCurrency || org?.baseCurrency || 'USD').toUpperCase();
     const accountCurrency = normalizedCurrencyCode || 'USD';

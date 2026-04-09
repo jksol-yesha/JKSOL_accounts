@@ -10,7 +10,7 @@ import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../se
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
-import { useWebSocket } from '../../hooks/useWebSocket';
+
 import { useAuth } from '../../context/AuthContext';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
 
@@ -588,9 +588,7 @@ const Transactions = () => {
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
 
-    // 🔥 WebSocket Integration
-    const socketBranchId = typeof selectedBranch?.id === 'number' ? selectedBranch.id : null;
-    const { on } = useWebSocket(socketBranchId);
+
 
     // Toolbar States
     const [searchTerm, setSearchTerm] = useState('');
@@ -830,29 +828,7 @@ const Transactions = () => {
         return () => controller.abort();
     }, [fetchTransactions]);
 
-    // 🔥 Listen for real-time transaction updates
-    useEffect(() => {
-        // Listen for new transactions
-        const unsubscribeCreate = on('transaction:created', () => {
-            fetchTransactions();
-        });
 
-        // Listen for updated transactions
-        const unsubscribeUpdate = on('transaction:updated', () => {
-            fetchTransactions();
-        });
-
-        // Listen for deleted transactions
-        const unsubscribeDelete = on('transaction:deleted', () => {
-            fetchTransactions();
-        });
-
-        return () => {
-            unsubscribeCreate();
-            unsubscribeUpdate();
-            unsubscribeDelete();
-        };
-    }, [fetchTransactions, on]); // Only depend on stable fetcher and listener binder
 
     // Sorting Handlers
     const handleSort = (key) => {
@@ -895,53 +871,21 @@ const Transactions = () => {
         return () => document.removeEventListener('mousedown', handleOutsideClick);
     }, [isFilterOpen]);
 
-    const groupedTransactions = useMemo(() => {
-        // We bypass the global filter, so it's intrinsically ALWAYS 'multi' mode in terms of grouping logic
+    const preparedTransactions = useMemo(() => {
         const raw = Array.isArray(transactions) ? transactions : [];
-        const groups = [];
-        const branchOccurrenceMap = new Map();
 
-        raw.forEach(txn => {
-            const date = txn.txnDate || '';
-            const amount = Number(txn.amountBaseCurrency || txn.finalAmountLocal || txn.amountBase || 0);
-            const amountKey = amount.toFixed(2);
-            const party = (txn.contact || txn.payee || txn.counterpartyName || '').trim().toLowerCase();
-            const type = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
-            const notes = (txn.notes || txn.description || '').trim().toLowerCase();
-            const txnName = (txn.name || '').trim().toLowerCase();
-            const accountName = (txn.account?.name || '').trim().toLowerCase();
-            const categoryName = (txn.category?.name || '').trim().toLowerCase();
-            const subCategoryName = (txn.subCategory?.name || txn.subCategoryName || '').trim().toLowerCase();
-            const dataKey = `${date}|${amountKey}|${party}|${type}|${notes}|${txnName}|${accountName}|${categoryName}|${subCategoryName}`;
+        return raw.map((txn) => {
             const branchName = txn.branch?.name || (branches || []).find(b => String(b.id) === String(txn.branchId))?.name || 'Unknown';
-            const branchId = Number(txn.branchId || 0);
-
-            if (!branchOccurrenceMap.has(dataKey)) branchOccurrenceMap.set(dataKey, new Map());
-            const branchCounts = branchOccurrenceMap.get(dataKey);
-            const occurrenceDelta = (branchCounts.get(branchId) || 0) + 1;
-            branchCounts.set(branchId, occurrenceDelta);
-
-            const baseKey = `${dataKey}|${occurrenceDelta}`;
-            let foundGroup = groups.find(g => g.baseKey === baseKey);
-
-            if (foundGroup) {
-                foundGroup.branchNames.push(branchName);
-            } else {
-                const newTxn = {
-                    ...txn,
-                    baseKey,
-                    branchNames: [branchName]
-                };
-                groups.push(newTxn);
-            }
+            return {
+                ...txn,
+                branchNames: [branchName]
+            };
         });
-
-        return groups;
-    }, [transactions, selectedBranch?.id, branches]);
+    }, [transactions, branches]);
 
     // Filtering & Sorting Logic
     const filteredTransactions = useMemo(() => {
-        let result = [...groupedTransactions];
+        let result = [...preparedTransactions];
 
         // 1. Search Logic
         if (searchTerm) {
@@ -1052,7 +996,7 @@ const Transactions = () => {
 
         return result;
 
-    }, [groupedTransactions, searchTerm, appliedFilters, sortConfig]);
+    }, [preparedTransactions, searchTerm, appliedFilters, sortConfig]);
 
     // Pagination
     const totalPages = Math.ceil(filteredTransactions.length / pageSize);
@@ -1228,8 +1172,7 @@ const Transactions = () => {
         filteredTransactions.forEach(t => {
             const currency = t.baseCurrency || t.currencyCode || 'INR';
             const unitAmount = Number(t.amountBaseCurrency || t.finalAmountLocal || t.amountBase || 0);
-            const replicationCount = t.branchNames?.length || 1;
-            totals[currency] = (totals[currency] || 0) + (unitAmount * replicationCount);
+            totals[currency] = (totals[currency] || 0) + unitAmount;
         });
         return totals;
     }, [filteredTransactions]);

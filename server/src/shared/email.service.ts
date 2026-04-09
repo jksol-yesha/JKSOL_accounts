@@ -90,52 +90,6 @@ const getBaseUrl = async (origin: string | null | undefined, envUrl: string, fal
   return fallbackUrl;
 };
 
-export const sendVerificationEmail = async (email: string, token: string) => {
-  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-  const mailOptions = {
-    from: `"JKSOL Account" <${env.MJ_SENDER_EMAIL}>`,
-    to: email,
-    subject: "Verify Your Email Address",
-    html: compactEmailHtml(`
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; text-align: center; color: #333;">
-        <div style="margin-bottom: 20px;">
-           ${getLogoImgTag()}
-        </div>
-        
-        <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">Verify Your Email Address</h2>
-        <p style="font-size: 16px; color: #666; margin-bottom: 24px;">to continue to JKSOL Account</p>
-        
-        <p style="font-size: 14px; color: #666; margin-bottom: 30px;">
-          Please use the verification code below to complete your email verification:
-        </p>
-        
-        <div style="background-color: #f4f4f4; padding: 15px 30px; border-radius: 8px; display: inline-block; margin-bottom: 30px;">
-          <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #333;">${token}</span>
-        </div>
-        
-        ${getUniqueIdTag()}
-        
-        <p style="font-size: 12px; color: #999; margin-bottom: 5px;">
-          This code will expire in 10 minutes.
-        </p>
-        <p style="font-size: 12px; color: #999;">
-          If you did not request this code, you can safely ignore this email.
-        </p>
-
-        <p style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
-          This is an automated message, please do not reply to this email.
-        </p>
-      </div>
-    `),
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error("Error sending email:", error);
-  }
-};
-
 export const sendOtpEmail = async (email: string, otp: string) => {
   const sentAt = new Date().toISOString();
   const uniqueId = `${Date.now()}_${Math.random().toString(36).slice(2, 11)}`;
@@ -180,54 +134,6 @@ export const sendOtpEmail = async (email: string, otp: string) => {
   }
 };
 
-export const sendPasswordResetEmail = async (email: string, token: string, origin?: string | null) => {
-  const baseUrl = await getBaseUrl(origin, env.BASE_URL, "http://localhost:3000");
-  const resetLink = `${baseUrl}/api/auth/reset-password-page?token=${token}`;
-  const uniqueId = `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
-
-  const mailOptions = {
-    from: `"JKSOL Account" <${env.MJ_SENDER_EMAIL}>`,
-    to: email,
-    subject: "Reset Your Password",
-    html: compactEmailHtml(`
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; text-align: center; color: #333;">
-        <div style="margin-bottom: 20px;">
-           ${getLogoImgTag()}
-        </div>
-        
-        <h2 style="font-size: 20px; font-weight: bold; margin-bottom: 10px;">Reset Your Password</h2>
-        <p style="font-size: 14px; color: #666; margin-bottom: 20px;">for your JKSOL Account</p>
-        
-        <p style="font-size: 14px; color: #666; margin-bottom: 30px;">
-          Click the button below to reset your password:
-        </p>
-        
-        <div style="margin-bottom: 30px;">
-          <a href="${resetLink}" style="background-color: #000; color: #fff; padding: 15px 30px; border-radius: 8px; text-decoration: none; font-weight: bold;">Reset Password</a>
-        </div>
-        
-        ${getUniqueIdTag()}
-        
-        <p style="font-size: 12px; color: #999; margin-bottom: 5px;">
-          This link will expire in 1 hour.
-        </p>
-        <p style="font-size: 12px; color: #999;">
-          If you did not request this, please ignore this email.
-        </p>
-
-        <p style="font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 20px;">
-          This is an automated message, please do not reply to this email.
-        </p>
-      </div>
-    `),
-  };
-
-  try {
-    const info = await transporter.sendMail(mailOptions);
-  } catch (error) {
-    console.error("Error sending email:", error);
-  }
-};
 
 export const sendInvitation = async (
   email: string,
@@ -240,7 +146,7 @@ export const sendInvitation = async (
   origin?: string | null,
   name?: string,
 ) => {
-  const frontendUrl = await getBaseUrl(origin, env.FRONTEND_URL, "http://localhost:5173");
+  const frontendUrl = await getBaseUrl(origin, env.FRONTEND_URL, env.FRONTEND_URL || "http://localhost:5173");
   const inviteLink = `${frontendUrl}/accept-invite?token=${token}`;
   const displayRole = roleName.charAt(0).toUpperCase() + roleName.slice(1);
   const greeting = name ? `Hello ${name},` : "Hello,";

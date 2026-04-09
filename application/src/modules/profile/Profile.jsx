@@ -6,7 +6,7 @@ import Card from '../../components/common/Card';
 import { useAuth } from '../../context/AuthContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { cn } from '../../utils/cn';
-import { PreferenceSettingsFields } from '../settings/components/PreferenceSettingsSection';
+import { PreferenceSettingsFields } from './components/PreferenceSettingsFields';
 
 const Profile = () => {
     const navigate = useNavigate();

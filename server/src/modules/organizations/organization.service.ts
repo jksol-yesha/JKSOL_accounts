@@ -359,20 +359,7 @@ export const OrganizationService = {
             .catch(err => console.error(`❌ [Background Email] Failed to notify user ${email}:`, err));
 
         const [invitedUser] = await db.select().from(users).where(eq(users.email, email));
-        // 🔔 Send real-time notification if user is logged in
-        if (invitedUser) {
-            const { WebSocketService } = await import('../../shared/websocket.service');
-            WebSocketService.broadcastToUser(invitedUser.id, {
-                event: 'organization:added',
-                data: {
-                    inviterName: requester.fullName || 'Admin',
-                    inviterEmail: requester.email || '',
-                    orgName,
-                    orgLogo,
-                    role,
-                }
-            });
-        }
+
 
         const result = { message: `User access granted and notified successfully`, email };
 
@@ -814,45 +801,7 @@ export const OrganizationService = {
             })
             .where(eq(users.id, memberId));
 
-        // Send WebSocket notification to the member about branch access update
-        try {
-            // Get organization and branch details for notification
-            const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
-            const [updaterUser] = await db.select().from(users).where(eq(users.id, requesterId));
 
-            // Get the newly added branches (those in branchIds param but not in old branchIds)
-            let addedBranchNames: string[] = [];
-            if (branchIds && branchIds.length > 0) {
-                const oldBranchIds = typeof member.branchIds === 'string'
-                    ? member.branchIds.split(',').filter(Boolean).map(Number)
-                    : (Array.isArray(member.branchIds) ? member.branchIds : []);
-
-                const newlyAddedIds = branchIds.filter(id => !oldBranchIds.includes(id));
-
-                if (newlyAddedIds.length > 0) {
-                    const addedBranches = await db.select({ id: branches.id, name: branches.name })
-                        .from(branches)
-                        .where(and(inArray(branches.id, newlyAddedIds), isNotDeleted(branches)));
-                    addedBranchNames = addedBranches.map(b => b.name);
-                }
-            }
-
-            // Broadcast to the member whose access was updated
-            const { WebSocketService } = await import('../../shared/websocket.service');
-            WebSocketService.broadcastToUser(memberId, {
-                event: 'branch_access:updated',
-                data: {
-                    organizationName: org?.name || 'Unknown Organization',
-                    updatedBy: updaterUser?.fullName || 'Admin',
-                    roleChanged: roleName !== undefined && roleName !== member.role,
-                    newRole: finalRoleName,
-                    addedBranches: addedBranchNames,
-                    timestamp: new Date().toISOString()
-                }
-            });
-        } catch (error) {
-            console.error("Failed to send websocket notification", error);
-        }
 
         await AuditService.log(orgId, 'user', memberId, 'UPDATE_MEMBER_ACCESS', requesterId, null, { role: roleName, branchIds });
 

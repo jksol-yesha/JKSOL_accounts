@@ -7,8 +7,6 @@ export const API_BASE_URL = envApiBaseUrl || '/api';
 export const API_ORIGIN = /^https?:\/\//i.test(API_BASE_URL)
     ? API_BASE_URL.replace(/\/api\/?$/, '')
     : window.location.origin;
-export const WS_URL = String(import.meta.env.VITE_WS_URL || '').trim()
-    || `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/api/ws`;
 
 export const buildAttachmentUrl = (path) => {
     if (!path) return '';
@@ -98,6 +96,35 @@ api.interceptors.request.use(
         // Skip encryption for public key endpoint
         if (config.url?.includes('auth/public-key')) return config;
 
+        const token = localStorage.getItem('accessToken');
+        const isAuthException =
+            config.url?.includes('/auth/login') ||
+            config.url?.includes('/auth/logout') ||
+            config.url?.includes('/auth/public-key') ||
+            config.url?.includes('/auth/refresh') ||
+
+            config.url?.includes('/auth/send-login-otp') ||
+            config.url?.includes('/auth/verify-login-otp') ||
+            config.url?.includes('/auth/send-invite-otp') ||
+            config.url?.includes('/auth/verify-invite-otp') ||
+            config.url?.includes('/auth/get-invite-details');
+
+        // Prevent feature API calls before any encryption/public-key work starts.
+        const isLoggingOut = localStorage.getItem('isLoggingOut') === '1';
+        if (isLoggingOut && !isAuthException) {
+            const controller = new AbortController();
+            config.signal = controller.signal;
+            controller.abort("Logout in progress");
+            return Promise.reject(new axios.CanceledError("Logout in progress"));
+        }
+
+        if (!token && !isAuthException) {
+            const controller = new AbortController();
+            config.signal = controller.signal;
+            controller.abort("Auth session not initialized. Missing Token.");
+            return Promise.reject(new axios.CanceledError("Missing Authentication Token"));
+        }
+
         // Ensure public key is loaded
         await fetchPublicKey(config.baseURL || '');
 
@@ -147,41 +174,8 @@ api.interceptors.request.use(
             }
         }
 
-        const token = localStorage.getItem('accessToken');
-        const isAuthException =
-            config.url?.includes('/auth/login') ||
-            config.url?.includes('/auth/signup') ||
-            config.url?.includes('/auth/logout') ||
-            config.url?.includes('/auth/public-key') ||
-            config.url?.includes('/auth/refresh') ||
-            config.url?.includes('/auth/forgot-password') ||
-            config.url?.includes('/auth/reset-password') ||
-            config.url?.includes('/auth/send-login-otp') ||
-            config.url?.includes('/auth/verify-login-otp') ||
-            config.url?.includes('/auth/send-invite-otp') ||
-            config.url?.includes('/auth/verify-invite-otp') ||
-            config.url?.includes('/auth/verify-email') ||
-            config.url?.includes('/auth/get-invite-details');
-
-        // Prevent feature API calls while logout is in progress.
-        const isLoggingOut = localStorage.getItem('isLoggingOut') === '1';
-        if (isLoggingOut && !isAuthException) {
-            const controller = new AbortController();
-            config.signal = controller.signal;
-            controller.abort("Logout in progress");
-            return Promise.reject(new axios.CanceledError("Logout in progress"));
-        }
-
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
-        } else if (!isAuthException) {
-            // [RACE CONDITION GUARD]
-            // If we're hitting a protected route but don't have a token, 
-            // the AUTH session isn't ready. Abort or fail immediately.
-            const controller = new AbortController();
-            config.signal = controller.signal;
-            controller.abort("Auth session not initialized. Missing Token.");
-            return Promise.reject(new Error("Missing Authentication Token"));
         }
 
         // Auto-inject orgId
@@ -385,7 +379,7 @@ api.interceptors.response.use(
                 // Call refresh endpoint
                 // Use a separate axios instance or explicit call to avoid interceptor loop risks, 
                 // though checks above should prevent it.
-                const response = await axios.post('/api/auth/refresh', { refreshToken });
+                const response = await api.post('/auth/refresh', { refreshToken });
 
                 const responseData = response.data;
                 const newAccessToken = responseData.data?.accessToken || responseData.accessToken;
@@ -449,16 +443,12 @@ api.interceptors.response.use(
 const apiService = {
     auth: {
         login: (credentials) => api.post('/auth/login', credentials),
-        signup: (data) => api.post('/auth/signup', data),
         logout: (refreshToken) => api.post('/auth/logout', { refreshToken: refreshToken || undefined }),
         refreshToken: (token) => api.post('/auth/refresh', { refreshToken: token }),
-        forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
-        resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),
-        verifyEmail: (token) => api.get(`/auth/verify-email?token=${token}`),
 
         getUsers: () => api.get('/auth/users'),
         updateProfile: (data) => api.put('/auth/profile', data),
-        updatePreferences: (data) => api.put('/auth/preferences', data),
+
         acceptInvite: (data) => api.post('/auth/accept-invite', data),
         declineInvite: (data) => api.post('/auth/decline-invite', data),
         getInviteDetails: (token) => api.get(`/auth/get-invite-details?token=${token}`),

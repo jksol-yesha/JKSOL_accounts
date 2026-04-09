@@ -34,9 +34,7 @@ import { PreferenceProvider } from './context/PreferenceContext';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import Login from './modules/auth/Login';
 import EnterOtp from './modules/auth/EnterOtp';
-import EmailVerification from './modules/auth/EmailVerification';
-import ForgotPassword from './modules/auth/ForgotPassword';
-import ResetPassword from './modules/auth/ResetPassword';
+
 import Onboarding from './modules/onboarding/Onboarding';
 // Removed: import { useEffect } from "react";
 
@@ -51,13 +49,10 @@ function App() {
               <PreferenceProvider>
                 <Routes>
                   {/* Public Routes Wrapped in PublicLayout */}
-                  <Route element={<PublicLayout />}>
-                    <Route path="/login" element={<Login />} />
-                    <Route path="/enter-otp" element={<EnterOtp />} />
-                    <Route path="/verify-email" element={<EmailVerification />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                  </Route>
+                    <Route element={<PublicLayout />}>
+                      <Route path="/login" element={<Login />} />
+                      <Route path="/enter-otp" element={<EnterOtp />} />
+                    </Route>
 
                   {/* Protected Routes */}
                   <Route path="/" element={<ProtectedRoute><Layout><Navigate to="/dashboard" replace /></Layout></ProtectedRoute>} />

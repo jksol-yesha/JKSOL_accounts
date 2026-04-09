@@ -1,4 +1,3 @@
-import type { User } from '../../types/user';
 import * as EmailService from '../../shared/email.service';
 import * as OtpService from './otp.service';
 import { db } from '../../db';
@@ -14,33 +13,11 @@ const sendOtpEmailInBackground = (email: string, otp: string) => {
     });
 };
 
-export const isBlacklisted = (token: string) => {
-    // No blacklist check
-    return false;
-};
-
-// MySQL JSON columns may return as strings - always parse safely
-const parsePrefs = (raw: any): Record<string, any> => {
-    if (!raw) return {};
-    if (typeof raw === 'object') return raw;
-    try { return JSON.parse(raw); } catch { return {}; }
-};
-
-export const updatePreferences = async (userId: number, preferences: any) => {
-    const [user] = await db.select({ preferences: users.preferences }).from(users).where(eq(users.id, userId));
-    const currentPrefs = parsePrefs(user?.preferences);
-    const newPrefs = { ...currentPrefs, ...preferences };
-    
-    await db.update(users).set({ preferences: newPrefs }).where(eq(users.id, userId));
-    return { preferences: newPrefs };
-};
-
-
 export const updateUser = async (
     userId: number,
     data: {
         email?: string;
-        password?: string;
+
         name?: string;
         profilePhoto?: string;
     }
@@ -63,14 +40,6 @@ export const updateUser = async (
         updateData.profilePhoto = data.profilePhoto;
     }
 
-    if (data.email) updateData.email = data.email;
-    if (data.name) updateData.fullName = data.name; // Mapping name -> fullName
-
-    // ADDED: Logic to update profile photo
-    if (data.profilePhoto) {
-        updateData.profilePhoto = data.profilePhoto;
-    }
-
     await db.update(users).set(updateData).where(eq(users.id, userId));
 
     return {
@@ -83,123 +52,7 @@ export const updateUser = async (
     };
 };
 
-export const signup = async ({
-    email,
-    password,
-    name,
-    role
-}: {
-    email: string;
-    password: string;
-    name: string;
-    role?: string;
-}) => {
-    const [exists] = await db.select().from(users).where(eq(users.email, email));
-
-    if (exists) {
-        throw new Error('User already exists');
-    }
-
-    const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-
-    // Use a transaction to ensure atomicity
-    return await db.transaction(async (tx) => {
-        try {
-            // 1. Get Owner Role ID
-            const [ownerRole] = await tx.select().from(roles).where(eq(roles.name, 'Owner'));
-            if (!ownerRole) throw new Error('Owner role not found in database');
-
-            // 1b. Create User (initially without org)
-            const [userResult] = await tx.insert(users).values({
-                email,
-                fullName: name,
-                roleId: ownerRole.id, // Set roleId instead of role enum
-                orgIds: "", // Empty string
-                branchIds: "", // Empty string
-                status: 1,
-                verificationToken: verificationCode,
-            });
-            const userId = userResult.insertId;
-
-            // 2. Create default organization for the user
-            const defaultOrgName = `${name}'s Organization`;
-            const [orgResult] = await tx.insert(organizations).values({
-                name: defaultOrgName,
-                status: 1,
-            });
-            const orgId = orgResult.insertId;
-
-            // 3. Update user with the new organization ID
-            await tx.update(users)
-                .set({ orgIds: String(orgId) })
-                .where(eq(users.id, userId));
-
-            // 4. Auto-Create Financial Years (Current & Next) - Same logic as organization.service.ts
-            const today = new Date();
-            const year = today.getFullYear();
-            const month = today.getMonth(); // 0-11
-
-            // Determine Current FY (April-March cycle)
-            let startYear = year;
-            if (month < 3) { // Jan, Feb, Mar belong to previous FY start
-                startYear = year - 1;
-            }
-
-            // Format: YYYY-YY (e.g., 2025-26)
-            const formatFyName = (start: number) => {
-                const end = start + 1;
-                return `${start}-${end.toString().slice(-2)}`;
-            };
-
-            const currentFyName = formatFyName(startYear);
-            const nextFyName = formatFyName(startYear + 1);
-
-            await tx.insert(financialYears).values([
-                {
-                    orgId: orgId,
-                    name: currentFyName,
-                    startDate: `${startYear}-04-01`,
-                    endDate: `${startYear + 1}-03-31`
-                },
-                {
-                    orgId: orgId,
-                    name: nextFyName,
-                    startDate: `${startYear + 1}-04-01`,
-                    endDate: `${startYear + 2}-03-31`
-                }
-            ]);
-
-            // 5. Send verification email
-            await EmailService.sendVerificationEmail(email, verificationCode);
-
-            return { id: userId, email, name, organizationId: orgId };
-        } catch (error) {
-            console.error('Error during signup transaction:', error);
-            throw error;
-        }
-    });
-};
-
-
-
-export const verifyEmail = async (token: string) => {
-    const [user] = await db.select().from(users).where(eq(users.verificationToken, token));
-
-    if (!user) throw new Error('Invalid verification token');
-
-    await db.update(users)
-        .set({
-            status: 1,
-            verificationToken: null
-        })
-        .where(eq(users.id, user.id));
-
-    return {
-        message: 'Email verified successfully'
-    };
-};
-
-export const logout = async (token: string, refreshToken?: string) => {
+export const logout = async (refreshToken?: string) => {
     if (refreshToken) {
         // Find user by this refresh token
         const [user] = await db.select({ id: users.id, refreshTokens: users.refreshTokens })
@@ -255,7 +108,7 @@ export const refreshToken = async (incomingRefreshToken: string, jwt: any) => {
         : (Array.isArray(user.branchIds) ? user.branchIds : []);
 
     const newAccessToken = await jwt.sign({
-        sub: user.id,
+        sub: String(user.id),
         email: user.email,
         role: user.role ? user.role.toLowerCase() : null,
         orgIds: orgIdsParsed,
@@ -324,7 +177,6 @@ export const verifyLoginOtp = async (email: string, otp: string, jwt: any) => {
             branchIds: users.branchIds,
             createdAt: users.createdAt,
             profilePhoto: users.profilePhoto,
-            preferences: users.preferences,
             refreshTokens: users.refreshTokens
         })
             .from(users)
@@ -397,7 +249,6 @@ export const verifyLoginOtp = async (email: string, otp: string, jwt: any) => {
                 branchIds: users.branchIds,
                 createdAt: users.createdAt,
                 profilePhoto: users.profilePhoto,
-                preferences: users.preferences,
                 refreshTokens: users.refreshTokens
             })
                 .from(users)
@@ -462,8 +313,7 @@ export const verifyLoginOtp = async (email: string, otp: string, jwt: any) => {
                 lastLoginAt: new Date(),
                 isVerified: true,
                 createdAt: user.createdAt,
-                profilePhoto: user.profilePhoto,
-                preferences: parsePrefs(user.preferences)
+                profilePhoto: user.profilePhoto
             }
         };
     } catch (error) {

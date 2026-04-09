@@ -7,7 +7,7 @@ import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { read, utils } from 'xlsx';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
 interface ImportError {
@@ -31,7 +31,7 @@ interface TransactionExportFilters {
     };
 }
 
-interface GroupedExportTransaction {
+interface ExportTransactionRow {
     id: number;
     name: string;
     txnDate: string | null;
@@ -42,7 +42,7 @@ interface GroupedExportTransaction {
     categoryName: string;
     notes: string;
     amount: number;
-    branchNames: string[];
+    branchName: string;
 }
 
 export class TransactionService {
@@ -66,8 +66,8 @@ export class TransactionService {
         return Number(status) === 1 ? 'Posted' : 'Draft';
     }
 
-    private static filterGroupedTransactions(
-        transactions: GroupedExportTransaction[],
+    private static filterExportTransactions(
+        transactions: ExportTransactionRow[],
         filters: TransactionExportFilters
     ) {
         let result = [...transactions];
@@ -163,6 +163,10 @@ export class TransactionService {
                         aValue = a.txnType || '';
                         bValue = b.txnType || '';
                         break;
+                    case 'branch':
+                        aValue = a.branchName || '';
+                        bValue = b.branchName || '';
+                        break;
                     case 'name':
                         aValue = a.name || '';
                         bValue = b.name || '';
@@ -235,7 +239,7 @@ export class TransactionService {
         };
     }
 
-    static async getGroupedExportData(
+    static async getExportData(
         orgId: number,
         branchId: number | number[] | 'all' | null,
         financialYearId: number,
@@ -243,49 +247,34 @@ export class TransactionService {
         user?: any,
         filters: TransactionExportFilters = {}
     ) {
-        const transactions = (await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user))
-            .map((txn: any) => this.enrichExportTransaction(txn));
-        const grouped = new Map<string, GroupedExportTransaction>();
+        const rawTransactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user);
 
-        transactions.forEach((txn: any) => {
-            const date = txn.txnDate ? new Date(txn.txnDate).toISOString().split('T')[0] : '';
-            const amount = Number(txn.amountBaseCurrency ?? txn.finalAmountLocal ?? txn.amountBase ?? 0);
-            const amountKey = amount.toFixed(2);
-            const party = (txn.contact || txn.payee || txn.counterpartyName || '').trim().toLowerCase();
-            const type = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
-            const notes = (txn.notes || txn.description || '').trim().toLowerCase();
-            const baseKey = `${date}|${amountKey}|${party}|${type}|${notes}`;
-            const branchName = txn.branch?.name || 'Unknown';
+        // Export must preserve one row per transaction. Do not merge similar rows.
+        const exportRows: ExportTransactionRow[] = rawTransactions.map((txn: any) => {
+            const enriched = this.enrichExportTransaction(txn);
+            const amount = Number(enriched.amountBaseCurrency ?? enriched.finalAmountLocal ?? enriched.amountBase ?? 0);
 
-            const existing = grouped.get(baseKey);
-            if (existing) {
-                if (!existing.branchNames.includes(branchName)) {
-                    existing.branchNames.push(branchName);
-                }
-                return;
-            }
-
-            grouped.set(baseKey, {
-                id: txn.id,
-                name: txn.name || '',
-                txnDate: txn.txnDate || null,
-                txnType: type,
-                status: txn.status ?? null,
-                contact: txn.contact || txn.payee || txn.counterpartyName || '',
-                accountName: txn.account?.name || '-',
-                categoryName: txn.category?.name || '-',
-                notes: txn.notes || txn.description || '',
-                amount,
-                branchNames: [branchName]
-            });
+            return {
+                id: enriched.id,
+                name: String(enriched.name || 'Transaction'),
+                txnDate: enriched.txnDate || null,
+                txnType: String(enriched.transactionType?.name || enriched.txnType || '').toLowerCase(),
+                status: enriched.status ?? null,
+                contact: String(enriched.contact || enriched.payee || enriched.counterpartyName || ''),
+                accountName: String(enriched.account?.name || '-'),
+                categoryName: String(enriched.category?.name || '-'),
+                notes: String(enriched.notes || enriched.description || ''),
+                amount: isNaN(amount) ? 0 : amount,
+                branchName: String(enriched.branch?.name || 'Unknown')
+            };
         });
 
-        return this.filterGroupedTransactions(Array.from(grouped.values()), filters);
+        return this.filterExportTransactions(exportRows, filters);
     }
 
-    static buildExportCsv(groupedTransactions: GroupedExportTransaction[]) {
-        const headers = ['Id', 'Name', 'Date', 'Type', 'Status', 'Payee', 'Account', 'Category', 'Notes', 'Amount', 'Branches'];
-        const rows = groupedTransactions.map((txn) => [
+    static buildExportCsv(exportRows: ExportTransactionRow[]) {
+        const headers = ['Id', 'Name', 'Date', 'Type', 'Status', 'Payee', 'Account', 'Category', 'Notes', 'Amount', 'Branch'];
+        const rows = exportRows.map((txn) => [
             txn.id,
             txn.name || '',
             this.formatExportDate(txn.txnDate),
@@ -296,7 +285,7 @@ export class TransactionService {
             txn.categoryName || '',
             txn.notes || '',
             Number(txn.amount || 0).toFixed(2),
-            txn.branchNames.join(', ')
+            txn.branchName || ''
         ]);
 
         return [
@@ -305,8 +294,8 @@ export class TransactionService {
         ].join('\n');
     }
 
-    static buildPrintableHtml(groupedTransactions: GroupedExportTransaction[]) {
-        const rows = groupedTransactions.map((txn, index) => `
+    static buildPrintableHtml(exportRows: ExportTransactionRow[]) {
+        const rows = exportRows.map((txn, index) => `
             <tr>
                 <td>${index + 1}</td>
                 <td>${txn.name || '-'}</td>
@@ -318,7 +307,7 @@ export class TransactionService {
                 <td>${txn.categoryName || '-'}</td>
                 <td>${txn.notes || '-'}</td>
                 <td style="text-align:right;">${Number(txn.amount || 0).toFixed(2)}</td>
-                <td>${txn.branchNames.join(', ') || '-'}</td>
+                <td>${txn.branchName || '-'}</td>
             </tr>
         `).join('');
 
@@ -364,7 +353,7 @@ export class TransactionService {
                             <th>Category</th>
                             <th>Notes</th>
                             <th>Amount</th>
-                            <th>Branches</th>
+                            <th>Branch</th>
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -713,7 +702,6 @@ export class TransactionService {
         }
 
         const branchesToNotify = new Set(validTransactions.map(t => t.branchId));
-        branchesToNotify.forEach(bid => WebSocketService.broadcastToBranch(bid, { event: 'transaction_created', data: { count: validTransactions.length } }));
 
         const partialSuccess = successCount > 0 && errors.length > 0;
         if (successCount === 0) {
@@ -984,14 +972,7 @@ export class TransactionService {
                 }
             }
 
-            // Broadcast
-            const affectedBranchIds = new Set(validTransactions.map(t => t.branchId));
-            affectedBranchIds.forEach(bid => {
-                WebSocketService.broadcastToBranch(bid, {
-                    event: 'transaction_created',
-                    data: { count: createdTxns.length, message: 'New transactions imported' }
-                });
-            });
+
 
             return {
                 success: true,
@@ -1412,7 +1393,7 @@ export class TransactionService {
 
         const orgPromise = db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
 
-        const txns = await db.select({
+        const baseQuery = db.select({
             transaction: transactions,
             transactionType: transactionTypes,
             category: categories,
@@ -1466,8 +1447,11 @@ export class TransactionService {
             .leftJoin(users, eq(transactions.createdBy, users.id))
             .leftJoin(parties, eq(transactions.contactId, parties.id))
             .where(and(...filters))
-            .orderBy(desc(transactions.txnDate), desc(transactions.createdAt))
-            .limit(limit || 50);
+            .orderBy(desc(transactions.txnDate), desc(transactions.createdAt));
+
+        const txns = typeof limit === 'number' && limit > 0
+            ? await baseQuery.limit(limit)
+            : await baseQuery;
 
         // Batch fetch entries
         const txnIds = txns.map(r => r.transaction.id);
@@ -1660,6 +1644,25 @@ export class TransactionService {
             if (!existingRow) throw new Error('Transaction not found');
             const existing = { ...existingRow.transaction, transactionType: existingRow.transactionType, currency: existingRow.currency };
 
+            // Fetch existing entries to resolve original accounts
+            const existingEntries = await tx.select().from(transactionEntries).where(eq(transactionEntries.transactionId, id));
+            const creditEntry = existingEntries.find(e => Number(e.credit) > 0);
+            const debitEntry = existingEntries.find(e => Number(e.debit) > 0);
+
+            let originalAccountId = null;
+            let originalFromAccountId = null;
+            let originalToAccountId = null;
+
+            const originalTypeName = existing.transactionType?.name?.toLowerCase();
+            if (originalTypeName === 'expense') {
+                originalAccountId = creditEntry?.accountId;
+            } else if (originalTypeName === 'income') {
+                originalAccountId = debitEntry?.accountId;
+            } else if (originalTypeName === 'transfer' || originalTypeName === 'investment') {
+                originalFromAccountId = creditEntry?.accountId;
+                originalToAccountId = debitEntry?.accountId;
+            }
+
 
             if (!existing) throw new Error('Transaction not found');
 
@@ -1695,6 +1698,7 @@ export class TransactionService {
 
             const headerPayload: any = {
                 financialYearId,
+                branchId: data.branchId !== undefined ? data.branchId : existing.branchId,
                 updatedAt: new Date(),
                 createdBy: userId,
                 fxRate: finalFxRate,
@@ -1765,9 +1769,11 @@ export class TransactionService {
             const mergedData = {
                 ...existing,
                 ...data,
-                ...data,
                 // ensure we have mapped fields for entry creation logic
-                amountLocal: data.amountLocal || existing.amountLocal
+                amountLocal: data.amountLocal || existing.amountLocal,
+                accountId: data.accountId !== undefined ? data.accountId : originalAccountId,
+                fromAccountId: data.fromAccountId !== undefined ? data.fromAccountId : originalFromAccountId,
+                toAccountId: data.toAccountId !== undefined ? data.toAccountId : originalToAccountId
             };
 
             // Determine Type (New or Old)
@@ -1789,40 +1795,29 @@ export class TransactionService {
 
             // Reuse logic (duplicated for now to avoid refactoring 'create' into helper in this step)
             if (typeName === 'expense') {
-                // Need categoryId and accountId.
-                // In 'update', data might contain 'categoryId'
-                const catId = data.categoryId || (existing as any).entries?.find((e: any) => e.debit > 0)?.accountId; // Heuristic?
-                if (data.categoryId === null || data.categoryId === undefined || data.accountId === null || data.accountId === undefined) {
+                if (mergedData.categoryId === null || mergedData.categoryId === undefined || mergedData.accountId === null || mergedData.accountId === undefined) {
                     throw new Error('Expense requires Category (Expense Account) and Paid From Account');
                 }
-                if (data.categoryId !== undefined && data.accountId !== undefined) {
-                    entries.push({ transactionId: id, accountId: data.categoryId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Expense' });
-                    entries.push({ transactionId: id, accountId: data.accountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Paid From' });
-                }
+                entries.push({ transactionId: id, accountId: mergedData.categoryId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Expense' });
+                entries.push({ transactionId: id, accountId: mergedData.accountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Paid From' });
             } else if (typeName === 'income') {
-                if (data.categoryId === null || data.categoryId === undefined || data.accountId === null || data.accountId === undefined) {
+                if (mergedData.categoryId === null || mergedData.categoryId === undefined || mergedData.accountId === null || mergedData.accountId === undefined) {
                     throw new Error('Income requires Category (Income Account) and Deposit To Account');
                 }
-                if (data.categoryId !== undefined && data.accountId !== undefined) {
-                    entries.push({ transactionId: id, accountId: data.accountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Deposit To' });
-                    entries.push({ transactionId: id, accountId: data.categoryId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Income Source' });
-                }
+                entries.push({ transactionId: id, accountId: mergedData.accountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Deposit To' });
+                entries.push({ transactionId: id, accountId: mergedData.categoryId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Income Source' });
             } else if (typeName === 'transfer') {
-                if (data.fromAccountId === null || data.fromAccountId === undefined || data.toAccountId === null || data.toAccountId === undefined) {
+                if (mergedData.fromAccountId === null || mergedData.fromAccountId === undefined || mergedData.toAccountId === null || mergedData.toAccountId === undefined) {
                     throw new Error('Transfer requires From Account and To Account');
                 }
-                if (data.fromAccountId !== undefined && data.toAccountId !== undefined) {
-                    entries.push({ transactionId: id, accountId: data.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Transfer In' });
-                    entries.push({ transactionId: id, accountId: data.fromAccountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Transfer Out' });
-                }
+                entries.push({ transactionId: id, accountId: mergedData.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Transfer In' });
+                entries.push({ transactionId: id, accountId: mergedData.fromAccountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Transfer Out' });
             } else if (typeName === 'investment') {
-                if (data.toAccountId === null || data.toAccountId === undefined || data.accountId === null || data.accountId === undefined) {
+                if (mergedData.toAccountId === null || mergedData.toAccountId === undefined || mergedData.accountId === null || mergedData.accountId === undefined) {
                     throw new Error('Investment requires Investment Account and Paid From Account');
                 }
-                if (data.toAccountId !== undefined && data.accountId !== undefined) {
-                    entries.push({ transactionId: id, accountId: data.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Investment' });
-                    entries.push({ transactionId: id, accountId: data.accountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Paid From' });
-                }
+                entries.push({ transactionId: id, accountId: mergedData.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Investment' });
+                entries.push({ transactionId: id, accountId: mergedData.accountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Paid From' });
             }
 
             if (entries.length > 0) {

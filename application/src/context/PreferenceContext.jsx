@@ -14,25 +14,16 @@ export const usePreferences = () => {
 export const PreferenceProvider = ({ children }) => {
     const [preferences, setPreferences] = useState(() => {
         try {
-            const userStr = localStorage.getItem('user');
-            const userObj = userStr ? JSON.parse(userStr) : null;
-            const backendPrefs = userObj?.preferences || {};
-
             const saved = localStorage.getItem('system_preferences');
             const localPrefs = saved ? JSON.parse(saved) : {};
 
-            const merged = {
+            return {
                 currency: 'INR',
                 dateFormat: 'dd MMM, yyyy',
                 numberFormat: 'en-IN',
                 timeZone: 'Asia/Kolkata',
-                ...localPrefs,
-                ...backendPrefs
+                ...localPrefs
             };
-            
-            // Ensure system_preferences aligns with backend instantly
-            localStorage.setItem('system_preferences', JSON.stringify(merged));
-            return merged;
         } catch (e) {
             console.error("Failed to parse preferences", e);
             return {
@@ -45,30 +36,13 @@ export const PreferenceProvider = ({ children }) => {
     });
 
     const updatePreferences = async (newPrefs) => {
-        // Optimistic UI update
-        let updatedPrefs = {};
         setPreferences(prev => {
-            updatedPrefs = { ...prev, ...newPrefs };
+            const updatedPrefs = { ...prev, ...newPrefs };
             localStorage.setItem('system_preferences', JSON.stringify(updatedPrefs));
             // Trigger event for listeners immediately
             window.dispatchEvent(new Event('preferencesUpdated'));
             return updatedPrefs;
         });
-
-        try {
-            // Sync with Backend
-            await apiService.auth.updatePreferences(newPrefs);
-            
-            // Update local user object so reload preserves it
-            const userStr = localStorage.getItem('user');
-            if (userStr) {
-                const userObj = JSON.parse(userStr);
-                userObj.preferences = { ...(userObj.preferences || {}), ...newPrefs };
-                localStorage.setItem('user', JSON.stringify(userObj));
-            }
-        } catch (error) {
-            console.error("Failed to sync preferences to backend", error);
-        }
     };
 
     // When a different user logs in, re-read system_preferences that AuthContext just wrote

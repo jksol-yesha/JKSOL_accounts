@@ -6,9 +6,7 @@ import Sidebar from './Sidebar';
 import Header from './Header';
 import { cn } from '../../utils/cn';
 
-import { useWebSocket } from '../../hooks/useWebSocket';
-import InvitationNotification from '../notifications/InvitationNotification';
-import BranchAccessNotification from '../notifications/BranchAccessNotification';
+
 
 const ACCOUNTS_CREATE_SCROLL_MODE_EVENT = 'accounts-create-scroll-mode';
 const TRANSACTIONS_CREATE_SCROLL_MODE_EVENT = 'transactions-create-scroll-mode';
@@ -47,12 +45,11 @@ const Layout = ({ children }) => {
             : true
     );
     const [createRouteNeedsPageScroll, setCreateRouteNeedsPageScroll] = useState(false);
-    const [invitationNotification, setInvitationNotification] = useState(null);
-    const [branchAccessNotification, setBranchAccessNotification] = useState(null);
+
     const [showScrollTop, setShowScrollTop] = useState(false);
     const mainRef = React.useRef(null);
     const location = useLocation();
-    const { on } = useWebSocket();
+
 
     // Check if current page is dashboard
     const isDashboard = location.pathname === '/' || location.pathname === '/dashboard';
@@ -115,33 +112,7 @@ const Layout = ({ children }) => {
         return () => window.removeEventListener(scrollModeEventName, handleScrollModeChange);
     }, [location.pathname]);
 
-    // Listen for invitation notifications
-    useEffect(() => {
-        const unsubscribe = on('invitation:received', (data) => {
-            setInvitationNotification(data);
 
-            // Auto-dismiss after 10 seconds
-            setTimeout(() => {
-                setInvitationNotification(null);
-            }, 10000);
-        });
-
-        return unsubscribe;
-    }, [on]);
-
-    // Listen for branch access update notifications
-    useEffect(() => {
-        const unsubscribe = on('branch_access:updated', (data) => {
-            setBranchAccessNotification(data);
-
-            // Auto-dismiss after 10 seconds
-            setTimeout(() => {
-                setBranchAccessNotification(null);
-            }, 10000);
-        });
-
-        return unsubscribe;
-    }, [on]);
 
     // Prevent back navigation
     React.useEffect(() => {
@@ -242,21 +213,7 @@ const Layout = ({ children }) => {
                 )}
             </div>
 
-            {/* Invitation Notification Toast */}
-            {invitationNotification && (
-                <InvitationNotification
-                    invitation={invitationNotification}
-                    onClose={() => setInvitationNotification(null)}
-                />
-            )}
 
-            {/* Branch Access Update Notification Toast */}
-            {branchAccessNotification && (
-                <BranchAccessNotification
-                    notification={branchAccessNotification}
-                    onClose={() => setBranchAccessNotification(null)}
-                />
-            )}
         </div>
 
     );

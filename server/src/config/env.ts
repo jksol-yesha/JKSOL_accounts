@@ -1,6 +1,6 @@
 export const env = {
-  JWT_SECRET: process.env.JWT_SECRET || 'super-secret-key',
-  JWT_EXPIRES_IN: '1d',
+  JWT_SECRET: process.env.JWT_SECRET || 'super_secret_key',
+  JWT_EXPIRES_IN: '7d',
   SMTP_USER: process.env.SMTP_USER || 'jksol.admin@gmail.com',
   SMTP_PASS: process.env.SMTP_PASS || "teob leqv gdmm yjhn",
   MJ_APIKEY_PUBLIC: process.env.MJ_APIKEY_PUBLIC || '',

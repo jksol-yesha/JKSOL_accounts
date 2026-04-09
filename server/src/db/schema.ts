@@ -10,10 +10,8 @@ export const users = mysqlTable("users", {
   orgIds: text("org_ids"), // Comma-separated org IDs
   branchIds: text("branch_ids"), // Comma-separated branch IDs
   lastLoginAt: datetime("last_login_at"),
-  verificationToken: varchar("verification_token", { length: 255 }),
-  // Preserving legacy columns to avoid data loss during push
-  resetToken: varchar("reset_token", { length: 255 }),
-  resetExpiresAt: datetime("reset_expires_at"),
+
+
   profilePhoto: longtext("profile_photo"),
   createdBy: bigint("created_by", { mode: "number", unsigned: true }), // Self-referencing users.id
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -22,7 +20,7 @@ export const users = mysqlTable("users", {
   otpExpiresAt: datetime("otp_expires_at"),
   otpIsUsed: boolean("otp_is_used").notNull().default(false),
 
-  preferences: json("preferences"), // User-specific settings (currency, date format, etc)
+
   refreshTokens: json("refresh_tokens"), // Array of { token, expiresAt, createdAt }
 
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),

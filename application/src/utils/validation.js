@@ -9,10 +9,6 @@ export const isValidPhone = (phone) => {
     return phoneRegex.test(phone);
 };
 
-export const isValidPassword = (password) => {
-    // Min 8 chars
-    return password && password.length >= 8;
-};
 
 export const isRequired = (value) => {
     return value !== null && value !== undefined && value.trim() !== '';

@@ -31,7 +31,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { usePermission } from '../../hooks/usePermission';
 import apiService from '../../services/api';
 import { useToast } from '../../context/ToastContext';
-import { useWebSocket } from '../../hooks/useWebSocket';
+
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 
 const createInitialDeleteDialog = () => ({
@@ -59,8 +59,7 @@ const Parties = () => {
         showToast(`${item} copied to clipboard!`, 'success');
     };
 
-    const socketBranchId = typeof selectedBranch?.id === 'number' ? selectedBranch.id : null;
-    const { on } = useWebSocket(socketBranchId);
+
 
     const canCreateParty = usePermission('PARTIES_MANAGE');
     const canEditParty = usePermission('PARTIES_MANAGE');
@@ -146,46 +145,7 @@ const Parties = () => {
         };
     }, [selectedOrg?.id]);
 
-    // WebSocket Real-time Updates
-    useEffect(() => {
-        if (!selectedOrg) return;
 
-        const handlePartyCreated = (data) => {
-            setParties(prev => {
-                // Check if already exists to prevent duplicates
-                if (prev.some(p => p.id === data.id)) return prev;
-                const updated = [data, ...prev];
-                localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
-                return updated;
-            });
-        };
-
-        const handlePartyUpdated = (data) => {
-            setParties(prev => {
-                const updated = prev.map(p => p.id === data.id ? data : p);
-                localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
-                return updated;
-            });
-        };
-
-        const handlePartyDeleted = (data) => {
-            setParties(prev => {
-                const updated = prev.filter(p => p.id !== data.id);
-                localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
-                return updated;
-            });
-        };
-
-        const unsubCreate = on('party:created', handlePartyCreated);
-        const unsubUpdate = on('party:updated', handlePartyUpdated);
-        const unsubDelete = on('party:deleted', handlePartyDeleted);
-
-        return () => {
-            if (unsubCreate) unsubCreate();
-            if (unsubUpdate) unsubUpdate();
-            if (unsubDelete) unsubDelete();
-        };
-    }, [selectedOrg, on, CACHE_KEY]);
 
     const filteredParties = useMemo(() => {
         let result = Array.isArray(parties) ? [...parties] : [];

@@ -18,6 +18,7 @@ const EnterOtp = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [timer, setTimer] = useState(() => {
         if (!email && !token) return 300;
+        if (location.state?.isNewOtp) return 300; // Force restart if signaled
         const storedExpiration = sessionStorage.getItem(OTP_TIMER_KEY);
         if (storedExpiration) {
             const remaining = Math.floor((parseInt(storedExpiration, 10) - Date.now()) / 1000);
@@ -33,7 +34,7 @@ const EnterOtp = () => {
             return;
         }
 
-        if (!sessionStorage.getItem(OTP_TIMER_KEY)) {
+        if (location.state?.isNewOtp || !sessionStorage.getItem(OTP_TIMER_KEY)) {
             sessionStorage.setItem(OTP_TIMER_KEY, (Date.now() + 300 * 1000).toString());
         }
 
@@ -100,6 +101,10 @@ const EnterOtp = () => {
                 await apiService.auth.sendLoginOtp(email);
             } else if (flow === 'invite') {
                 await apiService.auth.sendInviteOtp(token);
+            } else {
+                showToast('Invalid verification flow. Please login again.', 'error');
+                navigate('/login');
+                return;
             }
             setTimer(300);
             sessionStorage.setItem(OTP_TIMER_KEY, (Date.now() + 300 * 1000).toString());

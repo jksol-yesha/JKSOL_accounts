@@ -3,12 +3,11 @@ import { OrganizationService } from './organization.service';
 import { successResponse } from '../../shared/response';
 import type { ElysiaContext } from '../../shared/auth.middleware';
 
-export const getOrganizationList = async ({ user, set }: ElysiaContext) => {
+export const getOrganizationList = async ({ user, authError, set }: ElysiaContext) => {
 
     if (!user) {
-        console.error('❌ getOrganizationList - No user in context, returning 401');
         set.status = 401;
-        return { message: "Unauthorized" };
+        return { message: authError || "Unauthorized" };
     }
     try {
         const orgs = await OrganizationService.getAllForUser(user.id);

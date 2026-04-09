@@ -14,11 +14,10 @@ import { organizationRoutes } from './modules/organizations/organization.routes'
 import { auditRoutes } from './modules/audit/audit.routes';
 import { exchangeRatesRoutes } from './modules/exchange-rates/exchange-rates.routes';
 import { partiesRoutes } from './modules/parties/parties.routes';
-import { countriesRoutes } from './modules/countries/countries.routes';
-import { currenciesRoutes } from './modules/currencies/currencies.routes';
+import { masterDataRoutes } from './modules/master-data/master-data.routes';
 
 import { encryptionMiddleware } from './shared/encryption.middleware';
-import { WebSocketService } from './shared/websocket.service';
+
 import { jwtConfig } from './shared/jwt.config';
 
 const serverUploadsRoot = resolve(import.meta.dir, '..', 'uploads');
@@ -137,74 +136,6 @@ export const createApp = () => {
     service: 'Auth API'
   }));
 
-  // Debug WS route availability via HTTP
-  app.get('/ws', () => "WebSocket Endpoint is Active (Use WS protocol to connect)");
-
-  // WebSocket endpoint
-  app.ws('/ws', {
-    async message(ws, message) {
-      try {
-        // Elysia automatically parses JSON, so message is already an object
-        const data = message as any;
-
-        // Handle authentication
-        if (data.type === 'auth') {
-          const token = data.token;
-          if (!token) {
-            ws.send(JSON.stringify({ type: 'error', message: 'No token provided' }));
-            ws.close();
-            return;
-          }
-
-          // Verify JWT token - decode manually
-          try {
-            const parts = token.split('.');
-            if (parts.length !== 3) {
-              throw new Error('Invalid token format');
-            }
-
-            const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString());
-
-            if (!payload || !payload.sub) {
-              ws.send(JSON.stringify({ type: 'error', message: 'Invalid token payload' }));
-              ws.close();
-              return;
-            }
-
-            // Extract user data from token
-            const userId = Number(payload.sub);
-            const branchId = data.branchId || null;
-            const orgId = payload.orgId || null;
-
-            // Register connection
-            WebSocketService.addConnection(ws as any, userId, branchId, orgId);
-
-            // Send success confirmation
-            ws.send(JSON.stringify({
-              type: 'authenticated',
-              userId,
-              branchId,
-              message: 'WebSocket authenticated successfully'
-            }));
-          } catch (jwtError) {
-            console.error('JWT verification failed:', jwtError);
-            ws.send(JSON.stringify({ type: 'error', message: 'Invalid token' }));
-            ws.close();
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('WebSocket message error:', error);
-        console.error('Message content:', message);
-        console.error('Message type:', typeof message);
-        // Don't send error back if we can't parse - might be a ping/pong
-      }
-    },
-    close(ws) {
-      WebSocketService.removeConnection(ws as any);
-    }
-  });
-
   // Register modules
   app.use(authRoutes);
   app.use(branchesRoutes);
@@ -218,8 +149,7 @@ export const createApp = () => {
   app.use(auditRoutes);
   app.use(exchangeRatesRoutes);
   app.use(partiesRoutes);
-  app.use(countriesRoutes);
-  app.use(currenciesRoutes);
+  app.use(masterDataRoutes);
 
 
   return app;

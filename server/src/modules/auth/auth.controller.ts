@@ -3,30 +3,17 @@ import { AuditService } from '../audit/audit.service';
 import { successResponse } from '../../shared/response';
 import type { ElysiaContext } from '../../shared/auth.middleware';
 
-export const signup = async ({ body }: { body: any }) => {
-  const user = await AuthService.signup(body);
-  // Audit Log: SIGNUP
-  // Org ID is 0 because user is not assigned to any org yet
-  await AuditService.log(0, 'user', user.id, 'SIGNUP', user.id);
-  return successResponse('User registered successfully', user);
-};
-
-
 export const updateProfile = async ({ body, user }: ElysiaContext & { body: any }) => {
   if (!user) throw new Error('Unauthorized');
   const result = await AuthService.updateUser(user.id, body);
   return successResponse('Profile updated successfully', result);
 };
 
-export const updatePreferences = async ({ body, user }: ElysiaContext & { body: any }) => {
-  if (!user) throw new Error('Unauthorized');
-  const result = await AuthService.updatePreferences(user.id, body);
-  return successResponse('Preferences updated successfully', result);
-};
+
 
 export const logout = async ({ body }: { body: { refreshToken?: string } }) => {
   const { refreshToken } = body;
-  const result = await AuthService.logout("", refreshToken || "");
+  const result = await AuthService.logout(refreshToken || "");
   return successResponse(result.message);
 };
 
@@ -40,13 +27,6 @@ export const getUsers = async ({ user }: ElysiaContext) => {
   if (!user) throw new Error('Unauthorized');
   const users = await AuthService.getAllUsers();
   return successResponse('Users retrieved successfully', users);
-};
-
-export const verifyEmail = async ({ query }: { query: { token: string } }) => {
-  const { token } = query;
-  if (!token) throw new Error('Token is required');
-  const result = await AuthService.verifyEmail(token);
-  return successResponse(result.message);
 };
 
 // --- OTP Handlers ---
@@ -75,20 +55,4 @@ export const verifyLoginOtp = async ({ body, jwt }: { body: { email: string, otp
   }
 
   return successResponse('Login successful', result);
-};
-
-
-export const ping = ({ request }: { request: Request }) => {
-  const origin = request.headers.get('origin');
-  const host = request.headers.get('host');
-  const referer = request.headers.get('referer');
-  return {
-    message: 'pong',
-    debug: {
-      origin,
-      host,
-      referer,
-      timestamp: new Date().toISOString()
-    }
-  };
 };

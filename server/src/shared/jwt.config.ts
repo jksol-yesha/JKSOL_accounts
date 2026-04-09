@@ -1,6 +1,7 @@
 import { jwt } from '@elysiajs/jwt';
+import { env } from '../config/env';
 
 export const jwtConfig = jwt({
     name: 'jwt',
-    secret: 'super_secret_key' // TODO: Move to env variable
+    secret: env.JWT_SECRET
 });
