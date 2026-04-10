@@ -79,7 +79,6 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                 <div 
                     onClick={() => setSelectedType(prev => prev === 'expense' ? 'income' : 'expense')}
                     className="flex items-center gap-1.5 cursor-pointer select-none group"
-                    title={`Click to switch to Top ${selectedType === 'expense' ? 'Income' : 'Expenses'}`}
                 >
                     <h3 className="text-[15px] leading-none font-medium text-slate-900 group-hover:text-slate-700 tracking-tight transition-colors focus:outline-none flex items-center">
                         Top {selectedType === 'income' ? 'Income' : 'Expenses'}
@@ -121,6 +120,10 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                                             <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                         ))}
                                     </Pie>
+                                    <Tooltip 
+                                        formatter={(value) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: dashboardFilters?.currency || preferences?.currency || 'INR' }).format(Math.abs(value))}
+                                        contentStyle={{ borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '12px', padding: '8px 12px', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                                    />
                                 </PieChart>
                             </ResponsiveContainer>
                         </div>

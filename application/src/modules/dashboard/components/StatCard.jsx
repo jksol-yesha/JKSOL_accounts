@@ -152,8 +152,8 @@ const MetricSparkline = ({
                         <AreaChart data={chartData} margin={{ top: 7, right: 4, bottom: 4, left: 4 }}>
                             <defs>
                                 <linearGradient id={`sparkline-fill-${chartId}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={currentFillColor} stopOpacity={0.09} />
-                                    <stop offset="55%" stopColor={currentFillColor} stopOpacity={0.035} />
+                                    <stop offset="0%" stopColor={currentFillColor} stopOpacity={0.35} />
+                                    <stop offset="70%" stopColor={currentFillColor} stopOpacity={0.10} />
                                     <stop offset="100%" stopColor={currentFillColor} stopOpacity={0} />
                                 </linearGradient>
                             </defs>

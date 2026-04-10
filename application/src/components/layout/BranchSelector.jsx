@@ -145,7 +145,6 @@ const BranchSelector = () => {
                     <>
                         {dropdownPosition && createPortal(
                             <>
-                                <div className="fixed inset-0 z-[90] bg-transparent" onClick={() => setIsOpen(false)} />
                                 <div
                                     ref={dropdownMenuRef}
                                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
