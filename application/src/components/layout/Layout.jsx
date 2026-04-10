@@ -184,7 +184,7 @@ const Layout = ({ children }) => {
 
     return (
 
-        <div className="flex h-screen bg-gray-50 overflow-hidden print:h-auto print:overflow-visible print:bg-white">
+        <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible print:bg-white">
             {/* Sidebar with collapsed state prop */}
             <div className="no-print print:hidden">
                 <Sidebar

@@ -154,8 +154,8 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 className={() => cn(
                                     "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group relative border border-transparent",
                                     isActive
-                                        ? "bg-white text-slate-800 font-semibold shadow-sm border-slate-200"
-                                        : "text-slate-500 hover:text-slate-800 hover:bg-slate-200/50",
+                                        ? "bg-emerald-50/70 text-emerald-800 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.02)] border-emerald-100/50"
+                                        : "text-slate-500 hover:text-emerald-800 hover:bg-emerald-50/50",
                                     effectiveCollapsed && "justify-center px-2 md:px-2.5",
                                     showHoverExpandPanel && "overflow-visible",
                                     showHoverExpandPanel && !isActive && "group-hover:rounded-r-none"
@@ -166,10 +166,10 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     strokeWidth={1.5}
                                     className={cn(
                                         "shrink-0 transition-colors",
-                                        isActive ? "text-slate-700" : "text-slate-400 group-hover:text-slate-500"
+                                        isActive ? "text-emerald-600" : "text-slate-400 group-hover:text-emerald-500"
                                     )}
                                 />
-
+                                
                                 {!effectiveCollapsed && (
                                     <span className={cn(
                                         "text-[13px] tracking-tight sidebar-laptop-item-label",

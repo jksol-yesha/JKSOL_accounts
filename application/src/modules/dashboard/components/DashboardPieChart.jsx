@@ -90,7 +90,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             </div>
 
             {/* Body */}
-            <div className="flex-1 flex flex-col md:flex-row relative">
+            <div className="flex-1 flex flex-col relative">
                 {loading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
                         <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
@@ -129,7 +129,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                         </div>
                         
                         {/* the Legend Area */}
-                        <div className="md:w-[280px] lg:w-[260px] xl:w-[320px] flex flex-col justify-center px-6 pb-6 md:pb-0 gap-3 shrink-0 auto-y-auto">
+                        <div className="w-full flex flex-col justify-center px-6 pb-6 gap-3 shrink-0 auto-y-auto">
                             {pieData.map((entry, index) => {
                                 const percent = totalAmount > 0 ? (Math.abs(entry.amount) / totalAmount) * 100 : 0;
                                 return (

@@ -242,9 +242,9 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                         <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
                     </div>
                 ) : (
-                    <div className="flex mx-auto items-center justify-center w-full max-w-[400px] gap-8">
+                    <div className="flex flex-col lg:flex-row mx-auto items-center justify-center w-full gap-5 lg:gap-4 xl:gap-8">
                         {/* Donut Chart */}
-                        <div className="w-[150px] h-[150px] flex-shrink-0 relative">
+                        <div className="w-[140px] h-[140px] xl:w-[150px] xl:h-[150px] flex-shrink-0 relative">
                             <ResponsiveContainer width="100%" height="100%">
                                 <PieChart>
                                     <Pie
@@ -281,11 +281,11 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80]"></span>
                                    <span className="text-[14px] font-medium text-slate-600">Income</span>
                                </div>
-                               <div className="flex items-center justify-between ml-[18px]">
-                                   <div className="text-[17px] font-semibold text-slate-800 tracking-tight">
+                               <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
+                                   <div className="text-[16px] xl:text-[17px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalIncomeApp)}
                                    </div>
-                                   <div className="text-[15px] font-medium text-slate-500">
+                                   <div className="text-[14px] xl:text-[15px] font-medium text-slate-500 shrink-0">
                                        {incomePercent}%
                                    </div>
                                </div>
@@ -297,11 +297,11 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#f87171]"></span>
                                    <span className="text-[14px] font-medium text-slate-600">Expenses</span>
                                </div>
-                               <div className="flex items-center justify-between ml-[18px]">
-                                   <div className="text-[17px] font-semibold text-slate-800 tracking-tight">
+                               <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
+                                   <div className="text-[16px] xl:text-[17px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalExpenseApp)}
                                    </div>
-                                   <div className="text-[15px] font-medium text-slate-500">
+                                   <div className="text-[14px] xl:text-[15px] font-medium text-slate-500 shrink-0">
                                        {expensePercent}%
                                    </div>
                                </div>

@@ -355,9 +355,9 @@ const Dashboard = () => {
             previousSeries: [],
             currentSeries: netProfitTrail.map((point) => point.value),
             comparisonLabels: netProfitTrail.map((point) => point.label),
-            chartColor: '#10b981', // emerald-500
+            chartColor: '#3b82f6', // blue-500
             previousChartColor: PREVIOUS_LINE_COLOR,
-            chartFillColor: '#10b981',
+            chartFillColor: '#3b82f6',
             previousSeriesLabel,
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
@@ -373,9 +373,9 @@ const Dashboard = () => {
             previousSeries: [],
             currentSeries: incomeTrail.map((point) => point.value),
             comparisonLabels: incomeTrail.map((point) => point.label),
-            chartColor: '#10b981', // emerald-500
+            chartColor: '#3b82f6',
             previousChartColor: PREVIOUS_LINE_COLOR,
-            chartFillColor: '#10b981',
+            chartFillColor: '#3b82f6',
             previousSeriesLabel,
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
@@ -391,9 +391,9 @@ const Dashboard = () => {
             previousSeries: [],
             currentSeries: expenseTrail.map((point) => point.value),
             comparisonLabels: expenseTrail.map((point) => point.label),
-            chartColor: '#f43f5e', // rose-500
+            chartColor: '#3b82f6',
             previousChartColor: PREVIOUS_LINE_COLOR,
-            chartFillColor: '#f43f5e',
+            chartFillColor: '#3b82f6',
             previousSeriesLabel,
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
@@ -409,9 +409,9 @@ const Dashboard = () => {
             previousSeries: [],
             currentSeries: investmentTrail.map((point) => point.value),
             comparisonLabels: investmentTrail.map((point) => point.label),
-            chartColor: '#6366f1', // indigo-500
+            chartColor: '#3b82f6',
             previousChartColor: PREVIOUS_LINE_COLOR,
-            chartFillColor: '#6366f1',
+            chartFillColor: '#3b82f6',
             previousSeriesLabel,
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
@@ -424,7 +424,7 @@ const Dashboard = () => {
     ];
 
     return (
-        <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-gray-50/30">
+        <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-transparent">
             <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-2 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
                 {/* Top Action Row */}
                 <div className="flex flex-col md:flex-row justify-between items-end md:items-center w-full gap-2 md:gap-3">
