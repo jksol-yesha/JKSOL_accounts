@@ -14,6 +14,8 @@ import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 import BranchSelector from '../../components/layout/BranchSelector';
 import CurrencySelector from '../../components/layout/CurrencySelector';
 import DateRangePicker from '../../components/common/DateRangePicker';
+import SidebarToggleButton from '../../components/layout/SidebarToggleButton';
+import { generateDatePresets } from '../../utils/constants';
 
 const recentDashboardFetches = new Map();
 
@@ -199,6 +201,8 @@ const Dashboard = () => {
         )
     );
 
+
+    const datePresets = generateDatePresets(selectedYear, previousYear);
 
     // Default DateRangePicker to Current FY as requested
     useEffect(() => {
@@ -427,14 +431,18 @@ const Dashboard = () => {
         <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-transparent">
             <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-2 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
                 {/* Top Action Row */}
-                <div className="flex flex-col md:flex-row justify-between items-end md:items-center w-full gap-2 md:gap-3">
-                    {/* Right: Date, Branch, Currency Dropdowns */}
-                    <div className="flex items-center justify-end w-full gap-2 md:gap-3">
+                <div className="flex items-start md:items-center justify-between mb-1 w-full gap-2 md:gap-3">
+                    <div className="flex-shrink-0">
+                        <SidebarToggleButton />
+                    </div>
+
+                    <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
                         <div className="flex-shrink-0">
                             <DateRangePicker 
                                 startDate={dashboardFilters.dateRange?.startDate}
                                 endDate={dashboardFilters.dateRange?.endDate}
                                 selectedPreset={dashboardFilters.dateRange?.preset}
+                                presetOptions={datePresets}
                                 onChange={(range) => setDashboardFilters(prev => ({ ...prev, dateRange: range }))}
                                 onApplyRange={(range) => setDashboardFilters(prev => ({ ...prev, dateRange: range }))}
                                 className=""

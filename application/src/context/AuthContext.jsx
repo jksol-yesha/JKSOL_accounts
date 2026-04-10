@@ -11,12 +11,12 @@ export const AuthProvider = ({ children }) => {
     const navigate = useNavigate();
     const normalizeUser = (rawUser) => {
         if (!rawUser) return null;
-        const fullName = rawUser.fullName || rawUser.name || '';
+        const fullName = String(rawUser.fullName ?? rawUser.name ?? '').trim();
         const emailPrefix = rawUser.email ? String(rawUser.email).split('@')[0] : '';
         const resolvedName = fullName || emailPrefix || 'User';
         return {
             ...rawUser,
-            fullName: fullName || resolvedName,
+            fullName,
             name: resolvedName
         };
     };
@@ -28,6 +28,17 @@ export const AuthProvider = ({ children }) => {
             }
         });
     }, []);
+
+    const clearPersistedAuthSession = React.useCallback(() => {
+        localStorage.removeItem('user');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('selectedOrg');
+        localStorage.removeItem('selectedBranch');
+        localStorage.removeItem('selectedYear');
+        localStorage.removeItem('isLoggingOut');
+        clearUserScopedUiState();
+    }, [clearUserScopedUiState]);
 
     useEffect(() => {
         const initAuth = async () => {
@@ -50,31 +61,16 @@ export const AuthProvider = ({ children }) => {
                     // apiService.defaults.headers... (handled by interceptor, but interceptor reads localStorage)
                 } catch (e) {
                     console.error("Failed to parse stored user:", e);
-                    localStorage.removeItom('user');
+                    clearPersistedAuthSession();
                 }
             }
             setIsLoading(false);
         };
 
         initAuth();
-    }, []);
+    }, [clearPersistedAuthSession]);
 
-    const login = async (email, password) => {
-        try {
-            const response = await apiService.auth.login({ email, password });
 
-            const data = response.data || response;
-            const accessToken = data.accessToken || data.token;
-            const refreshToken = data.refreshToken;
-            const user = normalizeUser(data.user);
-
-            loginSuccess(user, accessToken, refreshToken);
-            return user;
-        } catch (error) {
-            console.error("Login failed", error);
-            throw error;
-        }
-    };
 
     const loginSuccess = (user, accessToken, refreshToken) => {
         if (!accessToken) {
@@ -97,14 +93,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('selectedBranch');
         localStorage.removeItem('selectedYear');
 
-        // Overwrite system_preferences with this user's backend preferences
-        // This prevents preferences from a previously logged-in user from bleeding through
-        const userPrefs = normalizedUser.preferences;
-        const defaultPrefs = { currency: 'INR', dateFormat: 'dd MMM, yyyy', numberFormat: 'en-IN', timeZone: 'Asia/Kolkata' };
-        const resolvedPrefs = (userPrefs && typeof userPrefs === 'object' && Object.keys(userPrefs).length > 0)
-            ? { ...defaultPrefs, ...userPrefs }
-            : defaultPrefs;
-        localStorage.setItem('system_preferences', JSON.stringify(resolvedPrefs));
+
 
         // Set default selection based on user data
         if (normalizedUser.orgIds) {
@@ -142,17 +131,10 @@ export const AuthProvider = ({ children }) => {
             if (!user) {
                 // User is null -> Clear storage
                 // This happens AFTER the state update has propagated to children
-                localStorage.removeItem('user');
-                localStorage.removeItem('accessToken');
-                localStorage.removeItem('refreshToken');
-                localStorage.removeItem('selectedOrg');
-                localStorage.removeItem('selectedBranch');
-                localStorage.removeItem('selectedYear');
-                localStorage.removeItem('isLoggingOut');
-                clearUserScopedUiState();
+                clearPersistedAuthSession();
             }
         }
-    }, [clearUserScopedUiState, user, isLoading]);
+    }, [clearPersistedAuthSession, user, isLoading]);
 
     const logout = async (shouldRedirect = true) => {
         const refreshToken = localStorage.getItem('refreshToken');
@@ -175,34 +157,30 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // ... (rest of methods: signup, updateUser, etc.)
-
-    const signup = async (userData) => {
-        try {
-            const response = await apiService.auth.signup(userData);
-            return response.data;
-        } catch (error) {
-            console.error("Signup failed", error);
-            throw error;
-        }
-    }
-
     const updateUser = async (updatedData) => {
         try {
             const response = await apiService.auth.updateProfile(updatedData);
             const payload = response?.data || response;
-            const updatedUser =
-                payload?.user ||
-                payload?.data?.user ||
-                payload?.data ||
-                payload ||
+            
+            // Extract user data from various possible response structures
+            const updatedUser = 
+                payload?.user || 
+                payload?.data?.user || 
+                payload?.data || 
+                payload || 
                 {};
-            const mergedUser = { ...user, ...updatedUser, ...updatedData };
-            if (updatedData?.name) {
-                mergedUser.fullName = updatedData.name;
-            } else if (updatedUser?.name && !updatedUser?.fullName) {
+
+            // Merge current user with updated data from server
+            const mergedUser = {
+                ...user,
+                ...updatedUser
+            };
+
+            // Ensure field consistency (server uses 'name' for 'fullName' in response)
+            if (updatedUser.name) {
                 mergedUser.fullName = updatedUser.name;
             }
+
             const newData = normalizeUser(mergedUser);
 
             setUser(newData);
@@ -214,29 +192,13 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    const verifyEmail = async (token) => {
-        return apiService.auth.verifyEmail(token);
-    };
-
-    const forgotPassword = async (email) => {
-        return apiService.auth.forgotPassword(email);
-    };
-
-    const resetPassword = async (token, newPassword) => {
-        return apiService.auth.resetPassword(token, newPassword);
-    };
 
     return (
         <AuthContext.Provider value={{
             user,
-            login,
             loginSuccess,
-            signup,
             logout,
             updateUser,
-            verifyEmail,
-            forgotPassword,
-            resetPassword,
             isLoading
         }}>
             {children}

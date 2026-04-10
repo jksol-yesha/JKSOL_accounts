@@ -40,7 +40,6 @@ export const updateUser = async (
     userId: number,
     data: {
         email?: string;
-        password?: string;
         name?: string;
         profilePhoto?: string;
     }
@@ -49,37 +48,57 @@ export const updateUser = async (
 
     if (!existingUser) throw new Error('User not found');
 
-    if (data.email && data.email !== existingUser.email) {
-        const [emailExists] = await db.select().from(users).where(and(eq(users.email, data.email), sql`${users.id} != ${userId}`));
+    const hasOwn = (key: 'email' | 'name' | 'profilePhoto') => Object.prototype.hasOwnProperty.call(data || {}, key);
+    const normalizedEmail = hasOwn('email') ? String(data.email || '').trim().toLowerCase() : undefined;
+    const normalizedName = hasOwn('name') ? String(data.name || '').trim() : undefined;
+    const normalizedProfilePhoto = hasOwn('profilePhoto') ? (data.profilePhoto || null) : undefined;
+
+    if (hasOwn('email') && !normalizedEmail) {
+        throw new Error('Email is required');
+    }
+
+    if (normalizedEmail && normalizedEmail !== existingUser.email) {
+        const [emailExists] = await db.select().from(users).where(and(eq(users.email, normalizedEmail), sql`${users.id} != ${userId}`));
         if (emailExists) throw new Error('Email already in use');
     }
 
     const updateData: any = {};
-    if (data.email) updateData.email = data.email;
-    if (data.name) updateData.fullName = data.name; // Mapping name -> fullName
+    if (hasOwn('email')) updateData.email = normalizedEmail;
+    if (hasOwn('name')) updateData.fullName = normalizedName; // Mapping name -> fullName
 
-    // ADDED: Logic to update profile photo
-    if (data.profilePhoto) {
-        updateData.profilePhoto = data.profilePhoto;
+    if (hasOwn('profilePhoto')) {
+        updateData.profilePhoto = normalizedProfilePhoto;
     }
 
-    if (data.email) updateData.email = data.email;
-    if (data.name) updateData.fullName = data.name; // Mapping name -> fullName
-
-    // ADDED: Logic to update profile photo
-    if (data.profilePhoto) {
-        updateData.profilePhoto = data.profilePhoto;
+    if (Object.keys(updateData).length > 0) {
+        await db.update(users)
+            .set({
+                ...updateData,
+                updatedAt: new Date()
+            })
+            .where(eq(users.id, userId));
     }
 
-    await db.update(users).set(updateData).where(eq(users.id, userId));
+    const [persistedUser] = await db.select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        profilePhoto: users.profilePhoto,
+        status: users.status
+    }).from(users).where(eq(users.id, userId));
+
+    if (!persistedUser) throw new Error('User not found after update');
+
+    if (hasOwn('email') && persistedUser.email !== normalizedEmail) {
+        throw new Error('Email update could not be persisted');
+    }
 
     return {
-        id: existingUser.id,
-        email: updateData.email || existingUser.email,
-        name: updateData.fullName || existingUser.fullName,
-        // ADDED: Return the new profile photo if updated, or the existing one
-        profilePhoto: updateData.profilePhoto || existingUser.profilePhoto,
-        isVerified: true // Assuming active for now
+        id: persistedUser.id,
+        email: persistedUser.email,
+        name: persistedUser.fullName,
+        profilePhoto: persistedUser.profilePhoto,
+        isVerified: persistedUser.status === 1
     };
 };
 

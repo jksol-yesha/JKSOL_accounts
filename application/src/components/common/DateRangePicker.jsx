@@ -400,14 +400,14 @@ const DateRangePicker = forwardRef(({
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="h-8 px-4 rounded-md text-[13px] font-semibold text-gray-500 hover:text-slate-800 hover:bg-slate-100 transition-colors"
+                                className="h-8 px-4 rounded-md text-[13px] font-semibold text-gray-500 hover:text-emerald-800 hover:bg-emerald-50 transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={handleApply}
-                                className="h-8 rounded-md bg-slate-800 px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-slate-900 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="h-8 rounded-md bg-emerald-600 px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Apply
                             </button>
