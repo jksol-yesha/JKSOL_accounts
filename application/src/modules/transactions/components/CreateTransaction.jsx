@@ -1087,7 +1087,7 @@ const CreateTransaction = () => {
 
     return (
         <div className={cn(
-            "transactions-create-page flex flex-col min-h-full relative bg-gray-50/50",
+            "transactions-create-page flex flex-col min-h-full relative bg-white",
             needsWholePageScroll && "transactions-create-page-scroll"
         )}>
             <div ref={pageHeaderRef}>

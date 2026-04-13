@@ -12,13 +12,52 @@ const monthDiffInclusive = (startDate: string, endDate: string) => {
     return ((endYear - startYear) * 12) + (endMonth - startMonth) + 1;
 };
 
+const dayDiffInclusive = (startDate: string, endDate: string) => {
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    return Math.floor((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+};
+
+const getInterval = (startDate: string, endDate: string) => {
+    const diff = dayDiffInclusive(startDate, endDate);
+    if (diff <= 31) return 'day';
+    if (diff <= 92) return 'week';
+    return 'month';
+};
+
 const addMonths = (dateStr: string, offset: number) => {
     const [year = 0, month = 1, day = 1] = dateStr.split('-').map(Number);
     const date = new Date(Date.UTC(year, month - 1 + offset, day || 1));
     return {
-        year: date.getUTCFullYear(),
-        month: date.getUTCMonth() + 1,
-        label: date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })
+        key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`,
+        label: `${date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' })} ${date.getUTCFullYear()}`
+    };
+};
+
+const addDays = (dateStr: string, offset: number) => {
+    const [year = 0, month = 1, day = 1] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day + offset));
+    return {
+        key: `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`,
+        label: date.toLocaleString('en-US', { day: 'numeric', month: 'short', timeZone: 'UTC' })
+    };
+};
+
+const getWeekKey = (date: Date) => {
+    const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const dayNum = d.getUTCDay() || 7;
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`;
+};
+
+const addWeeks = (dateStr: string, offset: number) => {
+    const [year = 0, month = 1, day = 1] = dateStr.split('-').map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day + (offset * 7)));
+    return {
+        key: getWeekKey(date),
+        label: `W${getWeekKey(date).split('-W')[1]}`
     };
 };
 
@@ -85,8 +124,8 @@ export const DashboardService = {
         const orgBaseCurrency = org?.baseCurrency || 'INR';
         const displayCurrency = targetCurrency || orgBaseCurrency;
 
-        // Helper: Dynamic Aggregation
-        // Returns total converted to Display Currency
+        console.log(`[DashboardAPI] Resolved Dates: ${startDate} to ${endDate}`);
+        
         const getDynamicTotal = async (
             filterFn: (t: typeof transactions) => any
         ): Promise<number> => {
@@ -105,21 +144,17 @@ export const DashboardService = {
                 .from(transactions)
                 .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
                 .where(and(...whereClause))
-                .groupBy(currencies.code);
+                .groupBy(sql`${currencies.code}`);
             
             let total = 0;
             for (const row of rows) {
                 const amount = Number(row.totalDisplayValue || 0);
                 if (!amount) continue;
 
-                total += await convertAmount(
-                    amount,
-                    resolveTxnCurrency(row.currencyCode, orgBaseCurrency),
-                    displayCurrency,
-                    orgId
-                );
+                const sourceCur = resolveTxnCurrency(row.currencyCode, orgBaseCurrency);
+                const converted = await convertAmount(amount, sourceCur, displayCurrency, orgId);
+                total += converted;
             }
-
             return total;
         };
 
@@ -169,16 +204,19 @@ export const DashboardService = {
         // 1c. Fetch Transaction Types (Support multiple IDs for same name)
         const types = await db.select().from(transactionTypes);
         const getTypeIds = (...aliases: string[]) =>
-            types.filter(t => aliases.includes((t.name || '').toLowerCase())).map(t => t.id);
+            types.filter(t => aliases.includes((t.name || '').trim().toLowerCase())).map(t => t.id);
         
         const incomeIds = getTypeIds('income');
         const expenseIds = getTypeIds('expense');
         const investmentIds = getTypeIds('investment', 'invest');
 
+        console.log(`[DashboardAPI] Summary Request: Org=${orgId}, Range=${startDate} - ${endDate}, Currency=${displayCurrency}, Branch=${JSON.stringify(branchId)}`);
+        console.log(`[DashboardAPI] Found Type IDs: Income=${JSON.stringify(incomeIds)}, Expense=${JSON.stringify(expenseIds)}`);
+
         // 2. Opening Balance (Sum IN - Sum OUT) before start date
         const openingIn = await getDynamicTotal(
             (t) => and(
-                lt(t.txnDate, startDate),
+                sql`DATE(${t.txnDate}) < ${startDate}`,
                 eq(t.status, 1),
                 incomeIds.length > 0 ? inArray(t.txnTypeId, incomeIds) : sql`1=0`
             )
@@ -186,7 +224,7 @@ export const DashboardService = {
 
         const openingOut = await getDynamicTotal(
             (t) => and(
-                lt(t.txnDate, startDate),
+                sql`DATE(${t.txnDate}) < ${startDate}`,
                 eq(t.status, 1),
                 expenseIds.length > 0 ? inArray(t.txnTypeId, expenseIds) : sql`1=0`
             )
@@ -194,7 +232,7 @@ export const DashboardService = {
 
         const openingInvestment = await getDynamicTotal(
             (t) => and(
-                lt(t.txnDate, startDate),
+                sql`DATE(${t.txnDate}) < ${startDate}`,
                 eq(t.status, 1),
                 investmentIds.length > 0 ? inArray(t.txnTypeId, investmentIds) : sql`1=0`
             )
@@ -228,8 +266,8 @@ export const DashboardService = {
         // 3. Current Period Totals
         const totalIncome = await getDynamicTotal(
             (t) => and(
-                gte(t.txnDate, startDate),
-                lte(t.txnDate, endDate),
+                sql`DATE(${t.txnDate}) >= ${startDate}`,
+                sql`DATE(${t.txnDate}) <= ${endDate}`,
                 eq(t.status, 1),
                 incomeIds.length > 0 ? inArray(t.txnTypeId, incomeIds) : sql`1=0`
             )
@@ -237,8 +275,8 @@ export const DashboardService = {
 
         const totalExpense = await getDynamicTotal(
             (t) => and(
-                gte(t.txnDate, startDate),
-                lte(t.txnDate, endDate),
+                sql`DATE(${t.txnDate}) >= ${startDate}`,
+                sql`DATE(${t.txnDate}) <= ${endDate}`,
                 eq(t.status, 1),
                 expenseIds.length > 0 ? inArray(t.txnTypeId, expenseIds) : sql`1=0`
             )
@@ -246,15 +284,15 @@ export const DashboardService = {
 
         const totalInvestmentByAccount = await getInvestmentTotal(
             (t) => and(
-                gte(t.txnDate, startDate),
-                lte(t.txnDate, endDate)
+                sql`DATE(${t.txnDate}) >= ${startDate}`,
+                sql`DATE(${t.txnDate}) <= ${endDate}`
             )
         );
         const totalInvestmentByType = investmentIds.length > 0
             ? await getDynamicTotal(
                 (t) => and(
-                    gte(t.txnDate, startDate),
-                    lte(t.txnDate, endDate),
+                    sql`DATE(${t.txnDate}) >= ${startDate}`,
+                    sql`DATE(${t.txnDate}) <= ${endDate}`,
                     eq(t.status, 1),
                     inArray(t.txnTypeId, investmentIds)
                 )
@@ -266,6 +304,8 @@ export const DashboardService = {
 
         // 4. Closing Balance (Opening + Net Flow - Investment Outflow)
         const closingBalance = openingBalance + (totalIncome - totalExpense - totalInvestment);
+
+        console.log(`[DashboardAPI] Final: Opening=${openingBalance}, Income=${totalIncome}, Expense=${totalExpense}, Closing=${closingBalance}`);
 
         return {
             baseCurrency: displayCurrency, // Return the currency we converted to
@@ -285,7 +325,9 @@ export const DashboardService = {
         targetCurrency?: string,
         user?: any,
         customStartDate?: string,
-        customEndDate?: string
+        customEndDate?: string,
+        customCompareStartDate?: string,
+        customCompareEndDate?: string
     ) => {
         const fyIds = [financialYearId, compareFinancialYearId].filter(Boolean) as number[];
         const fyRows = await db
@@ -315,13 +357,29 @@ export const DashboardService = {
         const buildPeriodSeries = async (fy: typeof currentFy, periodStart?: string, periodEnd?: string) => {
             const start = periodStart || fy.startDate;
             const end = periodEnd || fy.endDate;
-            const monthCount = Math.max(1, monthDiffInclusive(start, end));
-            const labels = Array.from({ length: monthCount }, (_, index) => addMonths(start, index).label);
-            const monthKeyToIndex = new Map<string, number>();
+            const interval = getInterval(start, end);
 
-            Array.from({ length: monthCount }, (_, index) => addMonths(start, index)).forEach((item, index) => {
-                monthKeyToIndex.set(`${item.year}-${String(item.month).padStart(2, '0')}`, index);
-            });
+            let count = 0;
+            let generator: (d: string, i: number) => { key: string, label: string };
+            let sqlFormat = '%Y-%m';
+
+            if (interval === 'day') {
+                count = dayDiffInclusive(start, end);
+                generator = addDays;
+                sqlFormat = '%Y-%m-%d';
+            } else if (interval === 'week') {
+                count = Math.ceil(dayDiffInclusive(start, end) / 7);
+                generator = addWeeks;
+                sqlFormat = '%x-W%v';
+            } else {
+                count = monthDiffInclusive(start, end);
+                generator = addMonths;
+                sqlFormat = '%Y-%m';
+            }
+
+            const items = Array.from({ length: count }, (_, i) => generator(start, i));
+            const labels = items.map(t => t.label);
+            const keyToIndexMap = new Map<string, number>(items.map((t, i) => [t.key, i]));
 
             // Use plural IDs for matching
             const types = await db.select().from(transactionTypes);
@@ -343,7 +401,7 @@ export const DashboardService = {
             applyTxnBranchFilter(whereClause, branchId, user);
 
             const rows = await db.select({
-                monthKey: sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`,
+                periodKey: sql<string>`DATE_FORMAT(${transactions.txnDate}, ${sqlFormat})`,
                 typeName: transactionTypes.name,
                 currencyCode: currencies.code,
                 totalDisplayValue: sql<string>`SUM(${TXN_DISPLAY_AMOUNT_SQL})`
@@ -353,7 +411,7 @@ export const DashboardService = {
                 .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
                 .where(and(...whereClause))
                 .groupBy(
-                    sql`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`,
+                    sql`DATE_FORMAT(${transactions.txnDate}, ${sqlFormat})`,
                     transactionTypes.name,
                     currencies.code
                 );
@@ -372,7 +430,7 @@ export const DashboardService = {
             applyTxnBranchFilter(investmentWhereClause, branchId, user);
 
             const investmentRows = await db.select({
-                monthKey: sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`,
+                periodKey: sql<string>`DATE_FORMAT(${transactions.txnDate}, ${sqlFormat})`,
                 currencyCode: currencies.code,
                 totalNetAmount: sql<string>`SUM(${transactionEntries.debit} - ${transactionEntries.credit})`
             })
@@ -382,17 +440,17 @@ export const DashboardService = {
                 .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
                 .where(and(...investmentWhereClause))
                 .groupBy(
-                    sql`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`,
+                    sql`DATE_FORMAT(${transactions.txnDate}, ${sqlFormat})`,
                     currencies.code
                 );
 
-            const income = Array(monthCount).fill(0);
-            const expense = Array(monthCount).fill(0);
-            const investmentByType = Array(monthCount).fill(0);
-            const investmentByAccount = Array(monthCount).fill(0);
+            const income = Array(count).fill(0);
+            const expense = Array(count).fill(0);
+            const investmentByType = Array(count).fill(0);
+            const investmentByAccount = Array(count).fill(0);
 
             for (const row of rows) {
-                const index = monthKeyToIndex.get(String(row.monthKey || ''));
+                const index = keyToIndexMap.get(String(row.periodKey || ''));
                 if (index === undefined) continue;
 
                 const totalAmount = Number(row.totalDisplayValue || 0);
@@ -410,7 +468,7 @@ export const DashboardService = {
             }
 
             for (const row of investmentRows) {
-                const index = monthKeyToIndex.get(String(row.monthKey || ''));
+                const index = keyToIndexMap.get(String(row.periodKey || ''));
                 if (index === undefined) continue;
 
                 const netAmount = Number(row.totalNetAmount || 0);
@@ -448,8 +506,16 @@ export const DashboardService = {
             return `${Number(y) - 1}-${m}-${d}`;
         };
 
+        console.log(`[DashboardAPI] Trends Request: Org=${orgId}, Range=${currentFy.startDate} - ${currentFy.endDate}, Compare=${customCompareStartDate} - ${customCompareEndDate}`);
+        
         const currentSeries = await buildPeriodSeries(currentFy, customStartDate, customEndDate);
-        const compareSeries = compareFy ? await buildPeriodSeries(compareFy, subtractYear(customStartDate), subtractYear(customEndDate)) : null;
+        const compareSeries = (customCompareStartDate || compareFy)
+            ? await buildPeriodSeries(
+                compareFy || currentFy, 
+                customCompareStartDate || (compareFy ? subtractYear(customStartDate || '') : undefined), 
+                customCompareEndDate || (compareFy ? subtractYear(customEndDate || '') : undefined)
+            )
+            : null;
 
         return {
             baseCurrency: displayCurrency,

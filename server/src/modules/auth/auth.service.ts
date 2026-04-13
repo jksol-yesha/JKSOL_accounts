@@ -71,12 +71,14 @@ export const updateUser = async (
     }
 
     if (Object.keys(updateData).length > 0) {
+        console.log(`[DB UPDATE] Saving user ${userId}:`, updateData);
         await db.update(users)
             .set({
                 ...updateData,
                 updatedAt: new Date()
             })
             .where(eq(users.id, userId));
+        console.log(`[DB UPDATE] Successfully saved user ${userId}`);
     }
 
     const [persistedUser] = await db.select({

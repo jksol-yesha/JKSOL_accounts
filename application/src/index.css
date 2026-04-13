@@ -3,8 +3,8 @@
 @theme {
   --color-primary: #1e293b;
   --color-primary-dark: #0f172a;
-  --color-background: #f1f3f9;
-  --color-background-darker: #e9ecf3;
+  --color-background: #ffffff;
+  --color-background-darker: #ffffff;
   --color-sidebar: #ffffff;
   --color-sidebar-text: #64748b;
   --color-sidebar-active: #1e293b;
@@ -18,7 +18,7 @@
 
   color-scheme: light;
   color: #1e293b;
-  background-color: #f1f3f9;
+  background-color: #ffffff;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -31,7 +31,7 @@
 
 @layer base {
   body {
-    @apply bg-gray-50 text-slate-800 min-h-screen flex flex-col;
+    @apply bg-white text-slate-800 min-h-screen flex flex-col;
     margin: 0;
     min-width: 320px;
   }
@@ -1940,6 +1940,27 @@
   .recent-laptop-table tbody td span {
     font-size: 10px !important;
   }
+}
+
+/* Dashboard header decorative pattern */
+.dashboard-header-pattern {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0;
+  background: #ffffff;
+}
+
+.dashboard-header-pattern::before {
+  content: none;
+}
+
+.dashboard-header-pattern::after {
+  content: none;
+}
+
+.dashboard-header-pattern > * {
+  position: relative;
+  z-index: 1;
 }
 
 @media print {

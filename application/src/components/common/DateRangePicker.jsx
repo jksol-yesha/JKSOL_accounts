@@ -102,8 +102,19 @@ const DateRangePicker = forwardRef(({
 
     const parseLocalDate = (dateStr) => {
         if (!dateStr) return null;
-        const [y, m, d] = dateStr.split('-').map(Number);
-        return new Date(y, m - 1, d);
+        if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            return new Date(y, m - 1, d);
+        }
+
+        const parsedDate = new Date(dateStr);
+        if (Number.isNaN(parsedDate.getTime())) return null;
+
+        return new Date(
+            parsedDate.getFullYear(),
+            parsedDate.getMonth(),
+            parsedDate.getDate()
+        );
     };
 
     const formatDisplayDate = (dateStr) => {
@@ -247,20 +258,28 @@ const DateRangePicker = forwardRef(({
         setDraftPreset(option.value);
         if (option.range) {
             setDraftRange(option.range);
+            if (!usesDeferredApply) {
+                onChange?.({
+                    ...option.range,
+                    preset: option.value
+                });
+            }
             const date = parseLocalDate(option.range.startDate);
             if (date) setCurrentMonth(date);
         }
     };
 
     const handleApply = () => {
+        const appliedRange = {
+            startDate: draftRange.startDate || '',
+            endDate: draftRange.endDate || draftRange.startDate || '',
+            preset: draftPreset
+        };
+
         if (usesDeferredApply) {
-            onApplyRange({
-                startDate: draftRange.startDate,
-                endDate: draftRange.endDate,
-                preset: draftPreset
-            });
+            onApplyRange(appliedRange);
         } else {
-            onChange(draftRange);
+            onChange(appliedRange);
         }
         setIsOpen(false);
     };

@@ -414,7 +414,7 @@ const CreateParty = () => {
 
     return (
         <div className={cn(
-            "parties-create-page flex flex-col min-h-full bg-gray-50/50",
+            "parties-create-page flex flex-col min-h-full bg-white",
             needsWholePageScroll && "parties-create-page-scroll"
         )}>
             <div ref={pageHeaderRef}>

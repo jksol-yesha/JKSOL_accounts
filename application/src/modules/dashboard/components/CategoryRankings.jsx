@@ -13,8 +13,6 @@ import { usePreferences } from '../../../context/PreferenceContext';
 import { useOrganization } from '../../../context/OrganizationContext';
 import { useAuth } from '../../../context/AuthContext';
 
-const recentRankingFetches = new Map();
-
 // --- BANK AVATAR LOGIC ---
 const bankLogoModules = import.meta.glob('../../../assets/bank-logos/*.{png,jpg,jpeg,svg}', {
     eager: true,
@@ -91,14 +89,14 @@ const BankAvatar = ({ name, bankLogoKey, ifsc, bankName, bankCode, subtype, subt
 };
 
 const getCurrentBalance = (account) => {
-    const value = account?.closingBalance ?? account?.convertedClosingBalance ?? account?.closing_balance ?? account?.convertedBalance ?? account?.openingBalance ?? 0;
+    const value = account?.amount ?? account?.closingBalance ?? account?.convertedClosingBalance ?? account?.closing_balance ?? account?.convertedBalance ?? account?.openingBalance ?? 0;
     return Number.isFinite(Number(value)) ? Number(value) : 0;
 };
 
 // --- CUSTOM CARD SHELL MATCHING REFERENCE IMAGE ---
-const CardShell = ({ title, headerRight, children, className }) => (
+const CardShell = ({ title, headerRight, children, className, headerClassName }) => (
     <div className={cn("bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden", className)}>
-        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 shrink-0 flex items-center justify-between gap-4">
+        <div className={cn("px-5 py-4 border-b border-slate-100 bg-slate-100 shrink-0 flex items-center justify-between gap-4", headerClassName)}>
             <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
                 {title}
             </h3>
@@ -158,7 +156,11 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
     ) : null;
 
     return (
-        <CardShell title="Account Balances" headerRight={totalBalanceBadge}>
+        <CardShell
+            title="Account Balances"
+            headerRight={totalBalanceBadge}
+            headerClassName="bg-[#F9F9FB] border-b border-slate-200"
+        >
             <div className="flex-1 overflow-y-auto relative no-scrollbar pt-2">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -235,14 +237,17 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
     ] : [{ name: 'Empty', value: 1, color: '#eff6ff' }];
 
     return (
-        <CardShell title="Income vs Expenses">
+        <CardShell
+            title="Income vs Expenses"
+            headerClassName="bg-[#F9F9FB] border-b border-slate-200"
+        >
             <div className="flex-1 overflow-y-auto px-6 relative no-scrollbar flex flex-col justify-center py-5">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
                         <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
                     </div>
                 ) : (
-                    <div className="flex flex-col lg:flex-row mx-auto items-center justify-center w-full gap-5 lg:gap-4 xl:gap-8">
+                    <div className="flex flex-col xl:flex-row mx-auto items-center justify-center w-full gap-5 xl:gap-8">
                         {/* Donut Chart */}
                         <div className="w-[140px] h-[140px] xl:w-[150px] xl:h-[150px] flex-shrink-0 relative">
                             <ResponsiveContainer width="100%" height="100%">
@@ -332,7 +337,10 @@ const InvestmentCardList = ({ categories, initialLoading, overlayLoading, hasFet
     };
 
     return (
-        <CardShell title="Investment Performance">
+        <CardShell
+            title="Investment Performance"
+            headerClassName="bg-[#F9F9FB] border-b border-slate-200"
+        >
             <div className="flex-1 overflow-y-auto relative no-scrollbar">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
@@ -391,81 +399,55 @@ const CategoryRankings = ({ dashboardFilters }) => {
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
     
-    const cacheKey = `dashboard:rankings:layout_v6:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}:${dashboardFilters?.currency || preferences.currency}:${dashboardFilters?.dateRange?.startDate || 'all'}`;
     const rankingsContextReady = Boolean(
         location.pathname === '/dashboard' && !branchLoading && !yearLoading && selectedOrg?.id && selectedYear?.id &&
         (user?.role === 'member' || user?.role === 'owner' || selectedBranch?.id)
     );
 
     useEffect(() => {
-        try {
-            const raw = sessionStorage.getItem(cacheKey);
-            if (!raw) return;
-            const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed?.categories)) setCategories(parsed.categories);
-            if (Array.isArray(parsed?.accounts)) setAccounts(parsed.accounts);
-            if (Array.isArray(parsed?.categories) || Array.isArray(parsed?.accounts)) setHasFetchedOnce(true);
-        } catch { /* parse error */ }
-    }, [cacheKey]);
-
-    useEffect(() => {
         const controller = new AbortController();
         const fetchRankings = async () => {
-            let didStartRequest = false;
             if (!rankingsContextReady) return;
             setLoading(true);
             try {
                 const branchFilter = getBranchFilterValue();
                 if (!branchFilter) return;
-                const requestKey = JSON.stringify({ orgId: selectedOrg?.id, yearId: selectedYear?.id, branchFilter, currency: dashboardFilters?.currency || preferences.currency, startDate: dashboardFilters?.dateRange?.startDate, endDate: dashboardFilters?.dateRange?.endDate });
-                const lastStartedAt = recentRankingFetches.get(requestKey) || 0;
-                if (Date.now() - lastStartedAt < 800) return;
-                recentRankingFetches.set(requestKey, Date.now());
-
-                didStartRequest = true;
-                const [rankingsResponse, accountsResponse] = await Promise.all([
-                    apiService.dashboard.getCategoryRankings({ 
-                        branchId: branchFilter, 
-                        financialYearId: selectedYear.id, 
-                        targetCurrency: dashboardFilters?.currency || preferences.currency,
-                        ...(dashboardFilters?.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
-                    }, { signal: controller.signal }),
-                    apiService.accounts.getAll({ 
-                        branchId: 'all', 
-                        financialYearId: selectedYear.id, 
-                        targetCurrency: preferences.currency 
-                    }, { signal: controller.signal }).catch(() => ({ success: false, data: [] }))
-                ]);
+                const rankingsResponse = await apiService.dashboard.getCategoryRankings({
+                    branchId: branchFilter,
+                    financialYearId: selectedYear.id,
+                    targetCurrency: dashboardFilters?.currency || preferences.currency,
+                    ...(dashboardFilters?.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
+                }, { signal: controller.signal });
 
                 if (!controller.signal.aborted) {
                     if (rankingsResponse.success) {
                         const normalizedRankings = (Array.isArray(rankingsResponse.data) ? rankingsResponse.data : []).map(item => ({
                             ...item, type: String(item?.type ?? item?.txnType ?? '').trim().toLowerCase(), name: String(item?.name ?? '').trim(), amount: Number(item?.amount || 0)
                         }));
-                        setCategories(normalizedRankings);
-                        try { sessionStorage.setItem(cacheKey, JSON.stringify({ categories: normalizedRankings, accounts: accountsResponse.success ? (Array.isArray(accountsResponse.data) ? accountsResponse.data : []) : accounts })); } catch {}
+                        setAccounts(normalizedRankings.filter((item) => item.type === 'account'));
+                        setCategories(normalizedRankings.filter((item) => item.type !== 'account'));
                     }
-                    if (accountsResponse.success) setAccounts(Array.isArray(accountsResponse.data) ? accountsResponse.data : []);
                 }
             } catch (error) {
                 if (isIgnorableRequestError(error)) return;
+                console.error('Failed to fetch dashboard rankings:', error);
             } finally {
                 if (!controller.signal.aborted) {
                     setLoading(false);
-                    if (didStartRequest) setHasFetchedOnce(true);
+                    setHasFetchedOnce(true);
                 }
             }
         };
 
         const timeoutId = setTimeout(() => { if (rankingsContextReady) fetchRankings(); }, 100);
         return () => { clearTimeout(timeoutId); controller.abort(); };
-    }, [rankingsContextReady, location.pathname, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, dashboardFilters, branchLoading, yearLoading, getBranchFilterValue, cacheKey]);
+    }, [rankingsContextReady, location.pathname, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, dashboardFilters, branchLoading, yearLoading, getBranchFilterValue]);
 
     const showInitialLoader = loading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 xl:gap-4 h-full min-h-[300px] auto-rows-fr items-stretch">
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 h-full min-h-[300px] auto-rows-fr items-stretch">
             <AccountBalanceList accounts={accounts} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />
             <PnLBreakdownList categories={categories} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />
             <InvestmentCardList categories={categories} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />

@@ -96,6 +96,8 @@ export const getTrends = async ({ body, set, user, orgId, branchId: contextBranc
 
         const startDate = body.startDate || undefined;
         const endDate = body.endDate || undefined;
+        const compareStartDate = body.compareStartDate || undefined;
+        const compareEndDate = body.compareEndDate || undefined;
 
         const trends = await DashboardService.getTrends(
             orgId,
@@ -105,7 +107,9 @@ export const getTrends = async ({ body, set, user, orgId, branchId: contextBranc
             targetCurrency,
             user,
             startDate,
-            endDate
+            endDate,
+            compareStartDate,
+            compareEndDate
         );
 
         return { success: true, data: trends };

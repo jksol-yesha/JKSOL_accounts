@@ -497,7 +497,7 @@ const CreateAccount = () => {
     return (
         <div
             className={cn(
-                "accounts-create-page flex flex-col min-h-full bg-gray-50/50",
+                "accounts-create-page flex flex-col min-h-full bg-white",
                 needsWholePageScroll && "accounts-create-page-scroll"
             )}
         >

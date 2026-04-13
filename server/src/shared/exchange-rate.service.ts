@@ -106,6 +106,9 @@ export const ExchangeRateService = {
         const normalizedToCurrency = String(toCurrency || '').toUpperCase();
         if (!normalizedFromCurrency || !normalizedToCurrency) return 1;
         if (normalizedFromCurrency === normalizedToCurrency) return 1;
+        
+        console.log(`[ExchangeRateService] Requesting rate: ${normalizedFromCurrency} -> ${normalizedToCurrency} (Org: ${orgId})`);
+
         const todayStr = await this.getRateDate(orgId);
         const cacheKey = `${normalizedFromCurrency}_${normalizedToCurrency}_${todayStr}`;
         const now = Date.now();
@@ -113,6 +116,7 @@ export const ExchangeRateService = {
         // 1. Check Memory Cache
         if (rateCache[cacheKey]) {
             if (now - rateCache[cacheKey].timestamp < CACHE_TTL_MS) {
+                console.log(`[ExchangeRateService] Returning cached rate (memory): ${rateCache[cacheKey].rate}`);
                 return rateCache[cacheKey].rate;
             }
         }
@@ -130,6 +134,7 @@ export const ExchangeRateService = {
 
             if (dbRate) {
                 const rate = Number(dbRate.rate);
+                console.log(`[ExchangeRateService] Found rate in DB: ${rate}`);
                 rateCache[cacheKey] = { rate, timestamp: now };
                 return rate;
             }
@@ -139,7 +144,7 @@ export const ExchangeRateService = {
 
         // 3. Fetch from External API
         try {
-
+            console.log(`[ExchangeRateService] Rate not found in local cache. Fetching from external APIs...`);
             const providers = [
                 () => fetchFrankfurterRate(normalizedFromCurrency, normalizedToCurrency),
                 () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency)
@@ -149,6 +154,7 @@ export const ExchangeRateService = {
                 const rate = await fetchRate();
                 if (!rate) continue;
 
+                console.log(`[ExchangeRateService] Successfully fetched rate from API: ${rate}`);
                 await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
                 rateCache[cacheKey] = { rate, timestamp: now };
                 return rate;
@@ -169,10 +175,30 @@ export const ExchangeRateService = {
                 .limit(1);
 
             if (latestRate) {
-                console.warn(`[ExchangeRateService] Using fallback rate from ${latestRate.rateDate}`);
+                console.warn(`[ExchangeRateService] Using fallback rate from ${latestRate.rateDate}: ${latestRate.rate}`);
                 return Number(latestRate.rate);
             }
         } catch (e) { }
+
+        // 5. Final Fallback: Hardcoded common rates (Approximate)
+        const commonRates: Record<string, number> = {
+            'USD_INR': 83.3,
+            'INR_USD': 0.012,
+            'EUR_USD': 1.08,
+            'USD_EUR': 0.92,
+            'GBP_USD': 1.26,
+            'USD_GBP': 0.79,
+            'AED_INR': 22.7,
+            'INR_AED': 0.044,
+            'AED_USD': 0.27,
+            'USD_AED': 3.67
+        };
+        const fallbackKey = `${normalizedFromCurrency}_${normalizedToCurrency}`;
+        if (commonRates[fallbackKey]) {
+            const rate = commonRates[fallbackKey];
+            console.warn(`[ExchangeRateService] Using hardcoded fallback rate for ${fallbackKey}: ${rate}`);
+            return rate;
+        }
 
         console.warn(`[ExchangeRateService] CRITICAL FAILURE: No rate found for ${normalizedFromCurrency} -> ${normalizedToCurrency}. Using default 1.`);
         return 1;

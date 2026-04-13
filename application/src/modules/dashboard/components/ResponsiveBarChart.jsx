@@ -17,6 +17,8 @@ const DEFAULT_MIN_HEIGHT = 250;
 const DEFAULT_MAX_HEIGHT = 300;
 const DEFAULT_POSITIVE_COLOR = '#0f766e';
 const DEFAULT_NEGATIVE_COLOR = '#dc2626';
+const ACTIVE_BAR_VALUE_POP = 6;
+const ACTIVE_BAR_THICKNESS_POP = 4;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -199,6 +201,84 @@ const useObservedSize = () => {
     return [containerRef, size];
 };
 
+const getHoveredBarRect = ({ orientation, x = 0, y = 0, width = 0, height = 0, value = 0 }) => {
+    const normalizedValue = Number(value || 0);
+
+    if (orientation === 'vertical') {
+        const nextX = x - (ACTIVE_BAR_THICKNESS_POP / 2);
+        const nextWidth = width + ACTIVE_BAR_THICKNESS_POP;
+
+        if (normalizedValue >= 0) {
+            return {
+                x: nextX,
+                y: y - ACTIVE_BAR_VALUE_POP,
+                width: nextWidth,
+                height: height + ACTIVE_BAR_VALUE_POP
+            };
+        }
+
+        return {
+            x: nextX,
+            y,
+            width: nextWidth,
+            height: height + ACTIVE_BAR_VALUE_POP
+        };
+    }
+
+    const nextY = y - (ACTIVE_BAR_THICKNESS_POP / 2);
+    const nextHeight = height + ACTIVE_BAR_THICKNESS_POP;
+
+    if (normalizedValue >= 0) {
+        return {
+            x,
+            y: nextY,
+            width: width + ACTIVE_BAR_VALUE_POP,
+            height: nextHeight
+        };
+    }
+
+    return {
+        x: x - ACTIVE_BAR_VALUE_POP,
+        y: nextY,
+        width: width + ACTIVE_BAR_VALUE_POP,
+        height: nextHeight
+    };
+};
+
+const HoveredBarShape = ({ orientation, fill, value, ...shapeProps }) => {
+    const hoveredRect = getHoveredBarRect({
+        orientation,
+        x: Number(shapeProps.x || 0),
+        y: Number(shapeProps.y || 0),
+        width: Number(shapeProps.width || 0),
+        height: Number(shapeProps.height || 0),
+        value
+    });
+
+    if (hoveredRect.width <= 0 || hoveredRect.height <= 0) {
+        return null;
+    }
+
+    return (
+        <g style={{ pointerEvents: 'none' }}>
+            <rect
+                x={hoveredRect.x}
+                y={hoveredRect.y}
+                width={hoveredRect.width}
+                height={hoveredRect.height}
+                rx={8}
+                ry={8}
+                fill={fill}
+                stroke="rgba(255,255,255,0.45)"
+                strokeWidth={1}
+                style={{
+                    filter: 'drop-shadow(0 8px 14px rgba(15,23,42,0.18))'
+                }}
+            />
+        </g>
+    );
+};
+
 const ResponsiveBarChart = ({
     data = [],
     orientation = 'vertical',
@@ -351,6 +431,12 @@ const ResponsiveBarChart = ({
                                 isAnimationActive
                                 animationDuration={260}
                                 animationEasing="ease-out"
+                                activeBar={(shapeProps) => (
+                                    <HoveredBarShape
+                                        {...shapeProps}
+                                        orientation={normalizedOrientation}
+                                    />
+                                )}
                             >
                                 {chartData.map((entry) => (
                                     <Cell key={entry.id} fill={entry.fill} />

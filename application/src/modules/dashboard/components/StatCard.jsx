@@ -8,20 +8,9 @@ import {
 } from 'recharts';
 import { cn } from '../../../utils/cn';
 
-const FISCAL_MONTH_SHORT_NAMES = ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar'];
-
 const formatTooltipLabel = (label, payload) => {
     const payloadLabel = payload?.[0]?.payload?.label;
-    if (payloadLabel) {
-        return String(payloadLabel);
-    }
-
-    const numericLabel = Number(label);
-    if (Number.isInteger(numericLabel) && numericLabel >= 1 && numericLabel <= 12) {
-        return FISCAL_MONTH_SHORT_NAMES[numericLabel - 1];
-    }
-
-    return String(label || '');
+    return String(payloadLabel || label || '');
 };
 
 const MetricTooltip = ({

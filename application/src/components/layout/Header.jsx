@@ -204,7 +204,7 @@ const Header = ({ onMenuClick, isCollapsed, toggleSidebar }) => {
 
     return (
         <header className={cn(
-            "bg-gray-50 h-[72px] flex items-center justify-between px-3 md:px-4 xl:px-6 sticky top-0 z-50 flex-none transition-colors border-b border-slate-200 print:hidden no-print"
+            "bg-[#f1f4f8] h-[72px] flex items-center justify-between px-3 md:px-4 xl:px-6 sticky top-0 z-50 flex-none transition-colors print:hidden no-print"
         )}>
             <div className="flex items-center gap-2 md:gap-3 xl:gap-4 flex-1 min-w-0">
                 <button
@@ -367,7 +367,7 @@ const Header = ({ onMenuClick, isCollapsed, toggleSidebar }) => {
                                     >
                                         <div className="flex items-center gap-1.5">
                                             <ChevronDown size={14} strokeWidth={2.5} className={`text-slate-400 transition-transform ${isPreferencesExpanded ? '' : '-rotate-90'} group-hover/acc:text-slate-600`} />
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider group-hover/acc:text-slate-700 transition-colors">User Preferences</p>
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider group-hover/acc:text-slate-700 transition-colors">Preferences</p>
                                         </div>
                                         {hasPreferenceChanges && (
                                             <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded uppercase tracking-wider">Edited</span>

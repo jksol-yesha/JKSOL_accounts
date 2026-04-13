@@ -11,12 +11,24 @@ import { cn } from '../../utils/cn';
 const ACCOUNTS_CREATE_SCROLL_MODE_EVENT = 'accounts-create-scroll-mode';
 const TRANSACTIONS_CREATE_SCROLL_MODE_EVENT = 'transactions-create-scroll-mode';
 const PARTIES_CREATE_SCROLL_MODE_EVENT = 'parties-create-scroll-mode';
+const SIDEBAR_MODE_STORAGE_KEY = 'app-sidebar-mode';
 
 const isTransactionsCreateRoute = (pathname) => (
     pathname === '/transactions/create' || /^\/transactions\/edit\/[^/]+$/.test(pathname)
 );
 
 const isPartiesCreateRoute = (pathname) => pathname === '/parties/create';
+
+const getDefaultSidebarMode = () => {
+    if (typeof window === 'undefined') return 'expanded';
+
+    const storedMode = window.localStorage.getItem(SIDEBAR_MODE_STORAGE_KEY);
+    if (storedMode === 'expanded' || storedMode === 'collapsed' || storedMode === 'hover') {
+        return storedMode;
+    }
+
+    return window.innerWidth >= 768 && window.innerWidth <= 1024 ? 'collapsed' : 'expanded';
+};
 
 const shouldUseDesktopFooter = (pathname, width, shouldUseWholePageScroll = false) => {
     if (pathname === '/accounts/create' || isTransactionsCreateRoute(pathname) || isPartiesCreateRoute(pathname)) {
@@ -27,18 +39,15 @@ const shouldUseDesktopFooter = (pathname, width, shouldUseWholePageScroll = fals
 };
 
 const Footer = ({ className }) => (
-    <footer className={cn("bg-white border-t border-gray-100 h-10 px-6 text-center text-[10px] text-gray-400 flex items-center justify-center flex-none no-print print:hidden", className)}>
+    <footer className={cn("bg-[#f4f6fe] border-t border-slate-200 h-10 px-6 text-center text-[10px] text-slate-400 flex items-center justify-center flex-none no-print print:hidden", className)}>
         <p>© 2026 JKSOL. All rights reserved.</p>
     </footer>
 );
 
 const Layout = ({ children }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [isCollapsed, setIsCollapsed] = useState(() =>
-        typeof window !== 'undefined'
-            ? window.innerWidth >= 768 && window.innerWidth <= 1024
-            : false
-    );
+    const [sidebarMode, setSidebarMode] = useState(getDefaultSidebarMode);
+    const [isSidebarHoverExpanded, setIsSidebarHoverExpanded] = useState(false);
     const [isMobileViewport, setIsMobileViewport] = useState(() =>
         typeof window !== 'undefined'
             ? window.innerWidth < 768
@@ -58,6 +67,15 @@ const Layout = ({ children }) => {
 
     // Check if current page is dashboard
     const isDashboard = location.pathname === '/' || location.pathname === '/dashboard';
+    const isSidebarCollapsed = !isMobileViewport && (sidebarMode === 'collapsed' || (sidebarMode === 'hover' && !isSidebarHoverExpanded));
+    const usesSidebarHoverOverlay = !isMobileViewport && sidebarMode === 'hover';
+
+    const applySidebarMode = (nextMode) => {
+        setSidebarMode(nextMode);
+        if (nextMode !== 'hover') {
+            setIsSidebarHoverExpanded(false);
+        }
+    };
 
     const toggleSidebar = () => {
         if (isMobileViewport) {
@@ -65,33 +83,24 @@ const Layout = ({ children }) => {
             return;
         }
 
-        setIsCollapsed((current) => !current);
+        applySidebarMode(isSidebarCollapsed ? 'expanded' : 'collapsed');
     };
 
     useEffect(() => {
         if (typeof window === 'undefined') return undefined;
 
-        let previousMode = window.innerWidth < 768 ? 'mobile' : window.innerWidth <= 1024 ? 'tablet' : 'desktop';
-
         const handleResize = () => {
             setIsDesktopFooter(shouldUseDesktopFooter(location.pathname, window.innerWidth, createRouteNeedsPageScroll));
-            const nextMode = window.innerWidth < 768 ? 'mobile' : window.innerWidth <= 1024 ? 'tablet' : 'desktop';
-            setIsMobileViewport(nextMode === 'mobile');
-            if (nextMode === previousMode) return;
+            const nextIsMobile = window.innerWidth < 768;
+            setIsMobileViewport(nextIsMobile);
 
-            if (nextMode === 'tablet') {
-                setIsCollapsed(true);
+            if (nextIsMobile) {
                 setIsSidebarOpen(false);
-            } else if (nextMode === 'desktop') {
-                setIsCollapsed(false);
-                setIsSidebarOpen(false);
-            } else {
-                setIsSidebarOpen(false);
+                setIsSidebarHoverExpanded(false);
             }
-
-            previousMode = nextMode;
         };
 
+        handleResize();
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, [createRouteNeedsPageScroll, location.pathname]);
@@ -100,6 +109,17 @@ const Layout = ({ children }) => {
         if (typeof window === 'undefined') return;
         setIsDesktopFooter(shouldUseDesktopFooter(location.pathname, window.innerWidth, createRouteNeedsPageScroll));
     }, [createRouteNeedsPageScroll, location.pathname]);
+
+    useEffect(() => {
+        if (typeof window === 'undefined' || isMobileViewport) return;
+        window.localStorage.setItem(SIDEBAR_MODE_STORAGE_KEY, sidebarMode);
+    }, [sidebarMode, isMobileViewport]);
+
+    useEffect(() => {
+        if (sidebarMode !== 'hover') {
+            setIsSidebarHoverExpanded(false);
+        }
+    }, [sidebarMode]);
 
     useEffect(() => {
         const scrollModeEventName = location.pathname === '/accounts/create'
@@ -166,19 +186,25 @@ const Layout = ({ children }) => {
 
     const sidebarLayoutValue = {
         isMobileViewport,
-        isSidebarCollapsed: isCollapsed,
+        isSidebarCollapsed,
         isSidebarOpen,
-        toggleSidebar
+        sidebarMode,
+        toggleSidebar,
+        setSidebarHoverExpanded: setIsSidebarHoverExpanded,
+        setSidebarMode: applySidebarMode
     };
 
     return (
-        <SidebarLayoutProvider value={sidebarLayoutValue}>
-            <div className="flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible print:bg-white">
-                <div className="no-print print:hidden">
+            <SidebarLayoutProvider value={sidebarLayoutValue}>
+                <div className="flex h-screen bg-white overflow-hidden print:h-auto print:overflow-visible print:bg-white">
+                <div className={cn(
+                    "no-print print:hidden flex-none",
+                    usesSidebarHoverOverlay && "md:w-[66px] lg:w-[68px]"
+                )}>
                     <Sidebar
                         isOpen={isSidebarOpen}
                         onClose={() => setIsSidebarOpen(false)}
-                        isCollapsed={isCollapsed}
+                        isCollapsed={isSidebarCollapsed}
                     />
                 </div>
 

@@ -1,6 +1,5 @@
 import React from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
-import { cn } from '../../../utils/cn';
 import { usePreferences } from '../../../context/PreferenceContext';
 
 const formatYAxis = (value) => {
@@ -30,20 +29,87 @@ const CustomTooltip = ({ active, payload, label, formatCurrency }) => {
     return null;
 };
 
+const CashFlowAxisTick = ({ x = 0, y = 0, payload }) => {
+    const label = String(payload?.value || '').trim();
+    const monthDayMatch = label.match(/^([A-Za-z]{3})\s+(\d{1,2})$/);
+    const dayMonthMatch = label.match(/^(\d{1,2})\s+([A-Za-z]{3})$/);
+    const match = label.match(/^(.*)\s+(\d{4})$/);
+
+    if (monthDayMatch || dayMonthMatch) {
+        const [, firstPart, secondPart] = monthDayMatch || dayMonthMatch;
+        const dayLabel = monthDayMatch ? secondPart : firstPart;
+        const monthLabel = monthDayMatch ? firstPart : secondPart;
+
+        return (
+            <g transform={`translate(${x},${y})`}>
+                <text
+                    x={0}
+                    y={0}
+                    dy={8}
+                    textAnchor="middle"
+                >
+                    <tspan x={0} dy={0} fill="#94a3b8" fontSize="10" fontWeight="600">
+                        {dayLabel}
+                    </tspan>
+                    <tspan x={0} dy={12} fill="#cbd5e1" fontSize="9" fontWeight="500">
+                        {monthLabel}
+                    </tspan>
+                </text>
+            </g>
+        );
+    }
+
+    if (!match) {
+        return (
+            <g transform={`translate(${x},${y})`}>
+                <text
+                    x={0}
+                    y={0}
+                    dy={12}
+                    textAnchor="middle"
+                    fill="#94a3b8"
+                    fontSize={10}
+                    fontWeight={600}
+                >
+                    {label}
+                </text>
+            </g>
+        );
+    }
+
+    const [, monthLabel, yearLabel] = match;
+
+    return (
+        <g transform={`translate(${x},${y})`}>
+            <text
+                x={0}
+                y={0}
+                dy={8}
+                textAnchor="middle"
+            >
+                <tspan x={0} dy={0} fill="#94a3b8" fontSize="10" fontWeight="600">
+                    {monthLabel}
+                </tspan>
+                <tspan x={0} dy={12} fill="#cbd5e1" fontSize="9" fontWeight="500">
+                    {yearLabel}
+                </tspan>
+            </text>
+        </g>
+    );
+};
+
+const isMonthlyCashFlowLabel = (value) => /^\w{3}\s+\d{4}$/.test(String(value || '').trim());
+
 const CashFlowCard = ({ stats = {}, chartData = [] }) => {
     const { formatCurrency } = usePreferences();
 
-    // Reversing the chartData to show chronological order from left to right (Dashboard trails are reversed by default)
-    const displayData = [...chartData].reverse().map(item => ({
-        ...item,
-        // Shorten labels like "Jan 2026" to "Jan\n2026" for better XAxis fitting if needed, or keep as is.
-        shortLabel: item.label.split(' ').join('\n')
-    }));
+    const displayData = [...chartData];
+    const showAllMonthTicks = displayData.length > 0 && displayData.every((item) => isMonthlyCashFlowLabel(item.label));
 
     return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-2 overflow-hidden min-h-[360px]">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 xl:col-span-2 overflow-hidden min-h-[360px]">
             {/* Header */}
-            <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center shrink-0 bg-slate-50">
+            <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
                 <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
                     Cash Flow
                 </h3>
@@ -55,7 +121,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                 {/* Left Side: Graph */}
                 <div className="flex-1 p-5 relative min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 8 }}>
                             <defs>
                                 <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
                                     <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
@@ -71,8 +137,11 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                                 dataKey="label" 
                                 axisLine={false} 
                                 tickLine={false} 
-                                tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
-                                dy={10}
+                                tick={<CashFlowAxisTick />}
+                                height={46}
+                                tickMargin={8}
+                                minTickGap={showAllMonthTicks ? 0 : 24}
+                                interval={showAllMonthTicks ? 0 : 'preserveStartEnd'}
                             />
                             <YAxis 
                                 axisLine={false} 
@@ -108,7 +177,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                 </div>
 
                 {/* Right Side: Summary Stats block */}
-                <div className="lg:w-[260px] border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-center px-6 py-6 lg:py-0 shrink-0 gap-6">
+                <div className="lg:w-[196px] border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-center px-4 py-6 lg:py-0 shrink-0 gap-6">
                     
                     {/* Opening Balance */}
                     <div className="flex flex-col items-end text-right">

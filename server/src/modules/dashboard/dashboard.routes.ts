@@ -9,7 +9,9 @@ export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
         body: t.Object({
             financialYearId: t.Numeric(),
             branchId: t.Optional(t.Union([t.Numeric(), t.Literal('all'), t.Array(t.Numeric())])),
-            targetCurrency: t.Optional(t.String())
+            targetCurrency: t.Optional(t.String()),
+            startDate: t.Optional(t.String()),
+            endDate: t.Optional(t.String())
         })
     })
     .post('/trends', DashboardController.getTrends, {
@@ -18,7 +20,11 @@ export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
             financialYearId: t.Numeric(),
             compareFinancialYearId: t.Optional(t.Numeric()),
             branchId: t.Optional(t.Union([t.Numeric(), t.Literal('all'), t.Array(t.Numeric())])),
-            targetCurrency: t.Optional(t.String())
+            targetCurrency: t.Optional(t.String()),
+            startDate: t.Optional(t.String()),
+            endDate: t.Optional(t.String()),
+            compareStartDate: t.Optional(t.String()),
+            compareEndDate: t.Optional(t.String())
         })
     })
     .post('/rankings', DashboardController.getRankings, {
@@ -26,6 +32,8 @@ export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
         body: t.Object({
             financialYearId: t.Numeric(),
             branchId: t.Optional(t.Union([t.Numeric(), t.Literal('all'), t.Array(t.Numeric())])),
-            targetCurrency: t.Optional(t.String())
+            targetCurrency: t.Optional(t.String()),
+            startDate: t.Optional(t.String()),
+            endDate: t.Optional(t.String())
         })
     });

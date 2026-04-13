@@ -190,7 +190,7 @@ const BranchSelector = () => {
                                         </div>
                                     </div>
 
-                                    <div className="max-h-64 overflow-y-auto no-scrollbar py-1">
+                                    <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
                                 {(branches || []).map(branch => {
                                     const isInactive = branch.status === 'inactive';
                                     const isStaged = stagedIds.includes(Number(branch.id));

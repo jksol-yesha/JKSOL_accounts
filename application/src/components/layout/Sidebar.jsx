@@ -4,10 +4,13 @@ import {
     X,
     LogOut,
     ChevronDown,
+    ChevronRight,
     User as UserIcon,
     Edit2,
     Check,
-    Camera
+    Camera,
+    AlignLeft,
+    ArrowRight
 } from 'lucide-react';
 import {
     Home,
@@ -20,6 +23,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import OrganizationSelector from './OrganizationSelector';
+import { useSidebarLayout } from './SidebarLayoutContext';
 import { useOrganization } from '../../context/OrganizationContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
@@ -49,6 +53,15 @@ const timeZones = [
     { value: 'UTC', label: 'UTC' },
 ];
 
+const PREFERENCE_CURRENCY_CODES = ['INR', 'USD', 'EUR', 'GBP', 'AED'];
+const PREFERENCE_CURRENCY_LABELS = {
+    INR: '₹ - Indian Rupee (INR)',
+    USD: '$ - US Dollar (USD)',
+    EUR: '€ - Euro (EUR)',
+    GBP: '£ - British Pound (GBP)',
+    AED: 'AED - UAE Dirham (AED)'
+};
+
 const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const [isTabletViewport, setIsTabletViewport] = React.useState(false);
     const [isMobileViewport, setIsMobileViewport] = React.useState(() =>
@@ -63,11 +76,12 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const [isSaving, setIsSaving] = React.useState(false);
     const [isPreferencesExpanded, setIsPreferencesExpanded] = React.useState(false);
     const [openPrefDropdown, setOpenPrefDropdown] = React.useState(null);
-    const [prefDropdownRect, setPrefDropdownRect] = React.useState(null);
     const [tempProfilePhoto, setTempProfilePhoto] = React.useState(null);
     const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
+    const [showSidebarControlMenu, setShowSidebarControlMenu] = React.useState(false);
     const sidebarRef = React.useRef(null);
     const profileMenuRef = React.useRef(null);
+    const sidebarControlRef = React.useRef(null);
     const logoutConfirmRef = React.useRef(null);
     const fileInputRef = React.useRef(null);
     const prefSelectRefs = React.useRef({});
@@ -76,8 +90,31 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const { user, logout, updateUser } = useAuth();
     const { preferences, updatePreferences } = usePreferences();
     const { currencyOptions } = useCurrencyOptions();
+    const { sidebarMode, setSidebarMode, setSidebarHoverExpanded } = useSidebarLayout();
+    const preferenceCurrencyOptions = React.useMemo(() => {
+        const availableOptions = new Map(
+            (currencyOptions || []).map((currency) => [String(currency.code || '').toUpperCase(), currency])
+        );
+
+        return PREFERENCE_CURRENCY_CODES.map((code) => {
+            const matchedOption = availableOptions.get(code);
+            return {
+                value: code,
+                label: matchedOption?.label || PREFERENCE_CURRENCY_LABELS[code] || code,
+                symbol: matchedOption?.symbol || PREFERENCE_CURRENCY_LABELS[code]?.split(' - ')[0] || code
+            };
+        });
+    }, [currencyOptions]);
     const effectiveCollapsed = isMobileViewport ? false : isCollapsed;
-    const showHoverExpandPanel = effectiveCollapsed && !isMobileViewport;
+    const usesHoverOverlay = !isMobileViewport && sidebarMode === 'hover';
+    const showHoverExpandPanel = effectiveCollapsed && !isMobileViewport && sidebarMode !== 'hover';
+    const SidebarToggleIcon = effectiveCollapsed ? ArrowRight : AlignLeft;
+    const sidebarControlLabel = 'Sidebar control';
+    const sidebarModeOptions = [
+        { value: 'expanded', label: 'Expanded' },
+        { value: 'collapsed', label: 'Collapsed' },
+        { value: 'hover', label: 'Expand on hover' }
+    ];
     const getFormattedName = (name) => {
         if (!name) return '';
         const parts = String(name).trim().split(/\s+/);
@@ -89,12 +126,14 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
     const rawName = user?.name || user?.fullName || (user?.email ? String(user.email).split('@')[0] : 'User');
     const displayName = getFormattedName(rawName);
+    
+    // Check for changes against the RAW data
+    const hasNameChange = tempDisplayName !== rawName;
+    const hasEmailChange = tempEmail !== (user?.email || '');
+    const hasPhotoChange = tempProfilePhoto !== (user?.profilePhoto || null);
     const hasPreferenceChanges = JSON.stringify(draftPreferences) !== JSON.stringify(preferences || {});
-    const hasChanges =
-        tempDisplayName !== displayName ||
-        tempEmail !== (user?.email || '') ||
-        hasPreferenceChanges ||
-        tempProfilePhoto !== (user?.profilePhoto || null);
+    
+    const hasChanges = hasNameChange || hasEmailChange || hasPhotoChange || hasPreferenceChanges;
 
     React.useEffect(() => {
         const mediaQuery = window.matchMedia('(min-width: 768px) and (max-width: 1024px)');
@@ -131,7 +170,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
     React.useEffect(() => {
         if (!showProfileMenu) {
-            setTempDisplayName(displayName);
+            setTempDisplayName(rawName); // Use RAW name for editing
             setTempEmail(user?.email || '');
             setTempProfilePhoto(user?.profilePhoto || null);
             setDraftPreferences(preferences || {});
@@ -139,7 +178,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             setIsPreferencesExpanded(false);
             setOpenPrefDropdown(null);
         }
-    }, [showProfileMenu, displayName, user?.email, user?.profilePhoto, preferences]);
+    }, [showProfileMenu, rawName, user?.email, user?.profilePhoto, preferences]);
 
     React.useEffect(() => {
         if (isMobileViewport && !isOpen) {
@@ -149,9 +188,15 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
     React.useEffect(() => {
         const handleClickOutside = (event) => {
-            if (profileMenuRef.current && !profileMenuRef.current.contains(event.target)) {
+            const clickedOutsideProfile = !profileMenuRef.current || !profileMenuRef.current.contains(event.target);
+            const clickedOutsideSidebarControl = !sidebarControlRef.current || !sidebarControlRef.current.contains(event.target);
+            const clickedOutsideLogoutConfirm = !logoutConfirmRef.current || !logoutConfirmRef.current.contains(event.target);
+
+            if (clickedOutsideProfile && clickedOutsideSidebarControl && clickedOutsideLogoutConfirm) {
                 setShowProfileMenu(false);
                 setOpenPrefDropdown(null);
+                setShowSidebarControlMenu(false);
+                setShowLogoutConfirm(false);
             }
         };
 
@@ -168,6 +213,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         const sidebarRect = sidebarRef.current.getBoundingClientRect();
 
         setHoveredItem({
+            id: item.id || item.path || item.label,
             label: item.label,
             icon: item.icon,
             isActive,
@@ -184,10 +230,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         }
     };
 
-    const handleLogout = () => {
+    const isCollapsedHoverMatch = (id) => showHoverExpandPanel && hoveredItem?.id === id;
+
+    const openProfileLogoutConfirm = () => {
         setHoveredItem(null);
+        setShowSidebarControlMenu(false);
+        setOpenPrefDropdown(null);
         setShowLogoutConfirm(true);
-        setShowProfileMenu(false);
     };
 
     const cancelLogout = () => {
@@ -207,7 +256,19 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const handleProfileClick = () => {
         setHoveredItem(null);
         setShowLogoutConfirm(false);
+        setShowSidebarControlMenu(false);
         setShowProfileMenu((current) => !current);
+    };
+
+    const handleSidebarModeSelect = (nextMode) => {
+        setShowSidebarControlMenu(false);
+        setHoveredItem(null);
+        setShowProfileMenu(false);
+        setShowLogoutConfirm(false);
+        setSidebarMode(nextMode);
+        if (nextMode === 'hover' && !isMobileViewport) {
+            setSidebarHoverExpanded(true);
+        }
     };
 
     const handleImageChange = (event) => {
@@ -232,15 +293,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
         setIsSaving(true);
         try {
-            if (
-                tempDisplayName !== displayName ||
-                tempEmail !== (user?.email || '') ||
-                tempProfilePhoto !== (user?.profilePhoto || null)
-            ) {
+            if (hasNameChange || hasEmailChange || hasPhotoChange) {
                 await updateUser({
-                    name: tempDisplayName !== displayName ? tempDisplayName : undefined,
-                    email: tempEmail !== (user?.email || '') ? tempEmail : undefined,
-                    profilePhoto: tempProfilePhoto !== (user?.profilePhoto || null) ? tempProfilePhoto : undefined,
+                    name: hasNameChange ? tempDisplayName : undefined,
+                    email: hasEmailChange ? tempEmail : undefined,
+                    profilePhoto: hasPhotoChange ? tempProfilePhoto : undefined,
                 });
             }
 
@@ -267,60 +324,80 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             setIsSaving(false);
         }
     };
-
-    const renderPrefSelect = (name, label, options, currentValue) => {
+    
+    // Child component for preference items with visual connection
+    const PreferenceItem = ({ name, options, currentValue, onSelect }) => {
         const isOpen = openPrefDropdown === name;
-        const selectedLabel = options.find((option) => option.value === currentValue)?.label || currentValue;
+        const selectedOption = options.find((option) => option.value === currentValue);
+        const selectedLabel = selectedOption?.label || currentValue;
+        const shouldScrollOptions = options.length > 4;
+        const isCurrencyPreference = name === 'currency';
 
-        const handleTriggerClick = (event) => {
-            if (isOpen) {
-                setOpenPrefDropdown(null);
-                setPrefDropdownRect(null);
-            } else {
-                const rect = event.currentTarget.getBoundingClientRect();
-                const availableHeight = window.innerHeight - rect.bottom - 8;
-                const maxHeight = Math.min(180, Math.max(80, availableHeight));
-                setPrefDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight });
-                setOpenPrefDropdown(name);
+        const renderPreferenceLabel = (option, highlightMode = 'none') => {
+            if (!isCurrencyPreference || !option) {
+                return option?.label || selectedLabel;
             }
+
+            const optionLabel = option.label || '';
+            const symbol = option.symbol || '';
+
+            if (!symbol || !optionLabel.startsWith(symbol)) {
+                return optionLabel;
+            }
+
+            const remainder = optionLabel.slice(symbol.length).trimStart();
+
+            return (
+                <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                    <span className={cn(
+                        'shrink-0',
+                        highlightMode === 'accent' && 'text-[#4A8AF4]',
+                        highlightMode === 'inverse' && 'text-white'
+                    )}>{symbol}</span>
+                    {remainder ? <span className="truncate">{remainder}</span> : null}
+                </span>
+            );
         };
 
+        // Diagnostic log to confirm component is working
+        React.useEffect(() => {
+            if (isOpen) console.log(`[Sidebar] PreferenceItem "${name}" opened`);
+        }, [isOpen, name]);
+
         return (
-            <div className="w-full">
+            <div className="relative w-full overflow-visible">
                 <div
-                    className="group/pref px-6 py-1.5 transition-colors cursor-pointer hover:bg-slate-50/90"
-                    onClick={handleTriggerClick}
+                    className="px-6 py-1.5 transition-colors cursor-pointer"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPrefDropdown(isOpen ? null : name);
+                    }}
                 >
                     <div className="flex items-center justify-between gap-x-3">
-                        <span className="min-w-0 text-[12px] font-bold text-[#1e293b] leading-5 whitespace-nowrap overflow-hidden text-ellipsis">
-                            {selectedLabel}
+                        <span className="min-w-0 flex-1 text-[12px] font-bold text-[#1e293b] leading-5 whitespace-nowrap overflow-hidden text-ellipsis">
+                            {renderPreferenceLabel(selectedOption || { label: selectedLabel }, 'none')}
                         </span>
-                        <ChevronDown
+                        <ChevronRight
                             size={14}
-                            strokeWidth={2.5}
-                            className={cn('shrink-0 text-slate-400 transition-transform duration-200', isOpen && 'rotate-180')}
+                            fill="currentColor"
+                            className={cn(
+                                'ml-auto shrink-0 text-slate-300 transition-all duration-200',
+                                isOpen && 'text-slate-500 translate-x-0.5'
+                            )}
                         />
                     </div>
                 </div>
 
-                {isOpen && prefDropdownRect && (
-                    <>
+                {isOpen && (
+                    <div className="absolute left-full bottom-0 z-[200] ml-1 overflow-visible animate-in fade-in zoom-in-95 duration-150">
+                        {/* Main Content Container with scrollbar */}
                         <div
-                            className="fixed inset-0 z-[195]"
-                            onClick={(event) => {
-                                event.stopPropagation();
-                                setOpenPrefDropdown(null);
-                                setPrefDropdownRect(null);
-                            }}
-                        />
-                        <div
-                            className="fixed bg-white z-[200] overflow-y-auto custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-150 rounded-xl shadow-[0_12px_40px_rgba(0,0,0,0.15)] border border-slate-100 py-1"
-                            style={{
-                                top: prefDropdownRect.top,
-                                left: prefDropdownRect.left,
-                                width: prefDropdownRect.width,
-                                maxHeight: prefDropdownRect.maxHeight,
-                            }}
+                            className={cn(
+                                "relative w-[248px] overflow-x-hidden bg-white rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)] border border-slate-100 py-1",
+                                shouldScrollOptions
+                                    ? "max-h-[136px] overflow-y-auto overscroll-contain no-scrollbar"
+                                    : "overflow-y-hidden"
+                            )}
                         >
                             {options.map((option) => {
                                 const isSelected = currentValue === option.value;
@@ -329,22 +406,23 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         key={option.value}
                                         onClick={(event) => {
                                             event.stopPropagation();
-                                            handlePreferenceChange({ target: { name, value: option.value } });
+                                            onSelect(name, option.value);
                                             setOpenPrefDropdown(null);
-                                            setPrefDropdownRect(null);
                                         }}
                                         className={cn(
                                             'px-6 py-1.5 text-[12px] font-bold flex items-center justify-between gap-3 cursor-pointer transition-colors',
-                                            isSelected ? 'bg-[#f0fdf4] text-[#0f172a]' : 'text-[#1e293b] hover:bg-[#f0fdf4]'
+                                            isSelected ? 'bg-[#4A8AF4] text-white' : 'text-[#1e293b] hover:bg-[#EEF4FF]'
                                         )}
                                     >
-                                        <span className="min-w-0 flex-1 whitespace-normal break-words pr-2 leading-5">{option.label}</span>
-                                        {isSelected && <Check size={14} strokeWidth={2.5} className="shrink-0 text-[#10b981]" />}
+                                        <span className="min-w-0 flex-1 pr-2 leading-5">
+                                            {renderPreferenceLabel(option, isSelected ? 'inverse' : 'none')}
+                                        </span>
+                                        {isSelected && <Check size={14} strokeWidth={2.5} className="shrink-0 text-white" />}
                                     </div>
                                 );
                             })}
                         </div>
-                    </>
+                    </div>
                 )}
             </div>
         );
@@ -374,6 +452,225 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         return true;
     });
 
+    const profileMenuContent = (
+        <div className="relative bg-[#f4f6fe]">
+            {hasChanges && (
+                <button
+                    type="button"
+                    onClick={handleSaveProfile}
+                    disabled={isSaving}
+                    className="absolute left-6 top-3 inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    <Check size={11} strokeWidth={3} />
+                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                </button>
+            )}
+
+            <div className="flex justify-center pt-4 pb-2">
+                <div
+                    className="group/avatar relative flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[2px] border-white bg-slate-100 text-slate-400 shadow-[0_4px_12px_rgb(15,23,42,0.1)] cursor-pointer"
+                    onClick={() => fileInputRef.current?.click()}
+                >
+                    {tempProfilePhoto ? (
+                        <img src={tempProfilePhoto} alt="Profile" className="h-full w-full object-cover" />
+                    ) : (
+                        <UserIcon size={22} strokeWidth={1.5} />
+                    )}
+                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 opacity-0 transition-opacity group-hover/avatar:opacity-100">
+                        <Camera size={15} className="text-white drop-shadow-md" />
+                    </div>
+                </div>
+                <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleImageChange}
+                    accept="image/*"
+                    className="hidden"
+                />
+            </div>
+
+            <div className="px-6 pb-3 space-y-0.5">
+                {activeEditField === 'name' ? (
+                    <input
+                        value={tempDisplayName}
+                        onChange={(event) => setTempDisplayName(event.target.value)}
+                        onBlur={() => setActiveEditField((current) => (current === 'name' ? null : current))}
+                        autoFocus
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[14px] font-bold text-slate-900 shadow-sm transition-colors focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200/80"
+                    />
+                ) : (
+                    <div className="group/name flex items-center gap-2">
+                        <p className="min-w-0 flex-1 text-[15px] font-extrabold text-slate-900 leading-tight tracking-tight">
+                            {tempDisplayName}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setActiveEditField('name')}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/name:opacity-100 group-hover/name:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
+                        >
+                            <Edit2 size={13} strokeWidth={2} />
+                        </button>
+                    </div>
+                )}
+
+                {activeEditField === 'email' ? (
+                    <input
+                        value={tempEmail}
+                        onChange={(event) => setTempEmail(event.target.value)}
+                        onBlur={() => setActiveEditField((current) => (current === 'email' ? null : current))}
+                        autoFocus
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 shadow-sm transition-colors focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200/80"
+                    />
+                ) : (
+                    <div className="group/email flex items-center gap-2">
+                        <p className="min-w-0 flex-1 break-all text-[12px] font-medium text-slate-400 leading-tight">
+                            {tempEmail || 'No email added'}
+                        </p>
+                        <button
+                            type="button"
+                            onClick={() => setActiveEditField('email')}
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/email:opacity-100 group-hover/email:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
+                        >
+                            <Edit2 size={13} strokeWidth={2} />
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            <div className="relative border-t border-slate-100 pt-2 flex flex-col w-full">
+                {isPreferencesExpanded && (
+                    <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                        <button
+                            type="button"
+                            onClick={() => {
+                                setOpenPrefDropdown(null);
+                                setIsPreferencesExpanded(false);
+                            }}
+                            className="mb-3 flex w-full items-center justify-between px-6 text-left transition-colors"
+                        >
+                            <div className="flex items-center gap-2 flex-1">
+                                <UserIcon size={13} strokeWidth={2.5} className="text-slate-400" />
+                                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                                    Preferences
+                                </p>
+                            </div>
+                            <ChevronDown
+                                size={14}
+                                strokeWidth={2.2}
+                                className={cn(
+                                    "ml-auto shrink-0 text-slate-400 transition-all duration-300 rotate-180 text-primary-500"
+                                )}
+                            />
+                        </button>
+                        <div className="space-y-0.5">
+                            <PreferenceItem
+                                name="currency"
+                                options={preferenceCurrencyOptions}
+                                currentValue={draftPreferences.currency || 'INR'}
+                                onSelect={(name, value) => {
+                                    handlePreferenceChange({ target: { name, value } });
+                                    updatePreferences({ [name]: value });
+                                }}
+                            />
+                            <PreferenceItem
+                                name="dateFormat"
+                                options={dateFormats}
+                                currentValue={draftPreferences.dateFormat}
+                                onSelect={(name, value) => {
+                                    handlePreferenceChange({ target: { name, value } });
+                                    updatePreferences({ [name]: value });
+                                }}
+                            />
+                            <PreferenceItem
+                                name="numberFormat"
+                                options={numberFormats}
+                                currentValue={draftPreferences.numberFormat}
+                                onSelect={(name, value) => {
+                                    handlePreferenceChange({ target: { name, value } });
+                                    updatePreferences({ [name]: value });
+                                }}
+                            />
+                            <PreferenceItem
+                                name="timeZone"
+                                options={timeZones}
+                                currentValue={draftPreferences.timeZone}
+                                onSelect={(name, value) => {
+                                    handlePreferenceChange({ target: { name, value } });
+                                    updatePreferences({ [name]: value });
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
+
+                {!isPreferencesExpanded && (
+                    <button
+                        type="button"
+                        className="flex w-full cursor-pointer items-center justify-between py-2 px-6 text-left"
+                        onClick={() => {
+                            setOpenPrefDropdown(null);
+                            setIsPreferencesExpanded((current) => !current);
+                        }}
+                    >
+                        <div className="flex items-center gap-2 flex-1">
+                            <UserIcon size={12} strokeWidth={2.5} className="text-slate-400" />
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 transition-colors">
+                                Preferences
+                            </p>
+                        </div>
+                        <ChevronDown
+                            size={14}
+                            strokeWidth={2.2}
+                            className={cn(
+                                "ml-auto shrink-0 text-slate-400 transition-all duration-300",
+                                isPreferencesExpanded && "rotate-180 text-primary-500"
+                            )}
+                        />
+                    </button>
+                )}
+            </div>
+
+            <div className="border-t border-slate-100 mt-1">
+                {!showLogoutConfirm ? (
+                    <button
+                        type="button"
+                        onClick={openProfileLogoutConfirm}
+                        className="flex w-full items-center gap-2 px-6 py-3 text-left text-slate-900 transition-colors"
+                    >
+                        <LogOut size={14} strokeWidth={1.8} className="shrink-0 text-slate-500" />
+                        <span className="text-[12px] font-semibold tracking-tight">Log out</span>
+                    </button>
+                ) : (
+                    <div className="px-6 py-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <p className="text-[13px] font-bold tracking-tight text-slate-800">
+                            Log out?
+                        </p>
+                        <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500">
+                            End this session from your profile panel.
+                        </p>
+                        <div className="mt-3 flex gap-2">
+                            <button
+                                type="button"
+                                onClick={cancelLogout}
+                                className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-slate-600 transition-colors hover:bg-slate-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleActualLogout}
+                                disabled={isSaving}
+                                className="flex-1 rounded-lg bg-rose-50 px-2 py-2 text-[11px] font-bold text-rose-600 transition-colors hover:bg-rose-100 disabled:opacity-60"
+                            >
+                                {isSaving ? 'Wait...' : 'Log out'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
     return (
         <>
             {/* Mobile Overlay */}
@@ -385,11 +682,26 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             )}
 
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-[70] w-64 bg-white border-r border-slate-200 flex flex-col transition-transform duration-300 ease-in-out md:relative md:translate-x-0 h-full overflow-visible",
-                isTabletViewport ? (effectiveCollapsed ? "md:w-[78px]" : "md:w-64") : (isCollapsed && "lg:w-20"),
+                "fixed inset-y-0 left-0 z-[70] w-[224px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-full overflow-visible",
+                usesHoverOverlay ? "md:fixed md:translate-x-0" : "md:relative md:translate-x-0",
+                isTabletViewport ? (effectiveCollapsed ? "md:w-[66px]" : "md:w-[224px]") : (isCollapsed && "lg:w-[68px]"),
+                usesHoverOverlay && !effectiveCollapsed && "md:z-[85] md:shadow-[0_18px_40px_rgba(15,23,42,0.14)]",
                 !isOpen && "-translate-x-full md:translate-x-0",
                 className
-            )} ref={sidebarRef}>
+            )}
+                ref={sidebarRef}
+                onMouseEnter={() => {
+                    if (!isMobileViewport && sidebarMode === 'hover') {
+                        setSidebarHoverExpanded(true);
+                    }
+                }}
+                onMouseLeave={() => {
+                    if (!isMobileViewport && sidebarMode === 'hover') {
+                        setSidebarHoverExpanded(false);
+                        setHoveredItem(null);
+                    }
+                }}
+            >
                 <div className={cn(
                     "flex flex-col pt-4 mb-2 flex-none",
                     effectiveCollapsed ? "items-center px-2" : "px-3"
@@ -415,6 +727,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
                     {filteredMenuItems.map((item) => {
                         const isActive = location.pathname.startsWith(item.path);
+                        const isCollapsedHovered = isCollapsedHoverMatch(item.path);
                         return (
                             <NavLink
                                 key={item.path}
@@ -424,11 +737,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 className={() => cn(
                                     "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group relative border border-transparent",
                                     isActive
-                                        ? "bg-emerald-50/70 text-emerald-800 font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.02)] border-emerald-100/50"
-                                        : "text-slate-500 hover:text-emerald-800 hover:bg-emerald-50/50",
+                                        ? "bg-[#4A8AF4] text-white font-semibold border-[#4A8AF4]"
+                                        : "text-slate-900 hover:text-slate-900 hover:bg-blue-50/50",
                                     effectiveCollapsed && "justify-center px-2 md:px-2.5",
                                     showHoverExpandPanel && "overflow-visible",
-                                    showHoverExpandPanel && !isActive && "group-hover:rounded-r-none"
+                                    showHoverExpandPanel && !isActive && isCollapsedHovered && "rounded-[14px] border-blue-200 bg-blue-50/80 text-blue-900 shadow-[0_8px_18px_rgba(59,130,246,0.12)]"
                                 )}
                             >
                                 <item.icon
@@ -436,7 +749,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     strokeWidth={1.5}
                                     className={cn(
                                         "shrink-0 transition-colors",
-                                        isActive ? "text-emerald-600" : "text-slate-400 group-hover:text-emerald-500"
+                                        isActive
+                                            ? "text-white"
+                                            : isCollapsedHovered
+                                                ? "text-slate-900"
+                                                : "text-slate-900 group-hover:text-slate-900"
                                     )}
                                 />
 
@@ -462,13 +779,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
                 <div className="flex-none">
                     <div className="relative w-full" ref={profileMenuRef}>
+                        {(() => {
+                            return (
                         <button
                             type="button"
                             onClick={handleProfileClick}
-                            onMouseEnter={(event) => handleItemHover(event, { label: 'Profile', icon: UserIcon })}
-                            onMouseLeave={clearHoveredItem}
                             className={cn(
-                                "flex h-10 w-full items-center transition-all duration-200 group relative border border-transparent text-slate-500 hover:text-slate-800 hover:bg-slate-100/80",
+                                "flex h-10 w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900",
                                 effectiveCollapsed ? "justify-center px-4" : "gap-3.5 px-6",
                                 showHoverExpandPanel && "overflow-visible",
                                 location.pathname.startsWith('/profile') && "bg-white text-slate-800 shadow-sm border-slate-200"
@@ -504,254 +821,138 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             )}
 
                             {effectiveCollapsed && (
-                                <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200">
-                                    {user?.profilePhoto ? (
-                                        <img
-                                            src={user.profilePhoto}
-                                            alt={displayName}
-                                            className="h-full w-full object-cover"
-                                        />
-                                    ) : (
-                                        <span className="text-[11px] font-bold text-slate-600">
-                                            {String(displayName).charAt(0).toUpperCase()}
-                                        </span>
-                                    )}
+                                <div className="flex w-full items-center justify-between px-3">
+                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200 transition-colors">
+                                        {user?.profilePhoto ? (
+                                            <img
+                                                src={user.profilePhoto}
+                                                alt={displayName}
+                                                className="h-full w-full object-cover"
+                                            />
+                                        ) : (
+                                            <span className="text-[11px] font-bold text-slate-600">
+                                                {String(displayName).charAt(0).toUpperCase()}
+                                            </span>
+                                        )}
+                                    </div>
+                                    <ChevronRight 
+                                        size={12} 
+                                        fill="currentColor"
+                                        className={cn(
+                                            "shrink-0 text-slate-300 transition-all duration-200",
+                                            showProfileMenu && "text-slate-500 translate-x-0.5"
+                                        )} 
+                                    />
                                 </div>
                             )}
 
-                            {effectiveCollapsed && (
-                                !showHoverExpandPanel ? (
-                                    <div className="absolute left-full ml-4 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-                                        Profile
-                                    </div>
-                                ) : null
-                            )}
                         </button>
+                            );
+                        })()}
 
                         {showProfileMenu && !effectiveCollapsed && (
-                            <div className="bg-white animate-in slide-in-from-top-2 duration-200 relative w-full border-t border-slate-100">
-                                <div className="relative">
-                                    {hasChanges && (
-                                        <button
-                                            type="button"
-                                            onClick={handleSaveProfile}
-                                            disabled={isSaving}
-                                            className="absolute left-6 top-3 inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            <Check size={11} strokeWidth={3} />
-                                            <span>{isSaving ? 'Saving...' : 'Save'}</span>
-                                        </button>
+                            <div className="relative w-full border-t border-slate-100 bg-[#f4f6fe] animate-in slide-in-from-top-2 duration-200">
+                                {profileMenuContent}
+                            </div>
+                        )}
+
+                        {showProfileMenu && effectiveCollapsed && (
+                            <div className="absolute bottom-0 left-full z-[120] ml-1 w-64 overflow-visible animate-in fade-in zoom-in-95 slide-in-from-left-2 duration-300 ease-out">
+                                <div
+                                    className={cn(
+                                        "relative rounded-2xl border border-slate-100 bg-[#f4f6fe] shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)]",
+                                        openPrefDropdown ? "overflow-visible" : "overflow-hidden"
                                     )}
-
-                                    {/* Avatar centered at top */}
-                                    <div className="flex justify-center pt-4 pb-2">
-                                        <div
-                                            className="group/avatar relative flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[2px] border-white bg-slate-100 text-slate-400 shadow-[0_4px_12px_rgb(15,23,42,0.1)] cursor-pointer"
-                                            onClick={() => fileInputRef.current?.click()}
-                                        >
-                                            {tempProfilePhoto ? (
-                                                <img src={tempProfilePhoto} alt="Profile" className="h-full w-full object-cover" />
-                                            ) : (
-                                                <UserIcon size={22} strokeWidth={1.5} />
-                                            )}
-                                            <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 opacity-0 transition-opacity group-hover/avatar:opacity-100">
-                                                <Camera size={15} className="text-white drop-shadow-md" />
-                                            </div>
-                                        </div>
-                                        <input
-                                            type="file"
-                                            ref={fileInputRef}
-                                            onChange={handleImageChange}
-                                            accept="image/*"
-                                            className="hidden"
-                                        />
-                                    </div>
-
-                                    {/* Name + Email left-aligned */}
-                                    <div className="px-6 pb-3 space-y-0.5">
-                                        {activeEditField === 'name' ? (
-                                            <input
-                                                value={tempDisplayName}
-                                                onChange={(event) => setTempDisplayName(event.target.value)}
-                                                onBlur={() => setActiveEditField((current) => (current === 'name' ? null : current))}
-                                                autoFocus
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-[14px] font-bold text-slate-900 shadow-sm transition-colors focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200/80"
-                                            />
-                                        ) : (
-                                            <div className="group/name flex items-center gap-2">
-                                                <p className="min-w-0 flex-1 text-[14px] font-bold text-[#1e293b] leading-5 tracking-tight">
-                                                    {tempDisplayName}
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveEditField('name')}
-                                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/name:opacity-100 group-hover/name:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
-                                                >
-                                                    <Edit2 size={13} strokeWidth={2} />
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {activeEditField === 'email' ? (
-                                            <input
-                                                value={tempEmail}
-                                                onChange={(event) => setTempEmail(event.target.value)}
-                                                onBlur={() => setActiveEditField((current) => (current === 'email' ? null : current))}
-                                                autoFocus
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-1 text-[12px] font-medium text-slate-700 shadow-sm transition-colors focus:border-slate-300 focus:outline-none focus:ring-2 focus:ring-slate-200/80"
-                                            />
-                                        ) : (
-                                            <div className="group/email flex items-center gap-2">
-                                                <p className="min-w-0 flex-1 break-all text-[12px] font-semibold text-slate-500 leading-5">
-                                                    {tempEmail || 'No email added'}
-                                                </p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setActiveEditField('email')}
-                                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/email:opacity-100 group-hover/email:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
-                                                >
-                                                    <Edit2 size={13} strokeWidth={2} />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="relative border-t border-slate-100 pt-2 flex flex-col w-full">
-                                        {isPreferencesExpanded && (
-                                            <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <p className="mb-3 text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400 px-6">
-                                                    Preferences
-                                                </p>
-                                                <div className="space-y-0.5">
-                                                    {renderPrefSelect(
-                                                        'currency',
-                                                        'Currency',
-                                                        currencyOptions.map((currency) => ({ value: currency.code, label: currency.label })),
-                                                        draftPreferences.currency || 'INR'
-                                                    )}
-                                                    {renderPrefSelect('dateFormat', 'Date Format', dateFormats, draftPreferences.dateFormat)}
-                                                    {renderPrefSelect('numberFormat', 'Number Format', numberFormats, draftPreferences.numberFormat)}
-                                                    {renderPrefSelect('timeZone', 'Time Zone', timeZones, draftPreferences.timeZone)}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            className="group/acc flex w-full cursor-pointer items-center justify-between py-2 px-6 text-left hover:bg-slate-50"
-                                            onClick={() => {
-                                                setOpenPrefDropdown(null);
-                                                setIsPreferencesExpanded((current) => !current);
-                                            }}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <ChevronDown
-                                                    size={13}
-                                                    strokeWidth={2.5}
-                                                    className={cn(
-                                                        'text-slate-400 transition-transform duration-200',
-                                                        !isPreferencesExpanded && '-rotate-90'
-                                                    )}
-                                                />
-                                                <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 transition-colors group-hover/acc:text-slate-700">
-                                                    User Preferences
-                                                </p>
-                                            </div>
-
-                                        </button>
-
-
-                                    </div>
+                                >
+                                    {profileMenuContent}
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    <div className="border-t border-slate-100" />
-
-                    {showLogoutConfirm && !effectiveCollapsed && (
-                        <div
-                            ref={logoutConfirmRef}
-                            className="bg-white px-5 py-4 animate-in slide-in-from-top-2 duration-300 border-b border-slate-100"
-                        >
-                            <p className="text-[14px] font-bold text-[#1e293b] mb-3 tracking-tight">
-                                Are you sure?
-                            </p>
-                            <div className="flex gap-2">
+                    {!isMobileViewport && (
+                        <>
+                            <div className="relative h-10 border-t border-slate-200" ref={sidebarControlRef}>
                                 <button
                                     type="button"
-                                    onClick={cancelLogout}
-                                    className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-[11px] font-bold text-[#475569] transition-all hover:bg-slate-50 hover:border-slate-300 active:scale-[0.98] whitespace-nowrap"
+                                    onClick={() => {
+                                        setHoveredItem(null);
+                                        setShowProfileMenu(false);
+                                        setShowLogoutConfirm(false);
+                                        setShowSidebarControlMenu((current) => !current);
+                                    }}
+                                    onMouseEnter={(event) => handleItemHover(event, { id: 'sidebar-control', label: sidebarControlLabel, icon: SidebarToggleIcon })}
+                                    onMouseLeave={clearHoveredItem}
+                                    className={cn(
+                                        "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900 hover:text-slate-900 hover:bg-blue-50/50",
+                                        effectiveCollapsed ? "justify-center px-4" : "justify-start px-6",
+                                        showHoverExpandPanel && "overflow-visible",
+                                        (isCollapsedHoverMatch('sidebar-control') || showSidebarControlMenu) && "rounded-[14px] border-blue-200 bg-blue-50/80 text-blue-900 shadow-[0_8px_18px_rgba(59,130,246,0.12)]"
+                                    )}
                                 >
-                                    No, Cancel
+                                    <SidebarToggleIcon
+                                        size={18}
+                                        strokeWidth={1.8}
+                                        className={cn(
+                                            "shrink-0 transition-colors",
+                                            (isCollapsedHoverMatch('sidebar-control') || showSidebarControlMenu) ? "text-slate-900" : "text-slate-900 group-hover:text-slate-900"
+                                        )}
+                                    />
+
+                                    {effectiveCollapsed && (
+                                        !showHoverExpandPanel ? (
+                                            <div className="absolute left-full ml-4 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                                {sidebarControlLabel}
+                                            </div>
+                                        ) : null
+                                    )}
                                 </button>
-                                <button
-                                    type="button"
-                                    onClick={handleActualLogout}
-                                    disabled={isSaving}
-                                    className="flex-1 rounded-lg bg-rose-50 px-2 py-2 text-[11px] font-bold text-rose-600 transition-all hover:bg-rose-100 active:scale-[0.98] disabled:opacity-60 whitespace-nowrap"
-                                >
-                                    {isSaving ? 'Wait...' : 'Yes, Log Out'}
-                                </button>
-                            </div>
-                        </div>
-                    )}
 
-                    <div className="h-10">
-                        <button
-                            type="button"
-                            onClick={handleLogout}
-                            onMouseEnter={(event) => handleItemHover(event, { label: 'Log out', icon: LogOut })}
-                            onMouseLeave={clearHoveredItem}
-                            className={cn(
-                                "flex h-full w-full items-center gap-3 px-6 transition-all duration-200 group relative border border-transparent text-slate-500 hover:text-rose-600 hover:bg-rose-50/80",
-                                effectiveCollapsed && "justify-center px-4",
-                                showHoverExpandPanel && "overflow-visible"
-                            )}
-                        >
-                            <LogOut
-                                size={18}
-                                strokeWidth={1.5}
-                                className="shrink-0 text-slate-400 transition-colors group-hover:text-rose-500"
-                            />
+                                {showSidebarControlMenu && (
+                                    <div className="absolute bottom-11 left-2 z-[140] w-[168px] animate-in fade-in slide-in-from-left-2 duration-150">
+                                        <div className="overflow-hidden rounded-[10px] border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,23,42,0.10)]">
+                                            <div className="px-1.5 py-1">
+                                                {sidebarModeOptions.map((option) => {
+                                                    const isSelected = sidebarMode === option.value;
 
-                            {!effectiveCollapsed && (
-                                <span className="text-[13px] tracking-tight sidebar-laptop-item-label font-semibold">
-                                    Log out
-                                </span>
-                            )}
-
-                            {effectiveCollapsed && (
-                                !showHoverExpandPanel ? (
-                                    <div className="absolute left-full ml-4 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
-                                        Log out
+                                                    return (
+                                                        <button
+                                                            key={option.value}
+                                                            type="button"
+                                                            onClick={() => handleSidebarModeSelect(option.value)}
+                                                            className="flex w-full items-center gap-2 rounded-[7px] px-1.5 py-1.5 text-left text-[11px] font-medium text-slate-700 transition-colors hover:bg-slate-50"
+                                                        >
+                                                            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center">
+                                                                <span
+                                                                    className={cn(
+                                                                        "block h-2 w-2 rounded-full border transition-colors",
+                                                                        isSelected ? "border-slate-600 bg-slate-600" : "border-transparent bg-transparent"
+                                                                    )}
+                                                                />
+                                                            </span>
+                                                            <span>{option.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
                                     </div>
-                                ) : null
-                            )}
-                        </button>
-                    </div>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 {showHoverExpandPanel && hoveredItem && (
                     <div
-                        className="absolute -translate-y-1/2 whitespace-nowrap z-[80] pointer-events-none"
+                        className="absolute -translate-y-1/2 whitespace-nowrap z-[80] pointer-events-none animate-in fade-in slide-in-from-left-1 duration-150"
                         style={{
                             top: hoveredItem.top,
-                            left: hoveredItem.left,
-                            height: hoveredItem.height,
-                            width: Math.max((hoveredItem.width || 0) + 180, 240)
+                            left: (hoveredItem.left || 0) + (hoveredItem.width || 0) + 8
                         }}
                     >
-                        <div className="flex h-full items-center gap-4 px-4 bg-black text-white shadow-lg shadow-black/25 rounded-xl border border-black">
-                            <hoveredItem.icon
-                                size={18}
-                                strokeWidth={1.5}
-                                className={cn(
-                                    "shrink-0",
-                                    "text-white/80"
-                                )}
-                            />
-                            <span className="text-base font-medium tracking-tight text-white">{hoveredItem.label}</span>
+                        <div className="rounded-[11px] border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold tracking-tight text-slate-800 shadow-[0_8px_18px_rgba(15,23,42,0.12)]">
+                            {hoveredItem.label}
                         </div>
                     </div>
                 )}

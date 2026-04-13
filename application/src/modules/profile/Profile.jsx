@@ -106,7 +106,7 @@ const Profile = () => {
     };
 
     return (
-        <div className="flex flex-col h-full min-h-0 overflow-hidden relative bg-gray-50/50">
+        <div className="flex flex-col h-full min-h-0 overflow-hidden relative bg-white">
             <PageHeader
                 title="My Profile"
                 breadcrumbs={['Settings', 'Profile']}

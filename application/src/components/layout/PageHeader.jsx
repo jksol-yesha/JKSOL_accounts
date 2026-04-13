@@ -9,7 +9,7 @@ const PageHeader = ({ title, breadcrumbs, actionLabel, onAction, actionIcon = Pl
 
     return (
         <div className={cn(
-            "bg-white border-b border-gray-100 px-4 md:px-5 xl:px-6 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4 z-20 shadow-sm",
+            "bg-white px-4 md:px-5 xl:px-6 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4 z-20 shadow-sm",
             mobileSticky ? "sticky top-0" : "md:sticky md:top-0"
         )}>
             <div className="flex flex-col">
