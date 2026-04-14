@@ -66,7 +66,7 @@ const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
                 className="group relative flex items-center justify-center px-2.5 h-[38px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm focus:outline-none"
             >
                 <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-800">
-                    <span className="text-emerald-600 font-bold opacity-90">{selectedOption.label.split(' - ')[0]}</span>
+                    <span className="text-[#4A8AF4] font-bold opacity-90">{selectedOption.label.split(' - ')[0]}</span>
                     <span>{selectedOption.value}</span>
                 </div>
             </button>
@@ -83,15 +83,15 @@ const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
                             onClick={() => handleSelect(option.value)}
                             className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
                                 value === option.value 
-                                ? 'bg-emerald-50/50' 
-                                : 'hover:bg-emerald-50/50'
+                                ? 'bg-[#EEF0FC]' 
+                                : 'hover:bg-[#EEF0FC]'
                             }`}
                         >
                             <div className="w-4 flex justify-center shrink-0">
-                                {value === option.value && <Check size={14} className="text-emerald-600" strokeWidth={2.5} />}
+                                {value === option.value && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                             </div>
                             <span className="text-[13px] tracking-tight text-slate-800">
-                                <span className={`font-bold mr-1 ${value === option.value ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                <span className={`font-bold mr-1 ${value === option.value ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
                                     {option.label.split(' - ')[0]}
                                 </span>
                                 <span className={value === option.value ? 'font-bold' : 'font-medium'}>

@@ -13,6 +13,7 @@ import Reports from './modules/reports/Reports';
 import Profile from './modules/profile/Profile';
 import Organizations from './modules/organizations/Organizations';
 import CreateOrganization from './modules/organizations/CreateOrganization';
+import ManageOrganization from './modules/organizations/ManageOrganization';
 import AuditLogs from './modules/audit/AuditLogs';
 import PublicLayout from './components/layout/PublicLayout';
 import './App.css';
@@ -101,6 +102,7 @@ function App() {
                           <Route path="/settings" element={<Navigate to="/profile" replace />} />
                           <Route path="/organizations" element={<Organizations />} />
                           <Route path="/organizations/create" element={<CreateOrganization />} />
+                          <Route path="/organizations/manage" element={<ManageOrganization />} />
                           <Route path="/profile" element={<Profile />} />
                           <Route path="/audit-logs" element={<AuditLogs />} />
                         </Routes>

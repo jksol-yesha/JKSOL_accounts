@@ -396,8 +396,10 @@ const CategoryRankings = ({ dashboardFilters }) => {
     
     const [categories, setCategories] = useState([]);
     const [accounts, setAccounts] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
+    const [accountsLoading, setAccountsLoading] = useState(false);
+    const [rankingsLoading, setRankingsLoading] = useState(false);
+    const [hasFetchedAccounts, setHasFetchedAccounts] = useState(false);
+    const [hasFetchedRankings, setHasFetchedRankings] = useState(false);
     
     const rankingsContextReady = Boolean(
         location.pathname === '/dashboard' && !branchLoading && !yearLoading && selectedOrg?.id && selectedYear?.id &&
@@ -406,9 +408,60 @@ const CategoryRankings = ({ dashboardFilters }) => {
 
     useEffect(() => {
         const controller = new AbortController();
+        const fetchAccounts = async () => {
+            if (!rankingsContextReady) return;
+            setAccountsLoading(true);
+            try {
+                const branchFilter = getBranchFilterValue();
+                if (!branchFilter) return;
+                const accountsResponse = await apiService.accounts.getAll({
+                    branchId: branchFilter,
+                    financialYearId: selectedYear.id,
+                    currency: dashboardFilters?.currency || preferences.currency
+                }, { signal: controller.signal });
+
+                if (!controller.signal.aborted) {
+                    if (accountsResponse.success) {
+                        setAccounts(Array.isArray(accountsResponse.data) ? accountsResponse.data : []);
+                    } else {
+                        setAccounts([]);
+                    }
+                }
+            } catch (error) {
+                if (isIgnorableRequestError(error)) return;
+                console.error('Failed to fetch dashboard account balances:', error);
+                if (!controller.signal.aborted) {
+                    setAccounts([]);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setAccountsLoading(false);
+                    setHasFetchedAccounts(true);
+                }
+            }
+        };
+
+        const timeoutId = setTimeout(() => { if (rankingsContextReady) fetchAccounts(); }, 100);
+        return () => { clearTimeout(timeoutId); controller.abort(); };
+    }, [
+        rankingsContextReady,
+        location.pathname,
+        user?.id,
+        selectedBranch?.id,
+        selectedYear?.id,
+        selectedOrg?.id,
+        dashboardFilters?.currency,
+        preferences.currency,
+        branchLoading,
+        yearLoading,
+        getBranchFilterValue
+    ]);
+
+    useEffect(() => {
+        const controller = new AbortController();
         const fetchRankings = async () => {
             if (!rankingsContextReady) return;
-            setLoading(true);
+            setRankingsLoading(true);
             try {
                 const branchFilter = getBranchFilterValue();
                 if (!branchFilter) return;
@@ -424,17 +477,21 @@ const CategoryRankings = ({ dashboardFilters }) => {
                         const normalizedRankings = (Array.isArray(rankingsResponse.data) ? rankingsResponse.data : []).map(item => ({
                             ...item, type: String(item?.type ?? item?.txnType ?? '').trim().toLowerCase(), name: String(item?.name ?? '').trim(), amount: Number(item?.amount || 0)
                         }));
-                        setAccounts(normalizedRankings.filter((item) => item.type === 'account'));
                         setCategories(normalizedRankings.filter((item) => item.type !== 'account'));
+                    } else {
+                        setCategories([]);
                     }
                 }
             } catch (error) {
                 if (isIgnorableRequestError(error)) return;
                 console.error('Failed to fetch dashboard rankings:', error);
+                if (!controller.signal.aborted) {
+                    setCategories([]);
+                }
             } finally {
                 if (!controller.signal.aborted) {
-                    setLoading(false);
-                    setHasFetchedOnce(true);
+                    setRankingsLoading(false);
+                    setHasFetchedRankings(true);
                 }
             }
         };
@@ -443,14 +500,16 @@ const CategoryRankings = ({ dashboardFilters }) => {
         return () => { clearTimeout(timeoutId); controller.abort(); };
     }, [rankingsContextReady, location.pathname, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, dashboardFilters, branchLoading, yearLoading, getBranchFilterValue]);
 
-    const showInitialLoader = loading && !hasFetchedOnce;
-    const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
+    const showInitialAccountsLoader = accountsLoading && !hasFetchedAccounts;
+    const showAccountsOverlayLoader = useDelayedOverlayLoader(accountsLoading, hasFetchedAccounts);
+    const showInitialRankingsLoader = rankingsLoading && !hasFetchedRankings;
+    const showRankingsOverlayLoader = useDelayedOverlayLoader(rankingsLoading, hasFetchedRankings);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 h-full min-h-[300px] auto-rows-fr items-stretch">
-            <AccountBalanceList accounts={accounts} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />
-            <PnLBreakdownList categories={categories} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />
-            <InvestmentCardList categories={categories} initialLoading={showInitialLoader} overlayLoading={showOverlayLoader} hasFetchedOnce={hasFetchedOnce} />
+            <AccountBalanceList accounts={accounts} initialLoading={showInitialAccountsLoader} overlayLoading={showAccountsOverlayLoader} hasFetchedOnce={hasFetchedAccounts} />
+            <PnLBreakdownList categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings} />
+            <InvestmentCardList categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings} />
         </div>
     );
 };

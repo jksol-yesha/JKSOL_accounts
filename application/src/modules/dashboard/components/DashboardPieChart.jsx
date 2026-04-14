@@ -10,8 +10,8 @@ import { cn } from '../../../utils/cn';
 const COLORS = ['#2f80ed', '#45c164', '#ff8a1e', '#9b67e5', '#b7b7b7', '#ff5c5c', '#20c4d8', '#ffd166'];
 const MAX_VISIBLE_SEGMENTS = 5;
 const TOP_CATEGORY_COUNT = MAX_VISIBLE_SEGMENTS - 1;
-const ACTIVE_SLICE_OFFSET = 6;
-const ACTIVE_SLICE_RADIUS_GROWTH = 6;
+const ACTIVE_SLICE_OFFSET = 2;
+const ACTIVE_SLICE_RADIUS_GROWTH = 2;
 
 const getCurrencySymbol = (currency) => {
     try {
@@ -67,7 +67,7 @@ const ActiveSliceShape = ({
                 fill={fill}
                 cornerRadius={4}
                 style={{
-                    filter: 'drop-shadow(0 10px 16px rgba(15,23,42,0.18))'
+                    filter: 'drop-shadow(0 4px 8px rgba(15,23,42,0.10))'
                 }}
             />
         </g>
@@ -108,12 +108,11 @@ const HoverRevealLabel = ({ text, onTruncatedHoverStart, onTruncatedHoverEnd }) 
         <div
             className="min-w-0 flex-1"
             onMouseEnter={handleHover}
-            onMouseMove={handleHover}
             onMouseLeave={onTruncatedHoverEnd}
         >
             <span
                 ref={labelRef}
-                className="block truncate text-[11px] font-medium text-slate-700 2xl:text-[13px]"
+                className="block truncate text-[10px] font-medium text-slate-700 2xl:text-[12px]"
             >
                 {text}
             </span>
@@ -203,23 +202,24 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         const sourceEvent = event?.nativeEvent || event;
         const { clientX, clientY } = sourceEvent || {};
 
-        if (!chartBodyRef.current || typeof clientX !== 'number' || typeof clientY !== 'number') {
+        if (typeof clientX !== 'number' || typeof clientY !== 'number') {
             return null;
         }
 
-        const rect = chartBodyRef.current.getBoundingClientRect();
-        const tooltipWidth = dimensions.width || 164;
-        const tooltipHeight = dimensions.height || 62;
+        const tooltipWidth = dimensions.width || 148;
+        const tooltipHeight = dimensions.height || 50;
         const gutter = 12;
+        const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+        const viewportHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
 
-        const nextLeft = Math.min(Math.max(clientX - rect.left + gutter, 8), Math.max(rect.width - tooltipWidth - 8, 8));
-        const nextTop = Math.min(Math.max(clientY - rect.top + gutter, 8), Math.max(rect.height - tooltipHeight - 8, 8));
+        const nextLeft = Math.min(Math.max(clientX + gutter, 8), Math.max(viewportWidth - tooltipWidth - 8, 8));
+        const nextTop = Math.min(Math.max(clientY + gutter, 8), Math.max(viewportHeight - tooltipHeight - 8, 8));
 
         return { left: nextLeft, top: nextTop };
     };
 
     const handleSegmentHover = (entry, index, event) => {
-        const nextPosition = getTooltipPosition(event, { width: 164, height: 62 });
+        const nextPosition = getTooltipPosition(event, { width: 148, height: 50 });
 
         setActiveIndex(index);
         setLabelTooltipState(null);
@@ -236,7 +236,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     };
 
     const handleLabelHover = (event, text) => {
-        const nextPosition = getTooltipPosition(event, { width: 220, height: 40 });
+        const nextPosition = getTooltipPosition(event, { width: 180, height: 36 });
 
         setActiveIndex(null);
         setTooltipState(null);
@@ -250,6 +250,12 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         setLabelTooltipState(null);
     };
 
+    const clearAllTooltips = () => {
+        setActiveIndex(null);
+        setTooltipState(null);
+        setLabelTooltipState(null);
+    };
+
     return (
         <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 overflow-visible min-h-[340px]">
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
@@ -257,7 +263,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                     onClick={() => setSelectedType((previous) => previous === 'expense' ? 'income' : 'expense')}
                     className="flex items-center gap-1.5 cursor-pointer select-none group"
                 >
-                    <h3 className="text-[15px] leading-none font-medium text-slate-900 group-hover:text-slate-700 tracking-tight transition-colors focus:outline-none flex items-center">
+                    <h3 className="text-[14px] leading-none font-medium text-slate-900 group-hover:text-slate-700 tracking-tight transition-colors focus:outline-none flex items-center">
                         Top {selectedType === 'income' ? 'Income' : 'Expenses'}
                     </h3>
                     <div className="text-slate-400 group-hover:text-slate-600 transition-colors p-1 rounded-md group-hover:bg-slate-50 flex items-center justify-center mt-[1px]">
@@ -266,7 +272,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                 </div>
             </div>
 
-            <div ref={chartBodyRef} className="flex-1 flex flex-col relative overflow-visible">
+            <div ref={chartBodyRef} className="flex-1 flex flex-col relative overflow-visible" onMouseLeave={clearAllTooltips}>
                 {loading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white z-10">
                         <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
@@ -297,7 +303,6 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                                             activeIndex={activeIndex ?? undefined}
                                             activeShape={ActiveSliceShape}
                                             onMouseEnter={(entry, index, event) => handleSegmentHover(entry, index, event)}
-                                            onMouseMove={(entry, index, event) => handleSegmentHover(entry, index, event)}
                                             onMouseLeave={clearSegmentHover}
                                         >
                                             {chartData.map((entry, index) => (
@@ -308,7 +313,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                                 </ResponsiveContainer>
                             </div>
 
-                            <div className="flex w-full min-w-0 flex-1 flex-col justify-center gap-2 xl:gap-2.5 2xl:gap-3">
+                            <div className="flex w-full min-w-0 flex-1 flex-col justify-center gap-1 xl:gap-1.5 2xl:gap-2">
                                 {chartData.map((entry, index) => {
                                     const amount = Math.abs(entry.amount);
                                     const percent = totalAmount > 0 ? (amount / totalAmount) * 100 : 0;
@@ -318,11 +323,11 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                                         <div
                                             key={`${entry.name}-${index}`}
                                             className={cn(
-                                                "flex items-center gap-2 rounded-lg px-1.5 py-1 transition-colors xl:gap-1.5 2xl:gap-3",
+                                                "flex items-center gap-1.5 rounded-lg px-1 py-0.5 transition-colors xl:gap-1.5 2xl:gap-2",
                                                 isActive && "bg-slate-50"
                                             )}
                                         >
-                                            <div className="flex min-w-0 flex-1 items-center gap-2 xl:gap-1.5 2xl:gap-3">
+                                            <div className="flex min-w-0 flex-1 items-center gap-1.5 xl:gap-1.5 2xl:gap-2">
                                                 <span
                                                     className="h-2.5 w-2.5 rounded-full shrink-0 2xl:h-3 2xl:w-3"
                                                     style={{ backgroundColor: COLORS[index % COLORS.length] }}
@@ -335,16 +340,15 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                                             </div>
 
                                             <div
-                                                className="flex shrink-0 items-center gap-2 xl:gap-1.5 2xl:gap-3"
+                                                className="flex shrink-0 items-center gap-1.5 xl:gap-1.5 2xl:gap-2"
                                                 onMouseEnter={(event) => handleSegmentHover(entry, index, event)}
-                                                onMouseMove={(event) => handleSegmentHover(entry, index, event)}
                                                 onMouseLeave={clearSegmentHover}
                                             >
-                                                <span className="w-[34px] shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-500 xl:w-[32px] 2xl:w-[48px] 2xl:text-[14px]">
+                                                <span className="w-[34px] shrink-0 text-right text-[10px] font-semibold tabular-nums text-slate-500 xl:w-[32px] 2xl:w-[48px] 2xl:text-[13px]">
                                                     {Math.round(percent)}%
                                                 </span>
 
-                                                <span className="w-[68px] shrink-0 text-right text-[11px] font-semibold tabular-nums tracking-tight text-slate-800 xl:w-[66px] 2xl:w-[100px] 2xl:text-[14px]">
+                                                <span className="w-[68px] shrink-0 text-right text-[10px] font-semibold tabular-nums tracking-tight text-slate-800 xl:w-[66px] 2xl:w-[100px] 2xl:text-[13px]">
                                                     {formatCompactAmount(amount, currencyCode)}
                                                 </span>
                                             </div>
@@ -358,20 +362,20 @@ const DashboardPieChart = ({ dashboardFilters }) => {
 
                 {tooltipState?.entry && tooltipState?.position && (
                     <div
-                        className="pointer-events-none absolute z-30 min-w-[164px] max-w-[220px] rounded-[10px] border border-slate-200 bg-white px-3 py-2 shadow-[0_10px_24px_-12px_rgba(15,23,42,0.35)]"
+                        className="pointer-events-none fixed z-[160] min-w-[148px] max-w-[192px] rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.28)]"
                         style={{
                             left: tooltipState.position.left,
                             top: tooltipState.position.top
                         }}
                     >
                         <p
-                            className="text-[11px] font-semibold"
+                            className="text-[10px] font-semibold"
                             style={{ color: tooltipState.color }}
                         >
                             {tooltipState.entry.name}
                         </p>
                         <p
-                            className="mt-1 text-[13px] font-bold"
+                            className="mt-0.5 text-[11px] font-bold"
                             style={{ color: tooltipState.color }}
                         >
                             {formatCurrency(Math.abs(tooltipState.entry.amount), currencyCode)}
@@ -381,13 +385,13 @@ const DashboardPieChart = ({ dashboardFilters }) => {
 
                 {labelTooltipState?.text && labelTooltipState?.position && (
                     <div
-                        className="pointer-events-none absolute z-30 max-w-[180px] rounded-[8px] border border-slate-200 bg-white px-2.5 py-1.5 shadow-[0_8px_18px_-12px_rgba(15,23,42,0.32)]"
+                        className="pointer-events-none fixed z-[160] max-w-[160px] rounded-[7px] border border-slate-200 bg-white px-2 py-1 shadow-[0_8px_16px_-12px_rgba(15,23,42,0.24)]"
                         style={{
                             left: labelTooltipState.position.left,
                             top: labelTooltipState.position.top
                         }}
                     >
-                        <p className="text-[11px] font-semibold text-slate-900">
+                        <p className="text-[10px] font-semibold text-slate-900">
                             {labelTooltipState.text}
                         </p>
                     </div>

@@ -1,21 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown, Building2, Check, Plus, Settings } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ChevronDown, Building2, Check } from 'lucide-react';
 import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
-import CreateOrganizationModal from './CreateOrganizationModal';
-import ManageOrganizationModal from './ManageOrganizationModal';
 
 const OrganizationSelector = ({ isCollapsed }) => {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const { organizations, selectedOrg, switchOrganization } = useOrganization();
     const [isOpen, setIsOpen] = useState(false);
-    const [showCreateModal, setShowCreateModal] = useState(false);
-    const [showManageOrgModal, setShowManageOrgModal] = useState(false);
-    const [manageModalConfig, setManageModalConfig] = useState({
-        view: 'list',
-        tab: 'details',
-        org: null
-    });
     const dropdownRef = useRef(null);
 
     // Use GLOBAL ROLE for Creation Permissions
@@ -126,7 +119,7 @@ const OrganizationSelector = ({ isCollapsed }) => {
                                     <button
                                         onClick={() => {
                                             setIsOpen(false);
-                                            setShowManageOrgModal(true);
+                                            navigate('/organizations/manage');
                                         }}
                                         className="w-full flex items-center gap-2 px-4 py-2 text-[13px] text-sky-600 hover:text-sky-700 hover:bg-slate-50 transition-colors text-left"
                                     >
@@ -137,11 +130,7 @@ const OrganizationSelector = ({ isCollapsed }) => {
                                     <button
                                         onClick={() => {
                                             setIsOpen(false);
-                                            setManageModalConfig({
-                                                view: 'edit',
-                                                org: selectedOrg
-                                            });
-                                            setShowManageOrgModal(true);
+                                            navigate('/organizations/manage');
                                         }}
                                         className="w-full flex items-center gap-2 px-4 py-2 text-[13px] text-sky-600 hover:text-sky-700 hover:bg-slate-50 transition-colors text-left"
                                     >
@@ -153,33 +142,6 @@ const OrganizationSelector = ({ isCollapsed }) => {
                     </div>
                 )}
             </div>
-
-            <CreateOrganizationModal
-                isOpen={showCreateModal}
-                onClose={() => setShowCreateModal(false)}
-                initialMode="create"
-                onBackToManage={() => {
-                    setShowCreateModal(false);
-                    setManageModalConfig({
-                        view: 'list',
-                        tab: 'details',
-                        org: null
-                    });
-                    setShowManageOrgModal(true);
-                }}
-            />
-            <ManageOrganizationModal
-                isOpen={showManageOrgModal}
-                onClose={() => setShowManageOrgModal(false)}
-                onCreateNew={() => {
-                    setShowManageOrgModal(false);
-                    setShowCreateModal(true);
-                }}
-                initialView={manageModalConfig.view}
-                initialTab={manageModalConfig.tab}
-                initialOrg={manageModalConfig.org}
-                userRole={selectedOrg?.role} // Pass role to modal
-            />
         </>
     );
 };

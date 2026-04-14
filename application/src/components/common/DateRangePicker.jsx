@@ -346,12 +346,12 @@ const DateRangePicker = forwardRef(({
                                                     onMouseLeave={() => setHoveredPreset(null)}
                                                     className={`group cursor-pointer w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
                                                         isActive
-                                                            ? 'bg-emerald-50/50'
-                                                            : 'hover:bg-emerald-50/50'
+                                                            ? 'bg-[#EEF0FC]'
+                                                            : 'hover:bg-[#EEF0FC]'
                                                     }`}
                                                 >
                                                     <div className="w-4 flex justify-center shrink-0">
-                                                        {isActive && <Check size={16} className="text-emerald-600" strokeWidth={2.5} />}
+                                                        {isActive && <Check size={16} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                                     </div>
                                                     <span className={`text-[13px] tracking-tight truncate ${isActive ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
                                                         {option.label}
@@ -400,11 +400,11 @@ const DateRangePicker = forwardRef(({
                                                 onClick={() => handleDateClick(day)}
                                                 className={`
                                                     h-8 w-8 rounded-md text-[13px] font-medium transition-all flex items-center justify-center
-                                                    ${isSelected ? 'bg-emerald-600 text-white shadow-sm ring-1 ring-emerald-600' : ''}
-                                                    ${inRange ? 'bg-emerald-50 text-emerald-800 rounded-none' : ''}
-                                                    ${isHoverPreview ? 'bg-emerald-50/40 text-slate-600 rounded-none border border-dashed border-emerald-200' : ''}
-                                                    ${today && !isSelected && !inRange && !isHoverPreview ? 'text-emerald-700 font-bold bg-emerald-50/50 ring-1 ring-emerald-200' : ''}
-                                                    ${!isSelected && !inRange && !isHoverPreview && !today ? 'text-slate-600 hover:bg-emerald-50 hover:text-emerald-700' : ''}
+                                                    ${isSelected ? 'bg-[#4A8AF4] text-white shadow-sm ring-1 ring-[#4A8AF4]' : ''}
+                                                    ${inRange ? 'bg-[#EEF0FC] text-[#2F5FC6] rounded-none' : ''}
+                                                    ${isHoverPreview ? 'bg-[#EEF0FC]/80 text-slate-600 rounded-none border border-dashed border-[#CBD4F7]' : ''}
+                                                    ${today && !isSelected && !inRange && !isHoverPreview ? 'text-[#2F5FC6] font-bold bg-[#EEF0FC] ring-1 ring-[#CBD4F7]' : ''}
+                                                    ${!isSelected && !inRange && !isHoverPreview && !today ? 'text-slate-600 hover:bg-[#EEF0FC] hover:text-[#2F5FC6]' : ''}
                                                 `}
                                             >
                                                 {day}
@@ -419,14 +419,14 @@ const DateRangePicker = forwardRef(({
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="h-8 px-4 rounded-md text-[13px] font-semibold text-gray-500 hover:text-emerald-800 hover:bg-emerald-50 transition-colors"
+                                className="h-8 px-4 rounded-md text-[13px] font-semibold text-gray-500 hover:text-[#2F5FC6] hover:bg-[#EEF0FC] transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={handleApply}
-                                className="h-8 rounded-md bg-emerald-600 px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-emerald-700 transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="h-8 rounded-md bg-[#4A8AF4] px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#3E79DE] transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Apply
                             </button>

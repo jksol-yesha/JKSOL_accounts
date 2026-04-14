@@ -456,10 +456,10 @@ const Dashboard = () => {
 
     return (
         <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-white">
-            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-2 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
+            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-1 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
                 {/* Top Action Row */}
-                <div className="sticky top-0 z-20 -mx-4 -mt-2 mb-1 bg-white/95 py-2 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:-mx-4 xl:-mx-6">
-                    <div className="dashboard-header-pattern px-4 py-2 md:px-4 xl:px-6">
+                <div className="sticky top-0 z-20 -mx-4 -mt-1 mb-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:-mx-4 xl:-mx-6">
+                    <div className="dashboard-header-pattern px-4 pt-2 pb-1 md:px-4 xl:px-6">
                         <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
                             <div className="flex-shrink-0">
                                 <DateRangePicker 

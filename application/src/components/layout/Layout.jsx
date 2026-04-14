@@ -39,7 +39,7 @@ const shouldUseDesktopFooter = (pathname, width, shouldUseWholePageScroll = fals
 };
 
 const Footer = ({ className }) => (
-    <footer className={cn("bg-[#f4f6fe] border-t border-slate-200 h-10 px-6 text-center text-[10px] text-slate-400 flex items-center justify-center flex-none no-print print:hidden", className)}>
+    <footer className={cn("bg-transparent border-t border-slate-200 h-10 px-6 text-center text-[10px] text-slate-400 flex items-center justify-center flex-none no-print print:hidden", className)}>
         <p>© 2026 JKSOL. All rights reserved.</p>
     </footer>
 );
@@ -199,7 +199,7 @@ const Layout = ({ children }) => {
                 <div className="flex h-screen bg-white overflow-hidden print:h-auto print:overflow-visible print:bg-white">
                 <div className={cn(
                     "no-print print:hidden flex-none",
-                    usesSidebarHoverOverlay && "md:w-[66px] lg:w-[68px]"
+                    usesSidebarHoverOverlay && "md:w-[50px] lg:w-[52px]"
                 )}>
                     <Sidebar
                         isOpen={isSidebarOpen}

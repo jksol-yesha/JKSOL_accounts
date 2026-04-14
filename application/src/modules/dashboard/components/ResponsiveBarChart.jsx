@@ -17,8 +17,8 @@ const DEFAULT_MIN_HEIGHT = 250;
 const DEFAULT_MAX_HEIGHT = 300;
 const DEFAULT_POSITIVE_COLOR = '#0f766e';
 const DEFAULT_NEGATIVE_COLOR = '#dc2626';
-const ACTIVE_BAR_VALUE_POP = 6;
-const ACTIVE_BAR_THICKNESS_POP = 4;
+const ACTIVE_BAR_VALUE_POP = 4;
+const ACTIVE_BAR_THICKNESS_POP = 2;
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -272,7 +272,7 @@ const HoveredBarShape = ({ orientation, fill, value, ...shapeProps }) => {
                 stroke="rgba(255,255,255,0.45)"
                 strokeWidth={1}
                 style={{
-                    filter: 'drop-shadow(0 8px 14px rgba(15,23,42,0.18))'
+                    filter: 'drop-shadow(0 6px 10px rgba(15,23,42,0.14))'
                 }}
             />
         </g>

@@ -230,8 +230,6 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         }
     };
 
-    const isCollapsedHoverMatch = (id) => showHoverExpandPanel && hoveredItem?.id === id;
-
     const openProfileLogoutConfirm = () => {
         setHoveredItem(null);
         setShowSidebarControlMenu(false);
@@ -382,7 +380,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             fill="currentColor"
                             className={cn(
                                 'ml-auto shrink-0 text-slate-300 transition-all duration-200',
-                                isOpen && 'text-slate-500 translate-x-0.5'
+                                isOpen && 'text-[#4A8AF4] translate-x-0.5'
                             )}
                         />
                     </div>
@@ -411,13 +409,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         }}
                                         className={cn(
                                             'px-6 py-1.5 text-[12px] font-bold flex items-center justify-between gap-3 cursor-pointer transition-colors',
-                                            isSelected ? 'bg-[#4A8AF4] text-white' : 'text-[#1e293b] hover:bg-[#EEF4FF]'
+                                            isSelected ? 'bg-[#EEF0FC] text-[#1e293b]' : 'text-[#1e293b] hover:bg-[#EEF0FC]'
                                         )}
                                     >
                                         <span className="min-w-0 flex-1 pr-2 leading-5">
-                                            {renderPreferenceLabel(option, isSelected ? 'inverse' : 'none')}
+                                            {renderPreferenceLabel(option, isSelected ? 'accent' : 'none')}
                                         </span>
-                                        {isSelected && <Check size={14} strokeWidth={2.5} className="shrink-0 text-white" />}
+                                        {isSelected && <Check size={14} strokeWidth={2.5} className="shrink-0 text-[#4A8AF4]" />}
                                     </div>
                                 );
                             })}
@@ -523,7 +521,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     />
                 ) : (
                     <div className="group/email flex items-center gap-2">
-                        <p className="min-w-0 flex-1 break-all text-[12px] font-medium text-slate-400 leading-tight">
+                        <p className="min-w-0 flex-1 truncate whitespace-nowrap text-[11px] font-medium tracking-[-0.01em] text-slate-400 leading-tight">
                             {tempEmail || 'No email added'}
                         </p>
                         <button
@@ -549,8 +547,8 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             className="mb-3 flex w-full items-center justify-between px-6 text-left transition-colors"
                         >
                             <div className="flex items-center gap-2 flex-1">
-                                <UserIcon size={13} strokeWidth={2.5} className="text-slate-400" />
-                                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-400">
+                                <UserIcon size={13} strokeWidth={2.5} className="text-black" />
+                                <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-black">
                                     Preferences
                                 </p>
                             </div>
@@ -613,8 +611,8 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         }}
                     >
                         <div className="flex items-center gap-2 flex-1">
-                            <UserIcon size={12} strokeWidth={2.5} className="text-slate-400" />
-                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500 transition-colors">
+                            <UserIcon size={12} strokeWidth={2.5} className="text-black" />
+                            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-black transition-colors">
                                 Preferences
                             </p>
                         </div>
@@ -630,23 +628,20 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 )}
             </div>
 
-            <div className="border-t border-slate-100 mt-1">
+            <div className="mt-1">
                 {!showLogoutConfirm ? (
                     <button
                         type="button"
                         onClick={openProfileLogoutConfirm}
                         className="flex w-full items-center gap-2 px-6 py-3 text-left text-slate-900 transition-colors"
                     >
-                        <LogOut size={14} strokeWidth={1.8} className="shrink-0 text-slate-500" />
+                        <LogOut size={14} strokeWidth={1.8} className="shrink-0 text-black" />
                         <span className="text-[12px] font-semibold tracking-tight">Log out</span>
                     </button>
                 ) : (
                     <div className="px-6 py-3 animate-in fade-in slide-in-from-top-1 duration-200">
                         <p className="text-[13px] font-bold tracking-tight text-slate-800">
                             Log out?
-                        </p>
-                        <p className="mt-1 text-[11px] font-medium leading-4 text-slate-500">
-                            End this session from your profile panel.
                         </p>
                         <div className="mt-3 flex gap-2">
                             <button
@@ -682,9 +677,9 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             )}
 
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-[70] w-[224px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-full overflow-visible",
+                "fixed inset-y-0 left-0 z-[70] w-[208px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-full overflow-visible",
                 usesHoverOverlay ? "md:fixed md:translate-x-0" : "md:relative md:translate-x-0",
-                isTabletViewport ? (effectiveCollapsed ? "md:w-[66px]" : "md:w-[224px]") : (isCollapsed && "lg:w-[68px]"),
+                isTabletViewport ? (effectiveCollapsed ? "md:w-[50px]" : "md:w-[208px]") : (isCollapsed && "lg:w-[52px]"),
                 usesHoverOverlay && !effectiveCollapsed && "md:z-[85] md:shadow-[0_18px_40px_rgba(15,23,42,0.14)]",
                 !isOpen && "-translate-x-full md:translate-x-0",
                 className
@@ -703,7 +698,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 }}
             >
                 <div className={cn(
-                    "flex flex-col pt-4 mb-2 flex-none",
+                    "flex flex-col pt-4 mb-0.5 flex-none",
                     effectiveCollapsed ? "items-center px-2" : "px-3"
                 )}>
                     <OrganizationSelector isCollapsed={effectiveCollapsed} />
@@ -719,7 +714,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
                 {/* Navigation */}
                 <div className={cn(
-                    "flex-1 overflow-y-auto overflow-x-visible py-2 px-3 space-y-1 custom-scrollbar",
+                    "flex-1 overflow-y-auto overflow-x-visible pt-1 pb-2 px-3 space-y-0.5 custom-scrollbar",
                     effectiveCollapsed && "no-scrollbar px-2"
                 )}>
 
@@ -727,7 +722,6 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
                     {filteredMenuItems.map((item) => {
                         const isActive = location.pathname.startsWith(item.path);
-                        const isCollapsedHovered = isCollapsedHoverMatch(item.path);
                         return (
                             <NavLink
                                 key={item.path}
@@ -735,13 +729,12 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 onMouseEnter={(event) => handleItemHover(event, item, isActive)}
                                 onMouseLeave={clearHoveredItem}
                                 className={() => cn(
-                                    "flex items-center gap-3 px-3 py-2.5 rounded-md transition-all duration-200 group relative border border-transparent",
+                                    "flex items-center gap-3 px-3 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent",
                                     isActive
-                                        ? "bg-[#4A8AF4] text-white font-semibold border-[#4A8AF4]"
-                                        : "text-slate-900 hover:text-slate-900 hover:bg-blue-50/50",
+                                        ? "bg-[#4A8AF4] text-white border-[#4A8AF4]"
+                                        : "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
                                     effectiveCollapsed && "justify-center px-2 md:px-2.5",
-                                    showHoverExpandPanel && "overflow-visible",
-                                    showHoverExpandPanel && !isActive && isCollapsedHovered && "rounded-[14px] border-blue-200 bg-blue-50/80 text-blue-900 shadow-[0_8px_18px_rgba(59,130,246,0.12)]"
+                                    showHoverExpandPanel && "overflow-visible"
                                 )}
                             >
                                 <item.icon
@@ -749,25 +742,21 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     strokeWidth={1.5}
                                     className={cn(
                                         "shrink-0 transition-colors",
-                                        isActive
-                                            ? "text-white"
-                                            : isCollapsedHovered
-                                                ? "text-slate-900"
-                                                : "text-slate-900 group-hover:text-slate-900"
+                                        isActive ? "text-white" : "text-slate-900 group-hover:text-slate-900"
                                     )}
                                 />
 
                                 {!effectiveCollapsed && (
                                     <span className={cn(
                                         "text-[13px] tracking-tight sidebar-laptop-item-label",
-                                        isActive ? "font-bold" : "font-semibold"
+                                        isActive ? "font-semibold" : "font-medium"
                                     )}>{item.label}</span>
                                 )}
 
                                 {/* Tooltip for collapsed state */}
                                 {effectiveCollapsed && (
                                     !showHoverExpandPanel ? (
-                                        <div className="absolute left-full ml-4 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                        <div className="absolute left-full ml-2.5 px-1.5 py-px bg-gray-800 text-white text-[9px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
                                             {item.label}
                                         </div>
                                     ) : null
@@ -786,7 +775,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             onClick={handleProfileClick}
                             className={cn(
                                 "flex h-10 w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900",
-                                effectiveCollapsed ? "justify-center px-4" : "gap-3.5 px-6",
+                                effectiveCollapsed ? "justify-center px-2 md:px-2.5" : "gap-3.5 px-6",
                                 showHoverExpandPanel && "overflow-visible",
                                 location.pathname.startsWith('/profile') && "bg-white text-slate-800 shadow-sm border-slate-200"
                             )}
@@ -821,28 +810,18 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             )}
 
                             {effectiveCollapsed && (
-                                <div className="flex w-full items-center justify-between px-3">
-                                    <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200 transition-colors">
-                                        {user?.profilePhoto ? (
-                                            <img
-                                                src={user.profilePhoto}
-                                                alt={displayName}
-                                                className="h-full w-full object-cover"
-                                            />
-                                        ) : (
-                                            <span className="text-[11px] font-bold text-slate-600">
-                                                {String(displayName).charAt(0).toUpperCase()}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <ChevronRight 
-                                        size={12} 
-                                        fill="currentColor"
-                                        className={cn(
-                                            "shrink-0 text-slate-300 transition-all duration-200",
-                                            showProfileMenu && "text-slate-500 translate-x-0.5"
-                                        )} 
-                                    />
+                                <div className="flex h-6 w-6 shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200 transition-colors">
+                                    {user?.profilePhoto ? (
+                                        <img
+                                            src={user.profilePhoto}
+                                            alt={displayName}
+                                            className="h-full w-full object-cover"
+                                        />
+                                    ) : (
+                                        <span className="text-[11px] font-bold text-slate-600">
+                                            {String(displayName).charAt(0).toUpperCase()}
+                                        </span>
+                                    )}
                                 </div>
                             )}
 
@@ -884,10 +863,10 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     onMouseEnter={(event) => handleItemHover(event, { id: 'sidebar-control', label: sidebarControlLabel, icon: SidebarToggleIcon })}
                                     onMouseLeave={clearHoveredItem}
                                     className={cn(
-                                        "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900 hover:text-slate-900 hover:bg-blue-50/50",
+                                        "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent bg-[#EEF0FC] text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
                                         effectiveCollapsed ? "justify-center px-4" : "justify-start px-6",
                                         showHoverExpandPanel && "overflow-visible",
-                                        (isCollapsedHoverMatch('sidebar-control') || showSidebarControlMenu) && "rounded-[14px] border-blue-200 bg-blue-50/80 text-blue-900 shadow-[0_8px_18px_rgba(59,130,246,0.12)]"
+                                        showSidebarControlMenu && "text-slate-900"
                                     )}
                                 >
                                     <SidebarToggleIcon
@@ -895,13 +874,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         strokeWidth={1.8}
                                         className={cn(
                                             "shrink-0 transition-colors",
-                                            (isCollapsedHoverMatch('sidebar-control') || showSidebarControlMenu) ? "text-slate-900" : "text-slate-900 group-hover:text-slate-900"
+                                            showSidebarControlMenu ? "text-slate-900" : "text-slate-900 group-hover:text-slate-900"
                                         )}
                                     />
 
                                     {effectiveCollapsed && (
                                         !showHoverExpandPanel ? (
-                                            <div className="absolute left-full ml-4 px-2 py-1 bg-gray-800 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                            <div className="absolute left-full ml-2.5 px-1.5 py-px bg-gray-800 text-white text-[9px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
                                                 {sidebarControlLabel}
                                             </div>
                                         ) : null
@@ -909,7 +888,12 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 </button>
 
                                 {showSidebarControlMenu && (
-                                    <div className="absolute bottom-11 left-2 z-[140] w-[168px] animate-in fade-in slide-in-from-left-2 duration-150">
+                                    <div
+                                        className={cn(
+                                            "absolute bottom-11 z-[140] w-[168px] animate-in fade-in slide-in-from-left-2 duration-150",
+                                            effectiveCollapsed ? "left-full ml-2" : "left-3"
+                                        )}
+                                    >
                                         <div className="overflow-hidden rounded-[10px] border border-slate-200 bg-white shadow-[0_8px_18px_rgba(15,23,42,0.10)]">
                                             <div className="px-1.5 py-1">
                                                 {sidebarModeOptions.map((option) => {
@@ -951,7 +935,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             left: (hoveredItem.left || 0) + (hoveredItem.width || 0) + 8
                         }}
                     >
-                        <div className="rounded-[11px] border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold tracking-tight text-slate-800 shadow-[0_8px_18px_rgba(15,23,42,0.12)]">
+                        <div className="rounded-[8px] border border-slate-200 bg-white px-2 py-1 text-[11px] font-semibold tracking-tight text-slate-800 shadow-[0_5px_10px_rgba(15,23,42,0.08)]">
                             {hoveredItem.label}
                         </div>
                     </div>

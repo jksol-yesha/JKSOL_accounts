@@ -75,8 +75,8 @@ const CustomSelect = React.forwardRef(({
             const spaceAbove = rect.top;
             const isMobile = window.innerWidth < 1024;
             const estimatedDropdownHeight = Math.min(
-                dropdownRef.current?.offsetHeight || 168,
-                isMobile ? Math.round(window.innerHeight * 0.44) : 168
+                dropdownRef.current?.offsetHeight || 300,
+                isMobile ? Math.round(window.innerHeight * 0.44) : 300
             );
             const requiredSpace = estimatedDropdownHeight + 8;
             const showAbove = spaceBelow < requiredSpace && spaceAbove > spaceBelow;
@@ -93,7 +93,8 @@ const CustomSelect = React.forwardRef(({
                 setDropdownStyles({
                     position: 'fixed',
                     left,
-                    width,
+                    minWidth: width,
+                    maxWidth: maxWidth,
                     ...(showAbove ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
                 });
                 return;
@@ -102,14 +103,15 @@ const CustomSelect = React.forwardRef(({
             setDropdownStyles({
                 position: 'fixed',
                 left: rect.left,
-                width: rect.width,
+                minWidth: rect.width,
+                maxWidth: 'calc(100vw - 32px)',
                 ...(showAbove ? { bottom: window.innerHeight - rect.top + 4 } : { top: rect.bottom + 4 }),
             });
         }
     }, []);
 
     React.useEffect(() => {
-        const handlePointerOutside = (event) => {
+        const handleOutsideClick = (event) => {
             if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
                 if (dropdownRef.current && dropdownRef.current.contains(event.target)) {
                     return;
@@ -122,7 +124,8 @@ const CustomSelect = React.forwardRef(({
             if (event.key === 'Escape') setIsOpen(false);
         };
 
-        document.addEventListener('pointerdown', handlePointerOutside);
+        document.addEventListener('mousedown', handleOutsideClick);
+        document.addEventListener('touchstart', handleOutsideClick);
         document.addEventListener('keydown', handleEscape);
         if (isOpen) {
             updatePosition();
@@ -130,7 +133,8 @@ const CustomSelect = React.forwardRef(({
             window.addEventListener('resize', updatePosition, true);
         }
         return () => {
-            document.removeEventListener('pointerdown', handlePointerOutside);
+            document.removeEventListener('mousedown', handleOutsideClick);
+            document.removeEventListener('touchstart', handleOutsideClick);
             document.removeEventListener('keydown', handleEscape);
             window.removeEventListener('scroll', updatePosition, true);
             window.removeEventListener('resize', updatePosition, true);
@@ -215,7 +219,7 @@ const CustomSelect = React.forwardRef(({
                         dropdownClassName
                     )}
                 >
-                    <div className={cn("max-h-[168px] overflow-y-auto no-scrollbar p-1", dropdownContentClassName)}>
+                    <div className={cn("max-h-[300px] overflow-y-auto custom-scrollbar p-1", dropdownContentClassName)}>
                         {options.map((option) => {
                             const isSelected = option.value === currentValue;
                             return (
@@ -230,7 +234,7 @@ const CustomSelect = React.forwardRef(({
                                         isSelected ? "bg-slate-100 font-bold text-slate-900" : "text-slate-700 font-medium"
                                     )}
                                 >
-                                    <span className={cn("block w-full pr-1 whitespace-normal break-all leading-snug", optionLabelClassName)}>{option.label}</span>
+                                    <span className={cn("block w-full pr-1 whitespace-normal break-words leading-snug", optionLabelClassName)}>{option.label}</span>
                                 </button>
                             );
                         })}
