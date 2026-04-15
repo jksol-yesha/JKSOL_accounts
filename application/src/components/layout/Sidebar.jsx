@@ -346,7 +346,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             const remainder = optionLabel.slice(symbol.length).trimStart();
 
             return (
-                <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+                <span className="flex min-w-0 items-center gap-0.5 overflow-hidden">
                     <span className={cn(
                         'shrink-0',
                         highlightMode === 'accent' && 'text-[#4A8AF4]',
@@ -365,7 +365,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         return (
             <div className="relative w-full overflow-visible">
                 <div
-                    className="px-6 py-1.5 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 transition-colors cursor-pointer"
                     onClick={(e) => {
                         e.stopPropagation();
                         setOpenPrefDropdown(isOpen ? null : name);
@@ -391,7 +391,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         {/* Main Content Container with scrollbar */}
                         <div
                             className={cn(
-                                "relative w-[248px] overflow-x-hidden bg-white rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)] border border-slate-100 py-1",
+                                "relative w-[228px] overflow-x-hidden bg-white rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)] border border-slate-100 py-1",
                                 shouldScrollOptions
                                     ? "max-h-[136px] overflow-y-auto overscroll-contain no-scrollbar"
                                     : "overflow-y-hidden"
@@ -408,11 +408,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                             setOpenPrefDropdown(null);
                                         }}
                                         className={cn(
-                                            'px-6 py-1.5 text-[12px] font-bold flex items-center justify-between gap-3 cursor-pointer transition-colors',
+                                            'flex items-center justify-between gap-2 cursor-pointer px-2.5 py-1 text-[11px] font-bold transition-colors',
                                             isSelected ? 'bg-[#EEF0FC] text-[#1e293b]' : 'text-[#1e293b] hover:bg-[#EEF0FC]'
                                         )}
                                     >
-                                        <span className="min-w-0 flex-1 pr-2 leading-5">
+                                        <span className="min-w-0 flex-1 pr-1.5 leading-4">
                                             {renderPreferenceLabel(option, isSelected ? 'accent' : 'none')}
                                         </span>
                                         {isSelected && <Check size={14} strokeWidth={2.5} className="shrink-0 text-[#4A8AF4]" />}
@@ -544,7 +544,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 setOpenPrefDropdown(null);
                                 setIsPreferencesExpanded(false);
                             }}
-                            className="mb-3 flex w-full items-center justify-between px-6 text-left transition-colors"
+                            className="mb-3 flex w-full items-center justify-between px-3 text-left transition-colors"
                         >
                             <div className="flex items-center gap-2 flex-1">
                                 <UserIcon size={13} strokeWidth={2.5} className="text-black" />
@@ -604,7 +604,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 {!isPreferencesExpanded && (
                     <button
                         type="button"
-                        className="flex w-full cursor-pointer items-center justify-between py-2 px-6 text-left"
+                        className="flex w-full cursor-pointer items-center justify-between py-2 px-3 text-left"
                         onClick={() => {
                             setOpenPrefDropdown(null);
                             setIsPreferencesExpanded((current) => !current);
