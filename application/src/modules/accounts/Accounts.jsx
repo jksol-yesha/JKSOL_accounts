@@ -11,25 +11,107 @@ import {
     ChevronDown,
     ChevronRight,
     ArrowUpDown,
-    Loader2
+    Loader2,
+    Landmark,
+    CreditCard,
+    Banknote,
+    ChevronUp,
+    Calendar,
+    TrendingUp,
+    RefreshCcw,
+    EyeOff,
+    Pin,
+    ArrowRight,
+    Wallet,
+    PiggyBank,
+    Briefcase,
+    Activity,
+    ChevronLeft
 } from 'lucide-react';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
-import { Can } from '../../hooks/usePermission';
 import { useWebSocket } from '../../hooks/useWebSocket';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
-import MobilePagination from '../../components/common/MobilePagination';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
+import CustomSelect from '../../components/common/CustomSelect';
 import apiService from '../../services/api';
 import { cn } from '../../utils/cn';
 import { ACCOUNT_TYPE_LABELS, ACCOUNT_SUBTYPE_LABELS } from './constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 import { TRANSACTION_DATA_CHANGED_EVENT } from '../transactions/transactionDataSync';
 import { useToast } from '../../context/ToastContext';
+import { 
+    LineChart, Line, XAxis, YAxis, CartesianGrid, 
+    Tooltip, ResponsiveContainer, Legend
+} from 'recharts';
+
+const MOCK_30_DAYS = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (29 - i));
+    return {
+        date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+        bank: 45000 + Math.random() * 20000 - 5000,
+        card: 5000 + Math.random() * 3000 - 1000,
+        cash: 1000 + Math.random() * 800 - 200
+    };
+});
+
+const MOCK_12_MONTHS = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - (11 - i));
+    return {
+        date: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        bank: 40000 + (i * 2000) + Math.random() * 10000,
+        card: 8000 + (i * 100) + Math.random() * 2000,
+        cash: 1200 + (i * 50) + Math.random() * 500
+    };
+});
+
+const SummaryItem = ({ title, amount, icon: Icon, colorClass, bgClass, currency }) => {
+    const { formatCurrency } = usePreferences();
+    return (
+        <div className="flex items-center gap-3">
+            <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border border-white/60", bgClass)}>
+                <Icon size={16} className={colorClass} strokeWidth={2.5} />
+            </div>
+            <div>
+                <p className="text-[11px] font-semibold text-gray-500 mb-0.5">{title}</p>
+                <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">
+                    {formatCurrency(amount, currency)}
+                </h3>
+            </div>
+        </div>
+    );
+};
+
+const CustomTooltip = ({ active, payload, label, currency }) => {
+    const { formatCurrency } = usePreferences();
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white border border-gray-100 rounded-lg p-2.5 shadow-md z-50 min-w-[140px]">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">{label}</p>
+                <div className="space-y-1">
+                    {payload.map((entry, index) => (
+                        <div key={index} className="flex items-center justify-between gap-3">
+                            <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                {entry.name}
+                            </span>
+                            <span className="text-xs font-bold text-gray-900">
+                                {formatCurrency(entry.value, currency)}
+                            </span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
 
 const createInitialDeleteDialog = () => ({
     open: false,
@@ -353,6 +435,49 @@ const Accounts = () => {
     const [pageSize] = useState(20); // Show 20 rows per page as requested
     const [currentPage, setCurrentPage] = useState(1);
     const cacheKey = `accounts:list:${selectedYear?.id || 'fy'}:${preferences.currency || 'currency'}`;
+
+    const computedBalances = useMemo(() => {
+        let bank = 0, card = 0, cash = 0;
+        accounts.forEach(a => {
+            const val = getDisplayClosingBalance(a);
+            const subtype = Number(a.subtype);
+            if (subtype === 12) bank += val;
+            else if (subtype === 22 || subtype === 21) card += val;
+            else if (subtype === 11) cash += val;
+        });
+        return { bankBalance: bank, cardBalance: card, cashBalance: cash };
+    }, [accounts]);
+    const { bankBalance, cardBalance, cashBalance } = computedBalances;
+
+    const [chartTimeframe, setChartTimeframe] = useState('30D');
+    const [chartVisible, setChartVisible] = useState(false);
+    const [summaryFilter, setSummaryFilter] = useState('All Accounts');
+    const [listFilter, setListFilter] = useState('Active Accounts');
+    
+    // Grid Controls
+    const [groupBy, setGroupBy] = useState('none');
+    const [hiddenColumns, setHiddenColumns] = useState(new Set());
+    const [frozenColumns, setFrozenColumns] = useState(new Set(['name'])); // Name forced frozen per user spec
+    const [columnFilters, setColumnFilters] = useState({});
+    const [activeColumnMenu, setActiveColumnMenu] = useState(null);
+    const [activeRowPopover, setActiveRowPopover] = useState(null);
+
+    // Click-away listener for popovers
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (!event.target.closest('.popover-container') && !event.target.closest('.popover-trigger')) {
+                setActiveColumnMenu(null);
+                setActiveRowPopover(null);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const chartData = useMemo(() => {
+        return chartTimeframe === '30D' ? MOCK_30_DAYS : MOCK_12_MONTHS;
+    }, [chartTimeframe]);
+
     const getAccountOweValue = (account) => {
         return oweMap.get(Number(account?.id)) || 0;
     };
@@ -507,7 +632,7 @@ const Accounts = () => {
         return () => window.removeEventListener('resize', handleResize);
     }, []);
 
-    // 🔥 Listen for real-time account updates
+    //  Listen for real-time account updates
     useEffect(() => {
         const refreshAccounts = () => {
             setDataRefreshTick((current) => current + 1);
@@ -571,6 +696,12 @@ const Accounts = () => {
     const filteredAccounts = useMemo(() => {
         let result = [...accounts];
 
+        if (listFilter === 'Active Accounts') {
+            result = result.filter(a => a.isActive || a.status === 1 || a.status === 'active');
+        } else if (listFilter === 'Inactive Accounts') {
+            result = result.filter(a => !a.isActive && a.status !== 1 && a.status !== 'active');
+        }
+
         if (searchTerm.trim()) {
             const term = searchTerm.toLowerCase();
             result = result.filter((account) => {
@@ -623,8 +754,26 @@ const Accounts = () => {
             });
         }
 
+        // Apply Column-Wise amount filters
+        if (Object.keys(columnFilters).length > 0) {
+            result = result.filter(account => {
+                for (const [colKey, filterOpts] of Object.entries(columnFilters)) {
+                    if (!filterOpts) continue;
+                    let val = 0;
+                    if (colKey === 'openingBalance') val = getDisplayBalance(account);
+                    if (colKey === 'closingBalance') val = getDisplayClosingBalance(account);
+                    
+                    const targetVal = Number(filterOpts.value);
+                    if (filterOpts.operator === 'lt' && !(val < targetVal)) return false;
+                    if (filterOpts.operator === 'gt' && !(val > targetVal)) return false;
+                    if (filterOpts.operator === 'eq' && !(val === targetVal)) return false;
+                }
+                return true;
+            });
+        }
+
         return result;
-    }, [accounts, sortConfig, oweMap, searchTerm]);
+    }, [accounts, sortConfig, oweMap, searchTerm, listFilter, columnFilters]);
 
     // Pagination
     const totalPages = Math.ceil(filteredAccounts.length / pageSize);
@@ -828,303 +977,298 @@ const Accounts = () => {
             <PageContentShell
                 header={(
                     <PageHeader
-                        title="Accounts"
-                        breadcrumbs={['Accounts', 'List']}
+                        title="Account Overview"
+                        breadcrumbs={['Accounts', 'Overview']}
                     />
                 )}
+                contentClassName="p-0 lg:p-0"
+                cardClassName="border-none shadow-none rounded-none overflow-visible"
             >
+                {/* Summary Component Box */}
+                <div className="px-5 pt-5 pb-0 print:hidden relative z-10">
+                    <div className="bg-[#fafafc] border border-gray-100 rounded-[12px] px-6 py-5 shadow-sm">
 
-                {/* Toolbar */}
-                <div className="p-4 flex flex-row items-center justify-between gap-4 border-b border-gray-50 relative print:hidden min-h-[74px]">
-                    <div className="relative hidden xl:block w-64">
-                        <Search size={18} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                        {/* Metrics Row */}
+                        <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
+                            <SummaryItem 
+                                title="Bank Balance" 
+                                amount={bankBalance} 
+                                icon={Landmark} 
+                                colorClass="text-emerald-600" 
+                                bgClass="bg-emerald-50" 
+                                currency={preferences.currency}
+                            />
+                            <SummaryItem 
+                                title="Card Balance" 
+                                amount={cardBalance} 
+                                icon={CreditCard} 
+                                colorClass="text-purple-600" 
+                                bgClass="bg-purple-50"
+                                currency={preferences.currency}
+                            />
+                            <SummaryItem 
+                                title="Cash in Hand" 
+                                amount={cashBalance} 
+                                icon={Banknote} 
+                                colorClass="text-gray-600" 
+                                bgClass="bg-gray-100"
+                                currency={preferences.currency}
+                            />
+                        </div>
+
+                        {/* Chart Toggle */}
+                        <div className="mt-4 border-t border-gray-50 flex justify-between items-center">
+                            <button 
+                                onClick={() => setChartVisible(!chartVisible)}
+                                className="flex items-center gap-1.5 text-[12px] font-semibold text-primary hover:text-primary/80 transition-colors"
+                            >
+                                <TrendingUp size={14} />
+                                {chartVisible ? 'Hide Chart' : 'Show Chart'}
+                                {chartVisible ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                            <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold">
+                                <Calendar size={13} />
+                                <span>Last 30 days</span>
+                            </div>
+                        </div>
+
+                        {/* Chart Section */}
+                        {chartVisible && (
+                            <div className="h-[220px] w-full mt-6 transition-all">
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <LineChart data={chartData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                        <XAxis 
+                                            dataKey="date" 
+                                            axisLine={{ stroke: '#f3f4f6' }} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 500 }}
+                                            dy={8}
+                                        />
+                                        <YAxis 
+                                            axisLine={false} 
+                                            tickLine={false} 
+                                            tick={{ fill: '#9CA3AF', fontSize: 10, fontWeight: 500 }}
+                                            tickFormatter={(val) => {
+                                                if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                                if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                return val;
+                                            }}
+                                        />
+                                        <Tooltip content={<CustomTooltip currency={preferences.currency} />} />
+                                        <Line type="monotone" name="Bank Balance" dataKey="bank" stroke="#10b981" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#10b981' }} />
+                                        <Line type="monotone" name="Card Balance" dataKey="card" stroke="#8b5cf6" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#8b5cf6' }} />
+                                        <Line type="monotone" name="Cash in Hand" dataKey="cash" stroke="#6b7280" strokeWidth={2} dot={false} activeDot={{ r: 4, strokeWidth: 0, fill: '#6b7280' }} />
+                                    </LineChart>
+                                </ResponsiveContainer>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                                {/* Custom List Header */}
+                <div className="px-5 pb-3 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between print:hidden gap-3 border-b border-gray-50">
+                    <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0">
+                        <div className="relative min-w-[160px]">
+                            <CustomSelect 
+                                value={listFilter}
+                                onChange={(e) => setListFilter(e.target.value)}
+                                className="text-[17px] font-bold text-gray-900 hover:opacity-80 transition-opacity whitespace-nowrap"
+                            >
+                                <option value="All Accounts">All Accounts</option>
+                                <option value="Active Accounts">Active Accounts</option>
+                                <option value="Inactive Accounts">Inactive Accounts</option>
+                            </CustomSelect>
+                        </div>
+                        <div className="relative min-w-[140px]">
+                            <CustomSelect 
+                                value={groupBy}
+                                onChange={(e) => setGroupBy(e.target.value)}
+                                className="text-xs font-semibold text-gray-700 bg-white"
+                            >
+                                <option value="none">No Grouping</option>
+                                <option value="type">Group by Type</option>
+                                <option value="subtype">Group by Subtype</option>
+                            </CustomSelect>
+                        </div>
+                        <button
+                            onClick={() => setDataRefreshTick(t => t + 1)}
+                            className="w-8 h-8 flex items-center justify-center rounded-md border transition-all active:scale-95 shadow-sm bg-white border-gray-200 text-gray-600 hover:bg-gray-50 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/20 shrink-0"
+                            title="Refresh Records"
+                        >
+                            <RefreshCcw size={15} strokeWidth={2.5} className={cn(loading && "animate-spin text-primary")} />
+                        </button>
+                        <button
+                            onClick={handleCreateAccount}
+                            className="w-8 h-8 flex items-center justify-center rounded-md border transition-all active:scale-95 shadow-sm bg-primary border-primary text-white hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-primary/20 shrink-0"
+                            title="Add New Account"
+                        >
+                            <Plus size={16} strokeWidth={2.5} />
+                        </button>
+                    </div>
+
+                    <div className="relative group w-full sm:w-64 shrink-0">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
                         <input
                             type="text"
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             placeholder="Search accounts..."
-                            className="w-full pl-10 pr-4 py-2 bg-[#f1f3f9] border border-gray-100 rounded-xl text-[13px] font-medium text-slate-700 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                            className="w-full pl-8 pr-3 py-1.5 bg-[#f1f3f9] border border-transparent rounded-lg text-xs font-medium placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all"
                         />
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-1 xl:hidden">
-                        <div className="relative group w-full max-w-sm">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search accounts..."
-                                className="w-full pl-10 pr-4 py-2.5 bg-[#f1f3f9] border border-transparent rounded-xl text-xs font-medium placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-3 justify-end">
-                        {/* Create Button */}
-                        <button
-                            onClick={handleCreateAccount}
-                            className="w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-                            title="Add New Account"
-                        >
-                            <Plus size={20} strokeWidth={2.5} />
-                        </button>
                     </div>
                 </div>
 
-
-
-                {!isDesktopView && (
-                    <>
-                        <div className="relative flex-1 p-4 print:hidden overflow-y-auto min-h-0 no-scrollbar" aria-busy={loading}>
-                            <div className="relative min-h-full">
-                                {showInitialLoader ? (
-                                    <div className="py-12 flex items-center justify-center">
-                                        <Loader2 size={26} className="text-gray-500 animate-spin" />
-                                    </div>
-                                ) : paginatedAccounts.length > 0 ? (
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {paginatedAccounts.map((account, index) => {
-                                            const syntheticId = (currentPage - 1) * pageSize + index + 1;
-                                            const hasAccountNumber = Boolean(String(account.accountNumber || '').trim());
-                                            const hasIfsc = Boolean(String(account.ifsc || '').trim());
-                                            const hasSwiftCode = Boolean(String(account.swiftCode || '').trim());
-                                            const hasBankBranchName = Boolean(String(account.bankBranchName || '').trim());
-                                            const hasDescription = Boolean(String(account.description || '').trim());
-                                            const openingBalanceDisplay = formatCurrency(getDisplayBalance(account), account.baseCurrency);
-                                            const oweValue = getAccountOweValue(account);
-                                            const closingBalance = getDisplayClosingBalance(account);
-                                            return (
-                                                <div key={account.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3 accounts-tablet-card">
-                                                    <div className="flex items-start justify-between gap-3 border-b border-gray-50 pb-2">
-                                                        <div>
-                                                            <div className="flex items-center gap-2 text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">
-                                                                <span className="font-mono">{syntheticId}</span>
-                                                                <span>Bank Name</span>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => openSettlementModal(account)}
-                                                                className="text-sm font-bold text-gray-800 hover:text-primary transition-colors text-left"
-                                                            >
-                                                                {account.name || account.bankName}
-                                                            </button>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Opening Balance</div>
-                                                            <div className="text-sm font-bold text-emerald-600 tabular-nums whitespace-nowrap">
-                                                                {openingBalanceDisplay}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-x-4 gap-y-3 accounts-tablet-card-grid">
-                                                        <MobileAccountField
-                                                            label="Type"
-                                                            value={account.typeLabel || '-'}
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Subtype"
-                                                            value={account.subtypeLabel || '-'}
-                                                            align="right"
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Date"
-                                                            value={formatDate(account.openingBalanceDate)}
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Opening Balance"
-                                                            value={openingBalanceDisplay}
-                                                            align="right"
-                                                            valueClassName="font-bold text-emerald-600 tabular-nums whitespace-nowrap"
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Net Balance"
-                                                            value={oweValue === 0 ? '-' : `${oweValue > 0 ? '+' : '-'}${formatCurrency(Math.abs(oweValue), account.baseCurrency)}`}
-                                                            valueClassName={cn(
-                                                                oweValue === 0
-                                                                    ? "font-medium text-gray-400"
-                                                                    : cn(
-                                                                        "font-bold tabular-nums whitespace-nowrap",
-                                                                        oweValue > 0 ? "text-emerald-600" : "text-rose-600"
-                                                                    )
-                                                            )}
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Closing Balance"
-                                                            value={formatCurrency(closingBalance, account.baseCurrency)}
-                                                            align="right"
-                                                            valueClassName={cn(
-                                                                "font-bold tabular-nums whitespace-nowrap",
-                                                                closingBalance > 0 ? "text-emerald-600" : closingBalance < 0 ? "text-rose-600" : "text-gray-600"
-                                                            )}
-                                                        />
-                                                        {hasDescription && (
-                                                            <MobileAccountField
-                                                                label="Description"
-                                                                value={account.description}
-                                                                colSpan={2}
-                                                            />
-                                                        )}
-                                                        <MobileAccountField
-                                                            label="Status"
-                                                            value={(
-                                                                <button
-                                                                    onClick={() => handleToggleStatus(account.id, account.isActive)}
-                                                                    className={cn(
-                                                                        "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all hover:opacity-80 cursor-pointer",
-                                                                        (account.status === 2 || account.status === 'inactive')
-                                                                            ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                                            : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                                                    )}
-                                                                >
-                                                                    {(account.status === 2 || account.status === 'inactive') ? 'INACTIVE' : 'ACTIVE'}
-                                                                </button>
-                                                            )}
-                                                        />
-                                                        <MobileAccountField
-                                                            label="Created By"
-                                                            value={account.createdByDisplayName || '-'}
-                                                            align="right"
-                                                        />
-                                                        {(hasAccountNumber || hasIfsc) && (
-                                                            <>
-                                                                {hasAccountNumber ? (
-                                                                    <MobileAccountField
-                                                                        label="Account No"
-                                                                        value={account.accountNumber}
-                                                                        valueClassName="tabular-nums break-all"
-                                                                    />
-                                                                ) : <div aria-hidden="true" />}
-                                                                {hasIfsc ? (
-                                                                    <MobileAccountField
-                                                                        label="IFSC Code"
-                                                                        value={account.ifsc}
-                                                                        align="right"
-                                                                    />
-                                                                ) : <div aria-hidden="true" />}
-                                                            </>
-                                                        )}
-                                                        {isAssetBankAccount(account) && (
-                                                            <>
-                                                                {(hasSwiftCode || hasBankBranchName) && (
-                                                                    <>
-                                                                        {hasSwiftCode ? (
-                                                                            <MobileAccountField
-                                                                                label="Swift Code"
-                                                                                value={account.swiftCode}
-                                                                            />
-                                                                        ) : <div aria-hidden="true" />}
-                                                                        {hasBankBranchName ? (
-                                                                            <MobileAccountField
-                                                                                label="Branch Name"
-                                                                                value={account.bankBranchName}
-                                                                                align="right"
-                                                                            />
-                                                                        ) : <div aria-hidden="true" />}
-                                                                    </>
-                                                                )}
-                                                            </>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="flex items-center gap-2 pt-2 border-t border-gray-50">
-                                                        <button
-                                                            onClick={() => {
-                                                                navigate('/accounts/create', { state: { account } });
-                                                            }}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 font-bold text-[10px] hover:bg-indigo-100 transition-colors"
-                                                        >
-                                                            <Edit size={12} />
-                                                            Edit
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleDelete(account)}
-                                                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-rose-50 text-rose-600 font-bold text-[10px] hover:bg-rose-100 transition-colors"
-                                                        >
-                                                            <Trash2 size={12} />
-                                                            Delete
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    hasFetchedOnce && <div className="py-12 text-center text-gray-400 font-medium text-sm">
-                                        No accounts found.
-                                    </div>
-                                )}
-                                {showOverlayLoader && <LoadingOverlay label="Loading accounts..." />}
-                            </div>
-                        </div>
-                        <div className="xl:hidden border-t border-gray-100 p-2 print:hidden">
-                            <MobilePagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                onPageChange={setCurrentPage}
-                            />
-                        </div>
-                    </>
-                )}
-
                 {/* Table View */}
-                {(isDesktopView || typeof window === 'undefined') && (
-                    <div className="relative print:block flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar accounts-laptop-table-scroll" aria-busy={loading}>
-                        <table className="w-full text-left border-collapse table-fixed accounts-laptop-table">
-                            <thead className="sticky top-0 z-10 bg-white">
-                                <tr className="bg-gray-50/50 border-y border-gray-200">
-                                    {(() => {
-                                        const cols = [
-                                            { label: 'Name', key: 'name', width: 'w-[18%]', align: 'text-left' },
-                                            { label: 'Subtype', key: 'subtypeLabel', width: 'w-[11%]', align: 'text-left' },
-                                            { label: 'Date', key: 'openingBalanceDate', width: 'w-[10%]', align: 'text-left' },
-                                            { label: 'Opening Balance', key: 'openingBalance', width: 'w-[15%]', align: 'text-right' },
-                                            { label: 'Closing Balance', key: 'closingBalance', width: 'w-[15%]', align: 'text-right' },
-                                            { label: 'Status', key: 'isActive', width: 'w-[10%]', align: 'text-left' },
-                                            { label: 'Created By', key: 'createdByDisplayName', width: 'w-[11%]', align: 'text-left' }
-                                        ];
-                                        return cols.map((col) => (
-                                            <th
-                                                key={col.label}
-                                                className={cn(
-                                                    `${col.width} sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm px-4 py-2 ${col.align} text-[11px] font-bold text-gray-700 uppercase tracking-wider cursor-pointer hover:bg-gray-100/50 group whitespace-nowrap`,
-                                                    col.key === 'subtypeLabel' && "pr-4",
-                                                    (col.key === 'openingBalance' || col.key === 'closingBalance') && "accounts-laptop-balance-header",
-                                                    col.key === 'openingBalanceDate' && "pl-4",
-                                                    col.key === 'openingBalance' && "pl-1",
-                                                    col.key === 'closingBalance' && "pr-8",
-                                                    col.key === 'isActive' && "pl-8"
-                                                )}
-                                                onClick={() => handleSort(col.key)}
-                                            >
+                {(isDesktopView || typeof window === 'undefined') && (() => {
+                    const allCols = [
+                        { label: 'Name', key: 'name', width: 'w-[18%]', align: 'text-left' },
+                        { label: 'Subtype', key: 'subtypeLabel', width: 'w-[11%]', align: 'text-left' },
+                        { label: 'Date', key: 'openingBalanceDate', width: 'w-[10%]', align: 'text-left' },
+                        { label: 'Opening Balance', key: 'openingBalance', width: 'w-[15%]', align: 'text-right' },
+                        { label: 'Closing Balance', key: 'closingBalance', width: 'w-[15%]', align: 'text-right' },
+                        { label: 'Status', key: 'isActive', width: 'w-[10%]', align: 'text-left' },
+                        { label: 'Created By', key: 'createdByDisplayName', width: 'w-[11%]', align: 'text-left' }
+                    ];
+                    
+                    const visibleCols = [...allCols.filter(c => frozenColumns.has(c.key)), ...allCols.filter(c => !frozenColumns.has(c.key))]
+                        .filter(c => !hiddenColumns.has(c.key));
+                    
+                    const tableColSpan = visibleCols.length + 1; // +1 for Action
+
+                    let groupedAccounts = { 'All': paginatedAccounts };
+                    if (groupBy !== 'none' && paginatedAccounts.length > 0) {
+                        groupedAccounts = {};
+                        paginatedAccounts.forEach(acc => {
+                            const key = groupBy === 'type' ? (acc.typeLabel || 'Unknown Type') : (acc.subtypeLabel || 'Unknown Subtype');
+                            if (!groupedAccounts[key]) groupedAccounts[key] = [];
+                            groupedAccounts[key].push(acc);
+                        });
+                    }
+
+                    return (
+                        <div className="relative print:block flex-1 min-h-0 overflow-x-auto overflow-y-auto no-scrollbar accounts-laptop-table-scroll px-5 pb-8" aria-busy={loading}>
+                            <div className="border border-[#e5e7eb] rounded-lg overflow-hidden bg-white shadow-sm">
+                        <table className="w-full text-left border-collapse table-fixed accounts-laptop-table divide-y divide-[#e5e7eb]">
+                                                                                    <thead className="sticky top-0 z-10 bg-white">
+                                <tr className="bg-[#f9fafb] border-b border-[#e5e7eb]">
+                                    
+                                    {visibleCols.map((col) => (
+                                        <th
+                                            key={col.label}
+                                            className={cn(
+                                                `${col.width} sticky top-0 z-10 bg-[#f9fafb]/95 backdrop-blur-sm px-2 py-1.5 ${col.align} text-[11px] font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap relative border-r border-[#e5e7eb] last:border-r-0`,
+                                                (col.key === 'openingBalance' || col.key === 'closingBalance') && "accounts-laptop-balance-header",
+                                                frozenColumns.has(col.key) && "sticky left-0 shadow-[2px_0_4px_-1px_rgba(0,0,0,0.05)] z-20"
+                                            )}
+                                        >
+                                                                                        <div className="flex items-center gap-1 group w-full relative">
                                                 <div className={cn(
                                                     "flex items-center gap-1",
                                                     col.align === 'text-right' ? "justify-end" : col.align === 'text-center' ? "justify-center" : "",
                                                     (col.key === 'openingBalance' || col.key === 'closingBalance') && "accounts-laptop-sort-header"
                                                 )}>
                                                     <span className={cn(
-                                                        (col.key === 'openingBalance' || col.key === 'closingBalance') && "accounts-laptop-balance-label"
-                                                    )}>
+                                                        "cursor-pointer hover:text-gray-900 transition-colors",
+                                                        col.key === 'subtypeLabel' && "pl-1",
+                                                    )} onClick={() => handleSort(col.key)}>
                                                         {col.label}
                                                     </span>
-                                                    <ArrowUpDown
-                                                        size={10}
-                                                        className={cn(
-                                                            "shrink-0 text-gray-400 group-hover:text-gray-600 transition-opacity",
-                                                            sortConfig.key === col.key ? "opacity-100" : "opacity-50 group-hover:opacity-100"
-                                                        )}
-                                                    />
                                                 </div>
-                                            </th>
-                                        ));
-                                    })()}
-                                    <th className="w-[7%] sticky top-0 z-10 bg-gray-50/95 backdrop-blur-sm px-4 py-2 pr-6 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap">
-                                        <div className="ml-auto w-12 text-left">Action</div>
+                                                <button 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setActiveColumnMenu(activeColumnMenu === col.key ? null : col.key);
+                                                    }}
+                                                    className="popover-trigger p-1 rounded-sm text-gray-400 hover:text-gray-700 hover:bg-gray-200/50 transition-all focus:outline-none shrink-0"
+                                                >
+                                                    <ChevronDown size={13} strokeWidth={2.5} />
+                                                </button>
+
+                                                {}
+                                                {activeColumnMenu === col.key && (
+                                                    <React.Fragment>
+                                                        
+                                                        <div className="popover-container absolute top-[calc(100%+4px)] right-0 w-40 bg-white border border-gray-200 rounded-lg shadow-[0_10px_30px_rgba(0,0,0,0.15)] z-[101] py-1 text-[11px] font-semibold text-gray-600 normal-case flex flex-col">
+                                                            <button onClick={() => { handleSort(col.key); setActiveColumnMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2.5 transition-colors">
+                                                                <ArrowUpDown size={14} className="text-gray-400" /> 
+                                                                <span className="font-semibold">Sort Ascending</span>
+                                                            </button>
+                                                            <button onClick={() => { handleSort(col.key); setActiveColumnMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2.5 transition-colors">
+                                                                <ArrowUpDown size={14} className="text-gray-400" /> 
+                                                                <span className="font-semibold">Sort Descending</span>
+                                                            </button>
+                                                            <div className="h-px bg-gray-100 my-1"></div>
+                                                            <button onClick={() => { setFrozenColumns(prev => { const n = new Set(prev); if(n.has(col.key)) n.delete(col.key); else n.add(col.key); return n; }); setActiveColumnMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2.5 transition-colors">
+                                                                <Pin size={14} className="text-gray-400" /> 
+                                                                <span className="font-semibold">{frozenColumns.has(col.key) ? 'Unfreeze column' : 'Freeze column'}</span>
+                                                            </button>
+                                                            <button onClick={() => { setHiddenColumns(prev => new Set([...prev, col.key])); setActiveColumnMenu(null); }} className="w-full text-left px-3 py-1.5 hover:bg-gray-50 flex items-center gap-2.5 transition-colors">
+                                                                <EyeOff size={14} className="text-gray-400" /> 
+                                                                <span className="font-semibold">Hide column</span>
+                                                            </button>
+                                                            
+                                                            {(col.key === 'openingBalance' || col.key === 'closingBalance') && (
+                                                                <>
+                                                                <div className="h-px bg-gray-100 my-1"></div>
+                                                                <div className="px-3 pb-2 pt-1" onClick={(e) => e.stopPropagation()}>
+                                                                    <div className="text-[10px] uppercase tracking-wider font-bold text-gray-400 mb-2 mt-1">Filter Amount</div>
+                                                                    <div className="flex flex-col gap-2">
+                                                                        <select 
+                                                                            defaultValue={columnFilters[col.key]?.operator || 'gt'}
+                                                                            id={`filter-op-${col.key}`}
+                                                                            className="w-full border border-gray-200 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-primary/50 bg-white"
+                                                                        >
+                                                                            <option value="gt">Greater than</option>
+                                                                            <option value="lt">Less than</option>
+                                                                            <option value="eq">Equal to</option>
+                                                                        </select>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            id={`filter-val-${col.key}`}
+                                                                            defaultValue={columnFilters[col.key]?.value || 1000} 
+                                                                            className="w-full border border-gray-200 rounded px-1.5 py-1 text-[11px] focus:outline-none focus:border-primary/50 bg-white"
+                                                                        />
+                                                                        <button 
+                                                                            className="w-full mt-0.5 bg-gray-50 border border-gray-200 hover:bg-gray-100 text-gray-700 py-1 rounded text-[11px] font-bold transition-colors"
+                                                                            onClick={(e) => {
+                                                                                const op = document.getElementById(`filter-op-${col.key}`).value;
+                                                                                const val = document.getElementById(`filter-val-${col.key}`).value;
+                                                                                setColumnFilters(prev => ({ ...prev, [col.key]: { operator: op, value: Number(val) } }));
+                                                                                setActiveColumnMenu(null);
+                                                                            }}
+                                                                        >
+                                                                            Apply Filter
+                                                                        </button>
+                                                                        {columnFilters[col.key] && (
+                                                                            <button 
+                                                                                className="w-full text-rose-500 hover:text-rose-600 py-1 rounded text-[10px] font-bold"
+                                                                                onClick={() => {
+                                                                                    const next = { ...columnFilters };
+                                                                                    delete next[col.key];
+                                                                                    setColumnFilters(next);
+                                                                                    setActiveColumnMenu(null);
+                                                                                }}
+                                                                            >
+                                                                                Clear Filter
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </React.Fragment>
+                                                )}
+                                            </div>
+                                        </th>
+                                    ))}
+                                    <th className="w-[7%] sticky top-0 z-10 bg-[#f9fafb]/95 backdrop-blur-sm px-2 py-1.5 pr-4 text-[11px] font-semibold text-gray-700 uppercase tracking-wider whitespace-nowrap border-l border-[#e5e7eb]">
+                                        <div className="xl:ml-auto w-12 text-center xl:text-left">Action</div>
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-100">
+                                                                                    <tbody className="divide-y divide-[#e5e7eb]">
                                 {showInitialLoader ? (
                                     <tr>
                                         <td colSpan={tableColSpan} className="px-6 py-8">
@@ -1133,144 +1277,137 @@ const Accounts = () => {
                                             </div>
                                         </td>
                                     </tr>
-                                ) : hasFetchedOnce && filteredAccounts.length === 0 ? (
+                                ) : hasFetchedOnce && Object.keys(groupedAccounts).length === 0 ? (
                                     <tr><td colSpan={tableColSpan} className="px-6 py-8 text-center text-sm text-gray-500">No accounts found.</td></tr>
                                 ) : (
-                                    paginatedAccounts.map((account) => {
-                                        const showExpand = isAssetBankAccount(account);
-                                        const isExpanded = !!expandedRows[account.id];
-                                        return (
-                                            <React.Fragment key={account.id}>
-                                                <tr className="group hover:bg-gray-50/50">
-                                                    <td className="px-4 py-1.5 text-xs font-bold text-gray-800">
-                                                        <div className="flex items-center gap-2 min-w-0">
-                                                            {showExpand ? (
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={() => toggleExpandedRow(account.id)}
-                                                                    className="text-gray-400 hover:text-gray-700 transition-colors shrink-0"
-                                                                    aria-label={isExpanded ? "Collapse details" : "Expand details"}
-                                                                >
-                                                                    {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                                </button>
-                                                            ) : (
-                                                                <span className="w-[14px] shrink-0" />
-                                                            )}
-                                                            <AccountNameTooltip
-                                                                name={account.name}
-                                                                className="flex-1 min-w-0"
-                                                                textClassName="text-xs font-bold text-gray-800 text-left cursor-default"
-                                                            />
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pr-4 whitespace-nowrap">
-                                                        <span className="text-xs font-medium text-gray-600">
-                                                            {account.subtypeLabel || '-'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pl-4 whitespace-nowrap text-left text-xs text-gray-600 font-medium">
-                                                        {formatDate(account.openingBalanceDate)}
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pl-1 text-xs font-black tabular-nums text-right whitespace-nowrap">
-                                                        <span className={`text-xs font-black ${getDisplayBalance(account) < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                                                            {account.baseCurrency === 'INR'
-                                                                ? formatCurrency(getDisplayBalance(account), account.baseCurrency).replace('INR', '').trim()
-                                                                : formatCurrency(getDisplayBalance(account), account.baseCurrency)
-                                                            }
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pr-8 text-xs font-black tabular-nums text-right whitespace-nowrap">
-                                                        <span className={cn(
-                                                            "text-xs font-black",
-                                                            getDisplayClosingBalance(account) > 0 ? "text-emerald-600" : getDisplayClosingBalance(account) < 0 ? "text-rose-600" : "text-gray-600"
-                                                        )}>
-                                                            {formatCurrency(getDisplayClosingBalance(account), account.baseCurrency)}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pl-8 text-left">
-                                                        <button
-                                                            onClick={() => handleToggleStatus(account.id, account.isActive)}
-                                                            className={cn(
-                                                                "inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide transition-all hover:opacity-80 cursor-pointer",
-                                                                (account.status === 2 || account.status === 'inactive')
-                                                                    ? "bg-gray-100 text-gray-500 hover:bg-gray-200"
-                                                                    : "bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                                            )}
-                                                        >
-                                                            {(account.status === 2 || account.status === 'inactive') ? 'Inactive' : 'Active'}
-                                                        </button>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 whitespace-nowrap">
-                                                        <span className="text-xs font-medium text-gray-500">
-                                                            {account.createdByDisplayName || '-'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-1.5 pr-6 print:hidden">
-                                                        <div className="ml-auto flex w-12 items-center gap-0.5">
-                                                            <button
-                                                                onClick={() => {
-                                                                    navigate('/accounts/create', { state: { account } });
-                                                                }}
-                                                                className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                                                                title="Edit"
-                                                            >
-                                                                <Edit size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => handleDelete(account)}
-                                                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                                                title="Delete"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        </div>
+                                    Object.entries(groupedAccounts).map(([groupKey, accounts]) => (
+                                        <React.Fragment key={groupKey}>
+                                            {groupBy !== 'none' && (
+                                                <tr className="bg-gray-100/50">
+                                                    <td colSpan={tableColSpan} className="px-3 py-1 text-xs font-bold text-gray-600 bg-gray-50 border-y border-[#e5e7eb]">
+                                                        {groupKey} <span className="text-gray-400 font-normal ml-1">({accounts.length})</span>
                                                     </td>
                                                 </tr>
-                                                {showExpand && isExpanded && (
-                                                    <tr>
-                                                        <td colSpan={tableColSpan} className="px-4 py-2">
-                                                            <div className="ml-6 inline-flex max-w-full animate-in fade-in duration-200 align-middle">
-                                                                <div className="inline-flex w-fit min-w-[28.5rem] max-w-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-                                                                    <div className="flex items-center justify-between gap-3 border-b border-gray-200 bg-gray-100 px-3 py-2">
-                                                                        <h4 className="text-left text-[10px] font-extrabold uppercase tracking-widest text-gray-700">
-                                                                            Bank Details
-                                                                        </h4>
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() => handleCopyBankDetails(account)}
-                                                                            className="inline-flex items-center rounded-md p-1 text-gray-500 transition-all hover:bg-gray-100 hover:text-gray-900"
-                                                                            aria-label={copiedBankDetailsId === account.id ? 'Copied' : 'Copy bank details'}
-                                                                            title={copiedBankDetailsId === account.id ? 'Copied' : 'Copy bank details'}
-                                                                        >
-                                                                            {copiedBankDetailsId === account.id ? <Check size={13} /> : <Copy size={13} />}
-                                                                        </button>
-                                                                    </div>
-                                                                    <div className="px-3 pt-0 pb-0 text-left text-xs leading-5">
-                                                                        {getBankDetailItems(account).map((item) => (
-                                                                            <div key={item.label} className="max-w-full text-gray-700">
-                                                                                <span className="font-medium text-gray-500">
-                                                                                    {item.label}:
-                                                                                </span>
-                                                                                <span className="ml-1 font-medium text-gray-700 break-all">
-                                                                                    {item.value}
-                                                                                </span>
+                                            )}
+                                            {accounts.map((account) => {
+                                                const showExpand = isAssetBankAccount(account);
+                                                return (
+                                                    <tr key={account.id} className="group hover:bg-[#f8fafc] transition-colors">
+
+                                                        {visibleCols.map(col => {
+                                                            const isFrozen = frozenColumns.has(col.key);
+                                                            const tdBaseClass = cn(
+                                                                "px-2 py-1 whitespace-nowrap border-r border-[#e5e7eb]",
+                                                                isFrozen && "sticky left-0 bg-white group-hover:bg-[#f8fafc] z-[1] shadow-[2px_0_4px_-1px_rgba(0,0,0,0.02)] transition-colors"
+                                                            );
+
+                                                            if (col.key === 'name') {
+                                                                return (
+                                                                    <td key="name" className={cn(tdBaseClass, "min-w-0 px-3 overflow-visible relative")}>
+                                                                        <div className="flex items-center gap-2 min-w-0 w-full relative">
+                                                                            <div className="flex items-center justify-center shrink-0 w-4 h-4 text-gray-400">
+                                                                                {account.subtype === 12 || account.subtype === '12' ? <Landmark size={14} strokeWidth={2} /> : 
+                                                                                account.subtype === 22 || account.subtype === '22' || account.subtype === 21 || account.subtype === '21' ? <CreditCard size={14} strokeWidth={2} /> : 
+                                                                                account.type === 20 || account.type === '20' ? <PiggyBank size={14} strokeWidth={2} /> :
+                                                                                account.subtype === 13 || account.subtype === '13' ? <Briefcase size={14} strokeWidth={2} /> :
+                                                                                account.subtype === 11 || account.subtype === '11' ? <Wallet size={14} strokeWidth={2} /> :
+                                                                                account.type === 4 || account.type === '4' ? <Activity size={14} strokeWidth={2} /> :
+                                                                                <Banknote size={14} strokeWidth={2} />}
                                                                             </div>
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
+                                                                            <AccountNameTooltip
+                                                                                name={account.name}
+                                                                                className="flex-1 min-w-0"
+                                                                                textClassName="text-[12px] font-semibold text-gray-800 text-left cursor-default leading-snug"
+                                                                            />
+                                                                            {showExpand && (
+                                                                                <div className="relative shrink-0 flex items-center">
+                                                                                    <button
+                                                                                        onClick={(e) => { e.stopPropagation(); setActiveRowPopover(activeRowPopover?.id === account.id ? null : { id: account.id, anchor: e.currentTarget }); }}
+                                                                                        className="popover-trigger inline-flex items-center justify-center p-1 rounded-sm text-gray-400 hover:bg-gray-200 hover:text-gray-800 transition-colors"
+                                                                                        title="View Bank Details"
+                                                                                    >
+                                                                                        <ArrowRight size={13} />
+                                                                                    </button>
+                                                                                                                                                                                                                                                            {activeRowPopover?.id === account.id && (
+                                                                                        <React.Fragment>
+                                                                                            
+                                                                                                                                                                                    {createPortal(
+                                                                                            <div className="fixed z-[9999] pointer-events-auto shadow-[0_4px_24px_rgba(0,0,0,0.15)] bg-white rounded-lg border border-[#e5e7eb] w-[320px] flex flex-col" 
+                                                                                                style={{
+                                                                                                    top: Math.min(activeRowPopover.anchor.getBoundingClientRect().top, window.innerHeight - 300),
+                                                                                                    left: activeRowPopover.anchor.getBoundingClientRect().right + 8
+                                                                                                }}
+                                                                                                onClick={(e)=>e.stopPropagation()}>
+                                                                                                <div className="bg-[#f9fafb] px-3 py-2 border-b border-[#e5e7eb] flex items-center justify-between rounded-t-lg">
+                                                                                                    <span className="text-[12px] font-bold text-gray-800">
+                                                                                                        Bank Details
+                                                                                                    </span>
+                                                                                                    <button onClick={() => handleCopyBankDetails(account)} className="text-gray-500 hover:text-gray-900 transition-colors p-0.5" title="Copy Details">
+                                                                                                        {copiedBankDetailsId === account.id ? <Check size={13} className="text-emerald-600" /> : <Copy size={13} />}
+                                                                                                    </button>
+                                                                                                </div>
+                                                                                                <div className="max-h-[300px] overflow-y-auto no-scrollbar bg-white rounded-b-lg">
+                                                                                                    <table className="w-full text-left text-[11px]">
+                                                                                                        <tbody className="divide-y divide-[#e5e7eb]">
+                                                                                                            {getBankDetailItems(account).map(item => (
+                                                                                                                <tr key={item.label} className="hover:bg-gray-50/50 transition-colors">
+                                                                                                                    <td className="px-3 py-1.5 text-gray-500 font-medium w-[40%] align-top">{item.label}</td>
+                                                                                                                    <td className="px-3 py-1.5 text-gray-900 font-medium break-all align-top border-l border-[#e5e7eb]">{item.value || '-'}</td>
+                                                                                                                </tr>
+                                                                                                            ))}
+                                                                                                        </tbody>
+                                                                                                    </table>
+                                                                                                </div>
+                                                                                            </div>,
+                                                                                            document.body
+                                                                                        )}
+                                                                                        </React.Fragment>
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </td>
+                                                                );
+                                                            }
+                                                            if (col.key === 'subtypeLabel') return <td key="subtype" className={cn(tdBaseClass, "text-[11px] font-medium text-gray-500 overflow-hidden text-ellipsis px-3")}><span className="truncate block max-w-[140px]">{account.subtypeLabel || '-'}</span></td>;
+                                                            if (col.key === 'openingBalanceDate') return <td key="date" className={cn(tdBaseClass, "text-[11px] font-medium text-gray-500 overflow-hidden text-ellipsis pl-3")}>{formatDate(account.openingBalanceDate)}</td>;
+                                                            if (col.key === 'openingBalance') return <td key="open" className={cn(tdBaseClass, "text-[12px] font-semibold tabular-nums text-right overflow-hidden", getDisplayBalance(account) < 0 ? 'text-rose-600' : 'text-emerald-700')}>{formatCurrency(getDisplayBalance(account), account.baseCurrency)}</td>;
+                                                            if (col.key === 'closingBalance') return <td key="close" className={cn(tdBaseClass, "text-[12px] font-semibold tabular-nums text-right overflow-hidden pr-6", getDisplayClosingBalance(account) < 0 ? 'text-rose-600' : 'text-emerald-700')}>{formatCurrency(getDisplayClosingBalance(account), account.baseCurrency)}</td>;
+                                                            if (col.key === 'isActive') return (
+                                                                <td key="status" className={cn(tdBaseClass, "pl-6 text-left overflow-hidden text-ellipsis")}>
+                                                                    <button
+                                                                        onClick={() => handleToggleStatus(account.id, account.isActive)}
+                                                                        className={cn(
+                                                                            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide transition-all hover:opacity-80 cursor-pointer text-left",
+                                                                            (account.status === 2 || account.status === 'inactive') ? "bg-gray-100 text-gray-500" : "bg-blue-50/50 text-blue-600"
+                                                                        )}
+                                                                    >
+                                                                        {(account.status === 2 || account.status === 'inactive') ? 'Inactive' : 'Active'}
+                                                                    </button>
+                                                                </td>
+                                                            );
+                                                            if (col.key === 'createdByDisplayName') return <td key="creator" className={cn(tdBaseClass, "text-[11px] font-medium text-gray-400 truncate max-w-[120px] overflow-hidden text-ellipsis")}>{account.createdByDisplayName || '-'}</td>;
+                                                            return <td key={col.key} className={tdBaseClass}>-</td>;
+                                                        })}
+                                                        <td className="px-2 py-1 pr-4 whitespace-nowrap xl:text-right print:hidden text-center">
+                                                            <div className="inline-flex items-center gap-1.5">
+                                                                <button onClick={() => navigate('/accounts/create', { state: { account } })} className="p-1 text-gray-400 hover:text-indigo-600 transition-colors" title="Edit"><Edit size={14} /></button>
+                                                                <button onClick={() => handleDelete(account)} className="p-1 text-gray-400 hover:text-rose-600 transition-colors" title="Delete"><Trash2 size={14} /></button>
                                                             </div>
                                                         </td>
                                                     </tr>
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })
+                                                );
+                                            })}
+                                        </React.Fragment>
+                                    ))
                                 )}
                             </tbody>
                         </table>
+                        </div>
                         {showOverlayLoader && <LoadingOverlay label="Loading accounts..." />}
                     </div>
-                )}
+                    );
+                })()}
 
                 {settlementModal.open && (
                     <div className="fixed inset-0 z-[120] bg-black/25 flex items-center justify-center p-4" onClick={closeSettlementModal}>
@@ -1336,42 +1473,26 @@ const Accounts = () => {
                     </div>
                 )}
 
-                {/* Pagination */}
-                <div className="hidden lg:flex items-center justify-between px-4 py-2 border-t border-gray-100 flex-none bg-white gap-3 sm:gap-0 print:hidden relative z-20 rounded-b-2xl">
-                    <div className="text-[11px] text-gray-500 font-medium">
-                        Showing <span className="font-bold text-gray-700">{filteredAccounts.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-gray-700">{Math.min(currentPage * pageSize, filteredAccounts.length)}</span> of <span className="font-bold text-gray-700">{filteredAccounts.length}</span> results
-                    </div>
-                    <div className="flex items-center space-x-1">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Previous
-                        </button>
-                        <div className="hidden sm:flex items-center space-x-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={cn(
-                                        "w-6 h-6 flex items-center justify-center rounded-md text-[11px] font-bold transition-all",
-                                        page === currentPage
-                                            ? "bg-gray-100 border border-gray-200 text-gray-900"
-                                            : "text-gray-500 hover:bg-gray-100"
-                                    )}
-                                >
-                                    {page}
-                                </button>
-                            ))}
+                {}
+                <div className="sticky bottom-0 left-0 right-0 border-t border-[#e5e7eb] bg-white text-[12px] text-gray-500 flex items-center px-4 py-2.5 z-50 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.02)] mt-auto shrink-0">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 transition-colors">
+                                <ChevronLeft size={14} />
+                            </button>
+                            <span className="flex items-center gap-1.5">Page <span className="font-bold text-gray-800 border border-gray-200 rounded px-1.5 py-0.5 bg-gray-50 min-w-[20px] text-center">{currentPage}</span> of {Math.max(1, Math.ceil(filteredAccounts.length / pageSize))}</span>
+                            <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredAccounts.length / pageSize)))} disabled={currentPage * pageSize >= filteredAccounts.length} className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded disabled:opacity-50 transition-colors">
+                                <ChevronRight size={14} />
+                            </button>
                         </div>
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages || totalPages === 0}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Next
-                        </button>
+                        <div className="h-4 w-px bg-gray-200 pointer-events-none"></div>
+                        <div>
+                            <span className="font-bold text-gray-800">{pageSize}</span> rows
+                        </div>
+                        <div className="h-4 w-px bg-gray-200 pointer-events-none"></div>
+                        <div>
+                            <span className="font-bold text-gray-800">{filteredAccounts.length}</span> records
+                        </div>
                     </div>
                 </div>
 
