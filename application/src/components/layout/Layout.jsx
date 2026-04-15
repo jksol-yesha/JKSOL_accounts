@@ -6,8 +6,6 @@ import Sidebar from './Sidebar';
 import { SidebarLayoutProvider } from './SidebarLayoutContext';
 import { cn } from '../../utils/cn';
 
-
-
 const ACCOUNTS_CREATE_SCROLL_MODE_EVENT = 'accounts-create-scroll-mode';
 const TRANSACTIONS_CREATE_SCROLL_MODE_EVENT = 'transactions-create-scroll-mode';
 const PARTIES_CREATE_SCROLL_MODE_EVENT = 'parties-create-scroll-mode';
@@ -30,14 +28,6 @@ const getDefaultSidebarMode = () => {
     return window.innerWidth >= 768 && window.innerWidth <= 1024 ? 'collapsed' : 'expanded';
 };
 
-const shouldUseDesktopFooter = (pathname, width, shouldUseWholePageScroll = false) => {
-    if (pathname === '/accounts/create' || isTransactionsCreateRoute(pathname) || isPartiesCreateRoute(pathname)) {
-        return width >= 1280 && !shouldUseWholePageScroll;
-    }
-
-    return width >= 1280;
-};
-
 const Footer = ({ className }) => (
     <footer className={cn("bg-transparent border-t border-slate-200 h-10 px-6 text-center text-[10px] text-slate-400 flex items-center justify-center flex-none no-print print:hidden", className)}>
         <p>© 2026 JKSOL. All rights reserved.</p>
@@ -53,17 +43,12 @@ const Layout = ({ children }) => {
             ? window.innerWidth < 768
             : false
     );
-    const [isDesktopFooter, setIsDesktopFooter] = useState(() =>
-        typeof window !== 'undefined'
-            ? shouldUseDesktopFooter(window.location.pathname, window.innerWidth)
-            : true
-    );
+
     const [createRouteNeedsPageScroll, setCreateRouteNeedsPageScroll] = useState(false);
 
     const [showScrollTop, setShowScrollTop] = useState(false);
     const mainRef = React.useRef(null);
     const location = useLocation();
-
 
     // Check if current page is dashboard
     const isDashboard = location.pathname === '/' || location.pathname === '/dashboard';
@@ -90,7 +75,7 @@ const Layout = ({ children }) => {
         if (typeof window === 'undefined') return undefined;
 
         const handleResize = () => {
-            setIsDesktopFooter(shouldUseDesktopFooter(location.pathname, window.innerWidth, createRouteNeedsPageScroll));
+
             const nextIsMobile = window.innerWidth < 768;
             setIsMobileViewport(nextIsMobile);
 
@@ -105,10 +90,7 @@ const Layout = ({ children }) => {
         return () => window.removeEventListener('resize', handleResize);
     }, [createRouteNeedsPageScroll, location.pathname]);
 
-    useEffect(() => {
-        if (typeof window === 'undefined') return;
-        setIsDesktopFooter(shouldUseDesktopFooter(location.pathname, window.innerWidth, createRouteNeedsPageScroll));
-    }, [createRouteNeedsPageScroll, location.pathname]);
+
 
     useEffect(() => {
         if (typeof window === 'undefined' || isMobileViewport) return;
@@ -143,8 +125,6 @@ const Layout = ({ children }) => {
         return () => window.removeEventListener(scrollModeEventName, handleScrollModeChange);
     }, [location.pathname]);
 
-
-
     // Prevent back navigation
     React.useEffect(() => {
         // Push current state to history stack
@@ -164,7 +144,7 @@ const Layout = ({ children }) => {
 
     useEffect(() => {
         const container = mainRef.current;
-        if (!container || isDesktopFooter) {
+        if (!container) {
             setShowScrollTop(false);
             return undefined;
         }
@@ -176,7 +156,7 @@ const Layout = ({ children }) => {
         updateScrollState();
         container.addEventListener('scroll', updateScrollState, { passive: true });
         return () => container.removeEventListener('scroll', updateScrollState);
-    }, [location.pathname, isDesktopFooter]);
+    }, [location.pathname]);
 
     const scrollToTop = () => {
         const container = mainRef.current;
@@ -211,30 +191,22 @@ const Layout = ({ children }) => {
                 <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out print:w-full print:block print:h-auto print:overflow-visible">
                     <main className={cn(
                         "flex-1 no-scrollbar relative min-h-0 flex flex-col print:h-auto print:overflow-visible print:block print:w-full print:flex-none",
-                        isDesktopFooter && isDashboard ? "overflow-hidden" : "overflow-y-auto"
+                        isDashboard ? "overflow-hidden" : "overflow-y-auto"
                     )} ref={mainRef}>
                         <div className={cn(
                             "w-full flex flex-col print:h-auto print:block print:w-full",
-                            isDesktopFooter
-                                ? "h-full min-h-0 flex-1"
-                                : "min-h-full",
-                            isDesktopFooter && isDashboard && "overflow-hidden"
+                            "h-full min-h-0 flex-1", isDashboard && "overflow-hidden"
                         )}>
                             <div className={cn(
-                                isDesktopFooter ? "flex-1 min-h-0" : "flex-none"
+                                "flex-1 min-h-0"
                             )}>
                                 {children}
                             </div>
 
-                            {!isDesktopFooter && <Footer className="mt-auto" />}
                         </div>
                     </main>
 
-                    {isDesktopFooter && (
-                        <Footer className="sticky bottom-0 z-10" />
-                    )}
-
-                    {!isDesktopFooter && showScrollTop && (
+                    {showScrollTop && (
                         <button
                             type="button"
                             onClick={scrollToTop}
