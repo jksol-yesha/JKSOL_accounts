@@ -48,12 +48,18 @@ export const OrganizationProvider = ({ children }) => {
 
             setOrganizations(list);
 
-            // If no selected org, or selected org not in list, select the one from user profile or first one
-            // (Only on initial load or if selectedOrg is completely lost/invalid)
-            if ((!selectedOrg || !list.find(o => o.id == selectedOrg.id)) && list.length > 0) {
-                // If user has orgId, try to find it
-                const defaultOrg = user.orgId ? list.find(o => o.id == user.orgId) : list[0];
-                const nextOrg = defaultOrg || list[0];
+            const selectedOrgExists = selectedOrg && list.find(o => o.id == selectedOrg.id);
+            const looksLikeProvisionalSelection = selectedOrg && !selectedOrg.name && !selectedOrg.role;
+            const preferredOrg = user?.orgId ? list.find(o => o.id == user.orgId) : null;
+            const hasManualOrgSelection = localStorage.getItem('selectedOrgManual') === '1';
+
+            // If no selected org, or selected org not in list, or the current selection is just an auth
+            // placeholder / non-manual selection that doesn't match the user's current org, prefer the user's org.
+            if (
+                (!selectedOrg || !selectedOrgExists) ||
+                ((looksLikeProvisionalSelection || !hasManualOrgSelection) && preferredOrg && Number(selectedOrg?.id) !== Number(preferredOrg.id))
+            ) {
+                const nextOrg = preferredOrg || list[0];
                 localStorage.setItem('selectedOrg', JSON.stringify(nextOrg));
                 setSelectedOrg(nextOrg);
             } else if (selectedOrg) {
@@ -106,12 +112,14 @@ export const OrganizationProvider = ({ children }) => {
             logo: apiOrg.logo ?? data.logo ?? null
         };
         setOrganizations([...organizations, newOrg]);
+        localStorage.setItem('selectedOrgManual', '1');
         setSelectedOrg(newOrg); // Auto switch
         return newOrg;
     };
 
     const switchOrganization = (org) => {
         // Save to localStorage immediately before reloading
+        localStorage.setItem('selectedOrgManual', '1');
         localStorage.setItem('selectedOrg', JSON.stringify(org));
         setSelectedOrg(org);
         window.location.reload();
@@ -121,6 +129,7 @@ export const OrganizationProvider = ({ children }) => {
         <OrganizationContext.Provider value={{
             organizations,
             selectedOrg,
+            setSelectedOrg,
             loading,
             createOrganization,
             switchOrganization,

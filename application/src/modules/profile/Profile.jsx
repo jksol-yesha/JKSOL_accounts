@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Calendar, Save, Check, Camera } from 'lucide-react';
+import { User, Mail, Calendar, Save, Check, Camera, Loader2, X } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { cn } from '../../utils/cn';
 import { PreferenceSettingsFields } from '../settings/components/PreferenceSettingsSection';
@@ -11,6 +12,7 @@ import { PreferenceSettingsFields } from '../settings/components/PreferenceSetti
 const Profile = () => {
     const navigate = useNavigate();
     const { user, updateUser } = useAuth();
+    const { showToast } = useToast();
     const { preferences, updatePreferences } = usePreferences();
     const [formData, setFormData] = useState({
         name: '',
@@ -19,6 +21,7 @@ const Profile = () => {
     });
     const [draftPreferences, setDraftPreferences] = useState(preferences);
     const [isLoading, setIsLoading] = useState(false);
+    const [showDeleteOption, setShowDeleteOption] = useState(false);
     const [error, setError] = useState('');
     const [showSuccess, setShowSuccess] = useState(false);
     const fileInputRef = useRef(null);
@@ -44,19 +47,52 @@ const Profile = () => {
         setError('');
     };
 
-    const handleImageChange = (e) => {
+    const handleImageChange = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (file.size > 5 * 1024 * 1024) { // 5MB limit
+            if (file.size > 5 * 1024 * 1024) {
                 setError('Image size should be less than 5MB');
+                showToast('Image size should be less than 5MB', 'error');
                 return;
             }
 
             const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, profilePhoto: reader.result }));
+            reader.onloadend = async () => {
+                const base64data = reader.result;
+                setFormData(prev => ({ ...prev, profilePhoto: base64data }));
+                
+                setIsLoading(true);
+                try {
+                    await updateUser({ profilePhoto: base64data });
+                    showToast('Profile photo updated', 'success');
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                } catch (err) {
+                    showToast('Failed to update photo', 'error');
+                } finally {
+                    setIsLoading(false);
+                }
             };
             reader.readAsDataURL(file);
+        }
+    };
+
+    const handleRemovePhoto = async (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        
+        setIsLoading(true);
+        try {
+            await updateUser({ profilePhoto: null });
+            setFormData(prev => ({ ...prev, profilePhoto: '' }));
+            setShowDeleteOption(false);
+            showToast('Profile photo removed', 'success');
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        } catch (err) {
+            showToast('Failed to remove photo', 'error');
+        } finally {
+            setIsLoading(false);
         }
     };
 
@@ -123,7 +159,16 @@ const Profile = () => {
                                 </div>
                             )}
                             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-6 border-b border-gray-50 pb-8 relative">
-                                <div className="relative group">
+                                <div 
+                                    className="relative group/profile-img cursor-pointer"
+                                    onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const nextState = !showDeleteOption;
+                                        setShowDeleteOption(nextState);
+                                        showToast(`Toggled: ${nextState ? 'Show' : 'Hide'}`, 'info', { duration: 1000 });
+                                    }}
+                                >
                                     <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-gray-50 shadow-sm flex-none bg-gray-100">
                                         {formData.profilePhoto ? (
                                             <img
@@ -139,11 +184,38 @@ const Profile = () => {
                                     </div>
                                     <button
                                         type="button"
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className="absolute bottom-0 right-0 bg-black text-white p-1.5 rounded-full shadow-lg hover:bg-gray-800 transition-colors"
+                                        onMouseDown={(e) => {
+                                            e.stopPropagation();
+                                            fileInputRef.current?.click();
+                                        }}
+                                        className="absolute bottom-0 right-0 bg-black text-white p-1.5 rounded-full shadow-lg hover:bg-gray-800 transition-colors z-10"
                                     >
                                         <Camera size={16} />
                                     </button>
+
+                                    {/* Saving Overaly */}
+                                    {isLoading && (
+                                        <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-full z-20">
+                                            <Loader2 size={24} className="animate-spin text-black" />
+                                        </div>
+                                    )}
+
+                                    {formData.profilePhoto && (
+                                        <button
+                                            type="button"
+                                            onMouseDown={(e) => {
+                                                e.stopPropagation();
+                                                handleRemovePhoto(e);
+                                            }}
+                                            title="Remove Photo"
+                                            className={cn(
+                                                "absolute -top-1 -right-1 bg-white text-black p-1.5 rounded-full shadow-[0_2px_8px_rgba(0,0,0,0.15)] ring-1 ring-slate-100 transition-all hover:bg-slate-50 z-30",
+                                                showDeleteOption ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"
+                                            )}
+                                        >
+                                            <X size={14} strokeWidth={2.5} />
+                                        </button>
+                                    )}
                                     <input
                                         type="file"
                                         ref={fileInputRef}
@@ -222,12 +294,11 @@ const Profile = () => {
                                         type="submit"
                                         disabled={isLoading}
                                         className={cn(
-                                            "px-8 py-3 rounded-xl text-sm font-bold text-white bg-black hover:bg-black/90 transition-all shadow-lg active:scale-95 flex items-center gap-2",
+                                            "w-12 h-12 rounded-full flex items-center justify-center text-white bg-black hover:bg-black/90 transition-all shadow-lg active:scale-95 shadow-black/20",
                                             isLoading && "opacity-70 cursor-not-allowed"
                                         )}
                                     >
-                                        <Save size={18} />
-                                        <span>{isLoading ? 'Saving...' : 'Save Changes'}</span>
+                                        {isLoading ? <Loader2 size={24} className="animate-spin" /> : <Check size={28} strokeWidth={3.5} />}
                                     </button>
                                 </div>
                             </div>

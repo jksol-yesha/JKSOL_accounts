@@ -36,4 +36,13 @@ export const dashboardRoutes = new Elysia({ prefix: '/dashboard' })
             startDate: t.Optional(t.String()),
             endDate: t.Optional(t.String())
         })
+    })
+    .post('/account-balance-trend', DashboardController.getAccountBalanceTrend, {
+        validateAccess: 'branch',
+        body: t.Object({
+            financialYearId: t.Numeric(),
+            branchId: t.Optional(t.Union([t.Numeric(), t.Literal('all'), t.Array(t.Numeric())])),
+            timeframe: t.Union([t.Literal('30D'), t.Literal('12M')]),
+            targetCurrency: t.Optional(t.String())
+        })
     });

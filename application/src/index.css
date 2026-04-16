@@ -8,11 +8,12 @@
   --color-sidebar: #ffffff;
   --color-sidebar-text: #64748b;
   --color-sidebar-active: #1e293b;
-  --shadow-soft: 0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
+  --shadow-soft:
+    0 2px 15px -3px rgba(0, 0, 0, 0.07), 0 10px 20px -2px rgba(0, 0, 0, 0.04);
 }
 
 :root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -41,6 +42,24 @@
   width: 100%;
 }
 
+/* AG Grid custom styling for minimal mode */
+.ag-theme-quartz {
+  --ag-header-background-color: #F9F9FB;
+  --ag-row-hover-color: #f8fafc;
+  --ag-borders: solid 1px #e5e7eb;
+  --ag-border-color: #e5e7eb;
+  --ag-row-border-color: #e5e7eb;
+  --ag-header-column-separator-display: block;
+  --ag-header-column-separator-color: #e5e7eb;
+  --ag-grid-size: 4px;
+  --ag-borders-critical: none;
+  --ag-font-family: inherit;
+  --ag-header-foreground-color: #374151;
+  --ag-data-color: #1e293b;
+  --ag-row-height: 42px;
+  --ag-header-height: 44px;
+  --ag-font-size: 11px;
+}
 
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
@@ -72,16 +91,22 @@
 }
 
 /* Notification Animations */
-@keyframes slide-in-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
+.animate-fade-in {
+  animation: fade-in 0.3s ease-out forwards;
+}
 
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out forwards;
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }
 
 .animate-slide-in-right {
@@ -136,7 +161,7 @@
     min-height: 0 !important;
     overscroll-behavior: contain;
   }
- 
+
   .accounts-create-page {
     height: 100%;
     min-height: 0;
@@ -180,7 +205,7 @@
     line-height: 1.1 !important;
   }
 
-  .accounts-create-field input:not([type='checkbox']),
+  .accounts-create-field input:not([type="checkbox"]),
   .accounts-create-field textarea,
   .accounts-create-select {
     min-height: 36px;
@@ -188,7 +213,7 @@
     line-height: 1.2 !important;
   }
 
-  .accounts-create-field input:not([type='checkbox']),
+  .accounts-create-field input:not([type="checkbox"]),
   .accounts-create-field textarea {
     padding-top: 7px !important;
     padding-bottom: 7px !important;
@@ -278,7 +303,7 @@
     line-height: 1.1 !important;
   }
 
-  .parties-create-field input:not([type='checkbox']),
+  .parties-create-field input:not([type="checkbox"]),
   .parties-create-field textarea {
     min-height: 36px;
     font-size: 13px !important;
@@ -380,7 +405,8 @@
   overflow: visible !important;
 }
 
-.transactions-create-page.transactions-create-page-scroll .transactions-create-shell,
+.transactions-create-page.transactions-create-page-scroll
+  .transactions-create-shell,
 .transactions-create-shell.transactions-create-shell-scroll {
   flex: none !important;
   max-height: none !important;
@@ -405,10 +431,14 @@
   overflow: visible !important;
 }
 
-.transactions-create-page.transactions-create-page-scroll .txn-desktop-form-scroll,
-.transactions-create-page.transactions-create-page-scroll .txn-laptop-form-scroll,
-.transactions-create-shell.transactions-create-shell-scroll .txn-desktop-form-scroll,
-.transactions-create-shell.transactions-create-shell-scroll .txn-laptop-form-scroll {
+.transactions-create-page.transactions-create-page-scroll
+  .txn-desktop-form-scroll,
+.transactions-create-page.transactions-create-page-scroll
+  .txn-laptop-form-scroll,
+.transactions-create-shell.transactions-create-shell-scroll
+  .txn-desktop-form-scroll,
+.transactions-create-shell.transactions-create-shell-scroll
+  .txn-laptop-form-scroll {
   flex: none !important;
   max-height: none !important;
   overflow-y: visible !important;
@@ -914,7 +944,6 @@
     padding-top: 10px !important;
     padding-bottom: 10px !important;
   }
-
 }
 
 @media (min-width: 1280px) {
@@ -1575,7 +1604,6 @@
   }
 }
 
-
 /* Mid-range laptop accounts table containment (e.g. 1536x864) */
 @media (min-width: 1451px) and (max-width: 1600px) and (max-height: 920px) {
   .accounts-laptop-table {
@@ -1784,7 +1812,6 @@
   }
 }
 
-
 /* Desktop-only refinement (exclude laptop/mobile compact breakpoints) */
 @media (min-width: 1451px) {
   .recent-desktop-type-body {
@@ -1964,7 +1991,6 @@
 }
 
 @media print {
-
   /* Global Hide */
   .no-print,
   nav,

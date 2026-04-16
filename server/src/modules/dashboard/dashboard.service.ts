@@ -5,11 +5,58 @@ import { eq, and, lt, lte, gte, sql, inArray, or } from 'drizzle-orm';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { resolveBankFromIfsc } from '../../shared/ifsc-bank';
 import { isNotDeleted } from '../../shared/soft-delete';
+import { getAllAccounts } from '../accounts/accounts.service';
 
 const monthDiffInclusive = (startDate: string, endDate: string) => {
     const [startYear = 0, startMonth = 1] = startDate.split('-').map(Number);
     const [endYear = 0, endMonth = 1] = endDate.split('-').map(Number);
     return ((endYear - startYear) * 12) + (endMonth - startMonth) + 1;
+};
+
+const padDatePart = (value: number) => String(value).padStart(2, '0');
+
+const formatUtcDateString = (date: Date) => (
+    `${date.getUTCFullYear()}-${padDatePart(date.getUTCMonth() + 1)}-${padDatePart(date.getUTCDate())}`
+);
+
+const parseDateStringAsUtc = (dateStr: string) => {
+    const [year = 0, month = 1, day = 1] = String(dateStr || '').split('-').map(Number);
+    return new Date(Date.UTC(year, month - 1, day || 1));
+};
+
+const shiftDateStringByDays = (dateStr: string, offset: number) => {
+    const shiftedDate = parseDateStringAsUtc(dateStr);
+    shiftedDate.setUTCDate(shiftedDate.getUTCDate() + offset);
+    return formatUtcDateString(shiftedDate);
+};
+
+const shiftDateStringByMonths = (dateStr: string, offset: number) => {
+    const [year = 0, month = 1, day = 1] = String(dateStr || '').split('-').map(Number);
+    const shiftedDate = new Date(Date.UTC(year, month - 1 + offset, day || 1));
+    return formatUtcDateString(shiftedDate);
+};
+
+const getMonthStart = (dateStr: string) => {
+    const [year = 0, month = 1] = String(dateStr || '').split('-').map(Number);
+    return `${year}-${padDatePart(month)}-01`;
+};
+
+const minDateString = (...dates: string[]) => dates.reduce((min, current) => (current < min ? current : min));
+
+const maxDateString = (...dates: string[]) => dates.reduce((max, current) => (current > max ? current : max));
+
+const getDateStringInTimeZone = (date: Date, timeZone: string) => {
+    const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    });
+    const parts = formatter.formatToParts(date);
+    const year = parts.find((part) => part.type === 'year')?.value || '0000';
+    const month = parts.find((part) => part.type === 'month')?.value || '01';
+    const day = parts.find((part) => part.type === 'day')?.value || '01';
+    return `${year}-${month}-${day}`;
 };
 
 const dayDiffInclusive = (startDate: string, endDate: string) => {
@@ -90,6 +137,21 @@ const applyAccountBranchFilter = (whereClause: any[], branchId: number | number[
     return;
 };
 
+
+
+const getAccountBalancePeriodSql = (interval: 'day' | 'month') => {
+    if (interval === 'day') {
+        return sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m-%d')`;
+    }
+
+    return sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`;
+};
+
+const getAccountBalancePeriodKey = (dateStr: string, interval: 'day' | 'month') => {
+    if (interval === 'day') return dateStr;
+    return String(dateStr || '').slice(0, 7);
+};
+
 const convertAmount = async (amount: number, sourceCurrency: string, targetCurrency: string, orgId?: number) => {
     if (!Number.isFinite(amount) || amount === 0) return 0;
     if (!sourceCurrency || sourceCurrency === targetCurrency) return amount;
@@ -107,6 +169,8 @@ const resolveTxnCurrency = (currencyCode?: string | null, fallbackCurrency = 'IN
     const normalized = String(currencyCode || '').trim().toUpperCase();
     return normalized || fallbackCurrency;
 };
+
+const roundBalanceValue = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
 
 export const DashboardService = {
     getSummary: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any, customStartDate?: string, customEndDate?: string) => {
@@ -796,5 +860,248 @@ export const DashboardService = {
 
         // 5. Return combined rankings. Frontend filters by type per card.
         return [...categoryRankings, ...accountRankings, ...transferBalances].sort((a: any, b: any) => b.amount - a.amount);
+    },
+
+    getAccountBalanceTrend: async (
+        orgId: number,
+        branchId: number | number[] | null,
+        financialYearId: number,
+        timeframe: '30D' | '12M',
+        targetCurrency?: string,
+        user?: any
+    ) => {
+        // 1. Get Financial Year
+        const fyList = await db.select().from(financialYears).where(eq(financialYears.id, financialYearId)).limit(1);
+        const fy = fyList[0];
+        if (!fy) throw new Error('Financial Year not found');
+
+        const orgList = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
+        const org = orgList[0];
+        const orgBaseCurrency = org?.baseCurrency || 'INR';
+        const displayCurrency = targetCurrency || orgBaseCurrency;
+        const orgTimeZone = org?.timezone || 'Asia/Kolkata';
+
+        // 2. Determine Timeframe Dates
+        const todayDate = getDateStringInTimeZone(new Date(), orgTimeZone);
+        let startDate: string;
+        let endDate: string;
+        let movementStartDate: string;
+        let interval: 'day' | 'month';
+        let seriesItems: Array<{ key: string; label: string }>;
+
+        endDate = minDateString(todayDate, fy.endDate);
+        if (endDate < fy.startDate) {
+            endDate = fy.startDate;
+        }
+
+        if (timeframe === '30D') {
+            startDate = shiftDateStringByDays(endDate, -29);
+            movementStartDate = startDate;
+            interval = 'day';
+            seriesItems = Array.from(
+                { length: dayDiffInclusive(startDate, endDate) },
+                (_, i) => addDays(startDate, i)
+            );
+        } else {
+            const endMonthStart = getMonthStart(endDate);
+            movementStartDate = maxDateString(fy.startDate, shiftDateStringByMonths(endMonthStart, -11));
+            startDate = getMonthStart(movementStartDate);
+            interval = 'month';
+            seriesItems = Array.from(
+                { length: monthDiffInclusive(startDate, getMonthStart(endDate)) },
+                (_, i) => addMonths(startDate, i)
+            );
+        }
+
+        // 3. Get All Active Accounts with Opening Balances
+        const activeAccounts = await db.select({
+            id: accounts.id,
+            subtype: accounts.subtype,
+            openingBalance: accounts.openingBalance,
+            openingBalanceDate: accounts.openingBalanceDate,
+            currencyCode: currencies.code,
+        })
+        .from(accounts)
+        .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
+        .where(and(
+            eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
+            eq(accounts.status, 1),
+            inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
+        ));
+
+        // Extract active account IDs to scope movement queries
+        const activeAccountIds = activeAccounts.map(a => a.id);
+
+        // 4. Fetch cumulative net movement for these accounts up to end date
+        // We need movements BEFORE start date to get the "initial" balance at start of range,
+        // and movements WITHIN the range to get daily/monthly points.
+        
+        if (activeAccountIds.length === 0) {
+            return seriesItems.map((item) => {
+                return { date: item.label, bank: 0, card: 0, cash: 0 };
+            });
+        }
+
+        const movementWhere = [
+            eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
+            eq(transactions.status, 1),
+            gte(transactions.txnDate, movementStartDate),
+            lte(transactions.txnDate, endDate),
+            inArray(transactionEntries.accountId, activeAccountIds)
+        ];
+        applyTxnBranchFilter(movementWhere, branchId, user);
+
+        const periodKeySql = getAccountBalancePeriodSql(interval);
+        const movements = await db.select({
+            accountId: transactionEntries.accountId,
+            periodKey: periodKeySql,
+            currencyCode: currencies.code,
+            netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
+        })
+        .from(transactionEntries)
+        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+        .where(and(...movementWhere))
+        .groupBy(transactionEntries.accountId, periodKeySql, currencies.code);
+
+        // 5. Build the series
+        // Map account movements by ID and periodKey for quick lookup
+        const movementMap = new Map<number, Map<string, number>>();
+        for (const movement of movements) {
+            const convertedNet = await convertAmount(
+                Number(movement.netAmount || 0),
+                resolveTxnCurrency(movement.currencyCode, orgBaseCurrency),
+                displayCurrency,
+                orgId
+            );
+            if (!movementMap.has(movement.accountId)) movementMap.set(movement.accountId, new Map());
+            const periodMap = movementMap.get(movement.accountId)!;
+            periodMap.set(movement.periodKey, (periodMap.get(movement.periodKey) || 0) + convertedNet);
+        }
+
+        // Fetch movements before range (to add to opening balance)
+        const beforeRangeWhere = [
+            eq(transactions.orgId, orgId),
+            isNotDeleted(transactions),
+            eq(transactions.status, 1),
+            lt(transactions.txnDate, movementStartDate),
+            inArray(transactionEntries.accountId, activeAccountIds)
+        ];
+        applyTxnBranchFilter(beforeRangeWhere, branchId, user);
+
+        const beforeRangeMovements = await db.select({
+            accountId: transactionEntries.accountId,
+            currencyCode: currencies.code,
+            netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
+        })
+        .from(transactionEntries)
+        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+        .where(and(...beforeRangeWhere))
+        .groupBy(transactionEntries.accountId, currencies.code);
+        
+        const beforeMap = new Map<number, number>();
+        for (const movement of beforeRangeMovements) {
+            const convertedNet = await convertAmount(
+                Number(movement.netAmount || 0),
+                resolveTxnCurrency(movement.currencyCode, orgBaseCurrency),
+                displayCurrency,
+                orgId
+            );
+            beforeMap.set(movement.accountId, (beforeMap.get(movement.accountId) || 0) + convertedNet);
+        }
+
+        // 6. Calculate balances for each point
+        const resultSeries = [];
+        
+        // Prepare initial balances for each account at start of series
+        const accountStates = await Promise.all(activeAccounts.map(async (acc) => {
+            const opening = Number(acc.openingBalance || 0);
+            const convertedOpening = await ExchangeRateService.convert(opening, acc.currencyCode || 'USD', displayCurrency, orgId);
+            const openingBalanceDate = acc.openingBalanceDate || null;
+            const openingPeriodKey = openingBalanceDate ? getAccountBalancePeriodKey(openingBalanceDate, interval) : null;
+            const isOpeningAppliedAtRangeStart = !openingBalanceDate || openingBalanceDate <= movementStartDate;
+            const beforeMove = beforeMap.get(acc.id) || 0;
+
+            return {
+                id: acc.id,
+                subtype: Number(acc.subtype),
+                currentBalance: isOpeningAppliedAtRangeStart ? convertedOpening + beforeMove : 0,
+                openingBalance: convertedOpening,
+                openingApplied: isOpeningAppliedAtRangeStart,
+                openingPeriodKey,
+                movements: movementMap.get(acc.id) || new Map<string, number>()
+            };
+        }));
+
+        for (const item of seriesItems) {
+            let bank = 0, card = 0, cash = 0;
+
+            for (const state of accountStates) {
+                if (!state.openingApplied && state.openingPeriodKey && item.key < state.openingPeriodKey) {
+                    continue;
+                }
+
+                if (!state.openingApplied && state.openingPeriodKey === item.key) {
+                    state.currentBalance += state.openingBalance;
+                    state.openingApplied = true;
+                }
+
+                const move = state.movements.get(item.key) || 0;
+                if (move !== 0) {
+                    state.currentBalance += move;
+                }
+
+                if (state.subtype === 12) bank += state.currentBalance;
+                else if (state.subtype === 22) card += state.currentBalance;
+                else if (state.subtype === 11) cash += state.currentBalance;
+            }
+
+            resultSeries.push({
+                date: item.label,
+                bank: roundBalanceValue(bank),
+                card: roundBalanceValue(card),
+                cash: roundBalanceValue(cash)
+            });
+        }
+
+        if (resultSeries.length > 0 && branchId === null) {
+            // Keep the final chart point aligned with the same active-account totals shown in the accounts summary cards.
+            const latestAccounts = await getAllAccounts(
+                orgId,
+                1,
+                displayCurrency,
+                user,
+                financialYearId
+            );
+
+            const latestTotals = latestAccounts.reduce((totals, account) => {
+                const subtype = Number(account.subtype);
+                const balance = Number(
+                    account.closingBalance
+                    ?? account.convertedClosingBalance
+                    ?? account.closing_balance
+                    ?? account.openingBalance
+                    ?? 0
+                ) || 0;
+
+                if (subtype === 12) totals.bank += balance;
+                else if (subtype === 22) totals.card += balance;
+                else if (subtype === 11) totals.cash += balance;
+                return totals;
+            }, { bank: 0, card: 0, cash: 0 });
+
+            const latestPoint = resultSeries[resultSeries.length - 1];
+            resultSeries[resultSeries.length - 1] = {
+                ...latestPoint,
+                bank: roundBalanceValue(latestTotals.bank),
+                card: roundBalanceValue(latestTotals.card),
+                cash: roundBalanceValue(latestTotals.cash)
+            };
+        }
+
+        return resultSeries;
     }
 };

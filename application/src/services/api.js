@@ -533,6 +533,7 @@ const apiService = {
         getSummary: (params, config) => api.post('/dashboard/summary', params, config),
         getTrends: (params, config) => api.post('/dashboard/trends', params, config),
         getCategoryRankings: (params, config) => api.post('/dashboard/rankings', params, config),
+        getAccountBalanceTrend: (params, config) => api.post('/dashboard/account-balance-trend', params, config),
     },
 
     categories: {

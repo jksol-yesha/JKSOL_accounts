@@ -92,6 +92,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.removeItem('selectedOrg');
         localStorage.removeItem('selectedBranch');
         localStorage.removeItem('selectedYear');
+        localStorage.removeItem('selectedOrgManual');
 
 
 
@@ -102,8 +103,8 @@ export const AuthProvider = ({ children }) => {
                 : (Array.isArray(normalizedUser.orgIds) ? normalizedUser.orgIds : []);
 
             if (orgIds.length > 0) {
-                const firstOrgId = orgIds[0];
-                localStorage.setItem('selectedOrg', JSON.stringify({ id: Number(firstOrgId) }));
+                const preferredOrgId = normalizedUser.orgId ?? orgIds[0];
+                localStorage.setItem('selectedOrg', JSON.stringify({ id: Number(preferredOrgId) }));
             }
         }
 
@@ -113,8 +114,8 @@ export const AuthProvider = ({ children }) => {
                 : (Array.isArray(normalizedUser.branchIds) ? normalizedUser.branchIds : []);
 
             if (branchIds.length > 0) {
-                const firstBranchId = branchIds[0];
-                localStorage.setItem('selectedBranch', JSON.stringify({ id: Number(firstBranchId) }));
+                const preferredBranchId = normalizedUser.branchId ?? branchIds[0];
+                localStorage.setItem('selectedBranch', JSON.stringify({ id: Number(preferredBranchId) }));
             }
         }
 

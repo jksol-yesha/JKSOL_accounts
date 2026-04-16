@@ -9,6 +9,34 @@ import CustomSelect from '../common/CustomSelect';
 import { cn } from '../../utils/cn';
 import { isValidEmail } from '../../utils/validation';
 
+const CurrencyOption = ({ symbol, code, isSelected }) => (
+    <div className="flex items-center gap-2 w-full pr-1">
+        <span className={cn(
+            "text-[13px] min-w-[16px] text-right font-medium whitespace-nowrap",
+            isSelected ? "text-slate-900" : "text-slate-400"
+        )}>
+            {symbol}
+        </span>
+        <span className={cn(
+            "text-[12px] tracking-wide whitespace-nowrap",
+            isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"
+        )}>
+            {code}
+        </span>
+    </div>
+);
+
+const TimezoneOption = ({ label, isSelected }) => (
+    <div className="flex items-center gap-2 w-full">
+        <span className={cn(
+            "text-[12px] tracking-wide whitespace-nowrap",
+            isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"
+        )}>
+            {label}
+        </span>
+    </div>
+);
+
 const parseMemberBranchIds = (branchIds) => {
     if (!branchIds) return [];
     if (Array.isArray(branchIds)) return branchIds.map(Number).filter(Boolean);
@@ -140,7 +168,7 @@ const MemberBranchTooltip = ({ branchNames = [], children }) => {
             {children}
             {visible && position && createPortal(
                 <span
-                    className="fixed z-[160] min-w-[170px] max-w-[240px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none"
+                    className="fixed z-[160] min-w-[170px] max-w-[240px] bg-white border border-gray-100 rounded-md shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none"
                     style={{ top: `${position.top}px`, left: `${position.left}px` }}
                 >
                     <span className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Branch Access</span>
@@ -158,13 +186,12 @@ const MemberBranchTooltip = ({ branchNames = [], children }) => {
 };
 
 const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = 'list', initialOrg = null }) => {
-    const { selectedOrg, refreshOrganizations, organizations } = useOrganization();
+    const { selectedOrg, setSelectedOrg, refreshOrganizations, organizations } = useOrganization();
     const { user } = useAuth(); // Needed? Maybe for checks later
     const { currencyOptions } = useCurrencyOptions();
 
     // View State: 'list' | 'manage'
     const [view, setView] = useState(initialView === 'edit' || initialView === 'settings' ? 'manage' : 'list');
-    const [activeTab, setActiveTab] = useState(initialView === 'edit' ? 'members' : 'details');
     const [editingOrg, setEditingOrg] = useState(initialOrg);
 
     const [requestError, setRequestError] = useState('');
@@ -197,7 +224,18 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
         setSuccessMessage('');
     };
 
-    // Organization Details Form State
+    // Inline Add Organization State
+    const [isAddingOrg, setIsAddingOrg] = useState(initialView === 'create');
+    const [isAddingUser, setIsAddingUser] = useState(false);
+    const [createFormData, setCreateFormData] = useState({
+        name: '',
+        baseCurrency: 'INR',
+        timezone: 'Asia/Kolkata',
+        logo: null
+    });
+    const [createLogoPreview, setCreateLogoPreview] = useState(null);
+
+    // Organization Details Form State (for editing)
     const [formData, setFormData] = useState({
         name: '',
         baseCurrency: 'USD',
@@ -246,7 +284,6 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             const isOrgAdmin = initialOrg?.role?.toLowerCase() === 'admin';
 
             setView(isManage ? 'manage' : 'list');
-            setActiveTab((initialView === 'edit' || isOrgAdmin) ? 'members' : 'details');
             setEditingOrg(initialOrg || null);
 
             setFormData({
@@ -263,7 +300,6 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             setEditingAccessData({ roleId: 3, branchIds: [] });
         } else {
             setView('list');
-            setActiveTab('details');
             setEditingOrg(null);
             setRequestError('');
             setSuccessMessage('');
@@ -276,17 +312,13 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
     // Fetch Members when in manage view
     useEffect(() => {
-        if (view === 'manage' && editingOrg && activeTab === 'members') {
+        if (view === 'manage' && editingOrg) {
             fetchMembers();
             fetchBranches();
-        }
-    }, [view, editingOrg, activeTab]);
-
-    useEffect(() => {
-        if (view === 'manage' && activeTab !== 'members') {
+        } else {
             resetMemberInviteForm();
         }
-    }, [view, activeTab]);
+    }, [view, editingOrg]);
 
     const fetchMembers = async () => {
         setLoadingMembers(true);
@@ -479,17 +511,11 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
     };
 
     const openOrganizationManager = (org) => {
-        const isOrgAdmin = org?.role?.toLowerCase() === 'admin';
-        setEditingOrg(org);
-        setFormData({
-            name: org?.name || '',
-            baseCurrency: org?.baseCurrency || 'USD',
-            timezone: org?.timezone || 'Asia/Kolkata',
-            logo: org?.logo || null
-        });
-        setLogoPreview(org?.logo || null);
-        setActiveTab(isOrgAdmin ? 'members' : 'details');
-        setView('manage');
+        // Auto-select the organization globally
+        localStorage.setItem('selectedOrgManual', '1');
+        setSelectedOrg(org);
+        
+        // Removed setView('manage') to stay on the list view as requested
     };
 
 
@@ -506,191 +532,306 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
     const inviteAllBranchesSelected = allBranchIds.length > 0 && selectedBranchIds.length === allBranchIds.length;
     const editSelectedBranchIds = Array.isArray(editingAccessData.branchIds) ? editingAccessData.branchIds.map(Number) : [];
     const editAllBranchesSelected = allBranchIds.length > 0 && editSelectedBranchIds.length === allBranchIds.length;
+    const handleCreateFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            if (file.size > 2 * 1024 * 1024) {
+                setRequestError("Logo must be less than 2MB");
+                return;
+            }
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setCreateFormData({ ...createFormData, logo: reader.result });
+                setCreateLogoPreview(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    const handleCreateOrg = async (e) => {
+        if (e) e.preventDefault();
+        if (!createFormData.name.trim()) return;
+
+        setIsLoading(true);
+        setRequestError('');
+        try {
+            await apiService.organizations.create(createFormData);
+            await refreshOrganizations();
+            setIsAddingOrg(false);
+            setCreateFormData({
+                name: '',
+                baseCurrency: 'INR',
+                timezone: 'Asia/Kolkata',
+                logo: null
+            });
+            setCreateLogoPreview(null);
+            setSuccessMessage('Organization created successfully');
+            setTimeout(() => setSuccessMessage(''), 3000);
+        } catch (err) {
+            setRequestError(err.response?.data?.message || 'Failed to create organization');
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     if (!isOpen) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className={cn(
-                "manage-org-modal-shell bg-white rounded-2xl w-full max-w-[92vw] md:max-w-[760px] shadow-2xl scale-100 animate-in zoom-in-95 duration-200 relative overflow-hidden flex flex-col transition-all",
-                view === 'manage' ? "manage-org-modal-manage" : "max-h-[88vh]"
-            )}>
+        <div 
+            className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-[12px] animate-in fade-in duration-300"
+            onClick={onClose}
+        >
+            <div 
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                    "manage-org-modal-shell bg-white h-full w-full md:w-[420px] shadow-[0_0_50px_rgba(0,0,0,0.1)] animate-in slide-in-from-right duration-500 ease-in-out relative flex flex-col",
+                    view === 'manage' ? "manage-org-modal-manage" : ""
+                )}
+            >
 
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-none bg-white rounded-t-2xl z-20">
-                    <div className="flex items-center gap-2">
-
-                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            {view === 'list' ? (
-                                <>
-                                    <Building2 className="text-gray-900" size={24} />
-                                    Manage Organizations
-                                </>
-                            ) : view === 'invite-owner' ? (
-                                <>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setView('list');
-                                            setRequestError('');
-                                            setSuccessMessage('');
-                                            setInviteEmail('');
-                                            setInviteName('');
-                                            setInviteOwnerEmailError('');
-                                        }}
-                                        className="mr-1 p-1 text-gray-400 hover:text-black transition-colors"
-                                    >
-                                        <ArrowLeft size={20} />
-                                    </button>
-                                    <Building2 className="text-gray-900" size={24} />
-                                    Add Owner
-                                </>
-                            ) : (
-                                <>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            setView('list');
-                                            setActiveTab('details');
-                                            setRequestError('');
-                                            setSuccessMessage('');
-                                            setMemberToRemove(null);
-                                            setMemberToEdit(null);
-                                        }}
-                                        className="mr-1 p-1 text-gray-400 hover:text-black transition-colors"
-                                    >
-                                        <ArrowLeft size={20} />
-                                    </button>
-                                    <Building2 className="text-gray-900" size={24} />
-                                    {editingOrg?.role?.toLowerCase() === 'admin' ? 'Manage Members' : 'Edit Organization'}
-                                </>
-                            )}
-                        </h3>
+                <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-20">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                <Building2 size={14} strokeWidth={2.5} />
+                            </div>
+                            <div className="flex flex-col">
+                                <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                                    Manage Organization
+                                </h2>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
+                        >
+                            <X size={14} strokeWidth={2.5} />
+                        </button>
                     </div>
+                </div>
+
+                {/* Tabs */}
+                <div className="flex px-5 border-b border-gray-200 bg-white shadow-[0_4px_12px_-6px_rgba(0,0,0,0.05)] z-20">
                     <button
-                        onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                        onClick={() => {
+                            setView('list');
+                        }}
+                        className={cn(
+                            "px-5 py-3.5 text-[13px] font-bold transition-all relative",
+                            view === 'list' ? "text-gray-900" : "text-[#8FA0B4] hover:text-gray-600"
+                        )}
                     >
-                        <X size={20} />
+                        Organization
+                        {view === 'list' && (
+                            <div className="absolute bottom-0 left-4 right-4 h-[3px] rounded-t-full bg-[#4A8AF4]" />
+                        )}
+                    </button>
+                    <button
+                        onClick={() => {
+                            if (!editingOrg && selectedOrg) {
+                                setEditingOrg(selectedOrg);
+                            }
+                            setView('manage');
+                        }}
+                        className={cn(
+                            "px-5 py-3.5 text-[13px] font-bold transition-all relative",
+                            view === 'manage' ? "text-gray-900" : "text-[#8FA0B4] hover:text-gray-600"
+                        )}
+                    >
+                        Users
+                        {view === 'manage' && (
+                            <div className="absolute bottom-0 left-4 right-4 h-[3px] rounded-t-full bg-[#4A8AF4]" />
+                        )}
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto min-h-0 bg-gray-50/50">
+                <div className="flex-1 overflow-y-auto min-h-0 bg-white">
 
                     {/* LIST VIEW */}
                     {view === 'list' && (
-                        <div className="p-6 space-y-6">
-                            <div>
-                                <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1">Your Organizations</h4>
-                                <div className="space-y-3">
-                                    {(organizations || []).map(org => (
-                                        <button
-                                            key={org.id}
-                                            onClick={() => openOrganizationManager(org)}
-                                            className="w-full bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all flex items-center gap-4 group text-left relative overflow-hidden"
-                                        >
-                                            {/* Organization Icon/Logo */}
-                                            <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 font-bold shrink-0 border border-gray-200 group-hover:border-gray-300 overflow-hidden">
-                                                {org.logo ? (
-                                                    <img src={org.logo} alt={org.name} className="w-full h-full object-cover" />
-                                                ) : (
-                                                    <Building2 size={20} />
-                                                )}
-                                            </div>
-
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="truncate text-sm font-bold text-gray-900 group-hover:text-primary transition-colors">{org.name}</h4>
-                                                <div className="flex items-center gap-2 mt-0.5 text-xs text-gray-500">
-                                                    <span className="uppercase font-medium">{org.role || 'Member'}</span>
-                                                    {org.baseCurrency && (
-                                                        <>
-                                                            <span className="w-1 h-1 rounded-full bg-gray-300" />
-                                                            <span>{org.baseCurrency}</span>
-                                                        </>
-                                                    )}
-                                                    {org.status === 2 && (
-                                                        <>
-                                                            <span className="w-1 h-1 rounded-full bg-red-300" />
-                                                            <span className="text-red-500 font-bold uppercase tracking-tight">Inactive</span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
-
-                                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {['owner', 'admin'].includes(org.role?.toLowerCase()) && (
-                                                    <div
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            openOrganizationManager(org);
-                                                        }}
-                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                                                        title={org.role?.toLowerCase() === 'admin' ? "Manage Members" : "Edit Organization"}
-                                                    >
-                                                        {org.role?.toLowerCase() === 'admin' ? <Users size={14} /> : <Edit size={14} />}
-                                                    </div>
-                                                )}
-                                                {org.role?.toLowerCase() === 'owner' && (
-                                                    <>
-                                                        <div
-                                                            onClick={(e) => handleToggleStatus(e, org)}
-                                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${org.status === 1 ? 'text-gray-400 hover:text-rose-600 hover:bg-rose-50' : 'text-gray-400 hover:text-green-600 hover:bg-green-50'}`}
-                                                            title={org.status === 1 ? "Deactivate" : "Activate"}
-                                                        >
-                                                            <Power size={14} className={org.status === 1 ? "" : "text-green-600"} />
-                                                        </div>
-                                                        <div
-                                                            onClick={(e) => handleDeleteOrg(e, org)}
-                                                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                                            title="Delete Organization"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-
-                                        </button>
-                                    ))}
+                        <div className="p-5 space-y-6">
+                            {successMessage && (
+                                <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-md border border-green-100 flex items-center gap-2">
+                                    <Check size={16} /> {successMessage}
                                 </div>
+                            )}
+
+                            {requestError && (
+                                <div className="p-3 bg-red-50 text-red-600 text-[11px] font-bold rounded-md border border-red-100 flex items-center gap-2">
+                                    <AlertCircle size={16} /> {requestError}
+                                </div>
+                            )}
+                            
+                            {/* Add Organization Collapsible */}
+                            <div className="bg-white rounded-md overflow-hidden transition-all duration-300 mb-2">
+                                <button
+                                    onClick={() => setIsAddingOrg(!isAddingOrg)}
+                                    className={cn(
+                                        "w-full px-4 py-2.5 flex items-center justify-between transition-all group",
+                                        isAddingOrg ? "bg-white" : "bg-slate-50/50 hover:bg-slate-100/50"
+                                    )}
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-7 h-7 bg-white border border-slate-200 rounded-md shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                            <Plus size={16} strokeWidth={2.5} />
+                                        </div>
+                                        <span className="text-[13px] font-extrabold text-slate-900 tracking-tight">Add Organization</span>
+                                    </div>
+                                    <ChevronDown 
+                                        size={14} 
+                                        strokeWidth={2.5}
+                                        className={cn(
+                                            "text-slate-400 transition-transform duration-300",
+                                            isAddingOrg ? "rotate-180" : ""
+                                        )} 
+                                    />
+                                </button>
+
+                                {isAddingOrg && (
+                                    <div className="px-4 pt-2 pb-5 space-y-4 animate-in slide-in-from-top-2 duration-300">
+
+                                        
+                                        {/* Logo Section */}
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-14 h-14 rounded-md border-[1.5px] border-dashed border-[#4A8AF4]/40 bg-white flex items-center justify-center relative overflow-hidden group/logo">
+                                                {createLogoPreview ? (
+                                                    <img src={createLogoPreview} alt="Preview" className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <div className="text-[#8FA0B4]"><Plus size={20} strokeWidth={2} /></div>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleCreateFileChange}
+                                                    className="absolute inset-0 opacity-0 cursor-pointer"
+                                                />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <h5 className="text-[13.5px] font-bold text-gray-900">Organization Logo</h5>
+                                                <p className="text-[11.5px] text-[#8FA0B4] font-medium leading-tight">Square logo recommended. PNG or JPG up to 2MB.</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2.5">
+                                            <input
+                                                type="text"
+                                                value={createFormData.name}
+                                                onChange={e => setCreateFormData({ ...createFormData, name: e.target.value })}
+                                                placeholder="Organization Name"
+                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all placeholder:text-gray-300 placeholder:font-medium"
+                                            />
+
+                                            <CustomSelect
+                                                value={createFormData.baseCurrency}
+                                                onChange={e => setCreateFormData({ ...createFormData, baseCurrency: e.target.value })}
+                                                showSelectedCheck
+                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all"
+                                            >
+                                                {currencyOptions
+                                                    .filter(c => ['INR', 'USD', 'EUR', 'GBP', 'AED'].includes(c.code))
+                                                    .map((currency) => (
+                                                    <option key={currency.code} value={currency.code}>
+                                                        <CurrencyOption symbol={currency.symbol} code={currency.code} isSelected={createFormData.baseCurrency === currency.code} />
+                                                    </option>
+                                                ))}
+                                            </CustomSelect>
+
+                                            <CustomSelect
+                                                value={createFormData.timezone}
+                                                onChange={e => setCreateFormData({ ...createFormData, timezone: e.target.value })}
+                                                showSelectedCheck
+                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all"
+                                            >
+                                                <option value="Asia/Kolkata">
+                                                    <TimezoneOption label="Asia/Kolkata" isSelected={createFormData.timezone === 'Asia/Kolkata'} />
+                                                </option>
+                                                <option value="UTC">
+                                                    <TimezoneOption label="UTC" isSelected={createFormData.timezone === 'UTC'} />
+                                                </option>
+                                                <option value="America/New_York">
+                                                    <TimezoneOption label="New York" isSelected={createFormData.timezone === 'America/New_York'} />
+                                                </option>
+                                                <option value="Europe/London">
+                                                    <TimezoneOption label="London" isSelected={createFormData.timezone === 'Europe/London'} />
+                                                </option>
+                                            </CustomSelect>
+                                        </div>
+
+                                        <div className="flex justify-end gap-3 pt-1">
+                                            <button
+                                                onClick={() => setIsAddingOrg(false)}
+                                                className="px-5 py-1.5 text-[12.5px] font-bold text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                onClick={handleCreateOrg}
+                                                disabled={isLoading || !createFormData.name.trim()}
+                                                className="px-5 py-1.5 text-[12.5px] font-bold text-white bg-[#4A8AF4] rounded-md hover:bg-[#3B7AE6] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                            >
+                                                {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Create'}
+                                            </button>
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
-                            {/* Add Owner Button */}
-                            {organizations.some(org => org.role?.toLowerCase() === 'owner') && (
-                                <button
-                                    onClick={() => setView('invite-owner')}
-                                    className="w-full bg-gray-50 hover:bg-white p-4 rounded-xl border border-gray-100 shadow-sm hover:shadow-md hover:border-gray-200 transition-all flex items-center justify-between group text-left"
-                                >
-                                    <div>
-                                        <h4 className="text-sm font-bold text-black group-hover:text-primary transition-colors">Add Owner</h4>
-                                        <p className="text-xs text-gray-500 mt-0.5">Grant full access to all your organizations</p>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-white/80 flex items-center justify-center text-gray-400 group-hover:scale-110 transition-transform shadow-sm">
-                                        <UserPlus size={16} />
-                                    </div>
-                                </button>
-                            )}
+                            {/* Organizations List */}
+                            <div className="space-y-4">
+                                <div className="flex items-center justify-between px-1">
+                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#8FA0B4]">Organizations</h4>
+                                </div>
+                                <div className="bg-white rounded-md overflow-hidden divide-y divide-slate-100">
+                                    {(organizations || []).map(org => {
+                                        const isSelected = selectedOrg?.id === org.id;
+                                        return (
+                                            <button
+                                                key={org.id}
+                                                onClick={() => openOrganizationManager(org)}
+                                                className={cn(
+                                                    "w-full px-4 py-3 transition-all flex items-center gap-4 text-left group/item",
+                                                    isSelected 
+                                                        ? "bg-[#EEF3FF]" 
+                                                        : "bg-white hover:bg-slate-50"
+                                                )}
+                                            >
+                                                {/* Selection Checkmark on Left */}
+                                                <div className="w-4 shrink-0 flex items-center justify-center">
+                                                    {isSelected && (
+                                                        <Check size={16} className="text-[#4A8AF4]" strokeWidth={3} />
+                                                    )}
+                                                </div>
 
-                            {organizations.some(org => org.role?.toLowerCase() === 'owner') && onCreateNew && (
-                                <div className="h-px bg-gray-200 mx-1" />
-                            )}
+                                                {/* Organization Icon/Logo */}
+                                                <div className="w-8 h-8 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-gray-500 font-bold shrink-0 overflow-hidden">
+                                                    {org.logo ? (
+                                                        <img src={org.logo} alt={org.name} className="w-full h-full object-cover" />
+                                                    ) : (
+                                                        <Building2 size={16} strokeWidth={2} className="text-slate-400 font-black" />
+                                                    )}
+                                                </div>
 
-                            {/* Add New Card */}
-                            {onCreateNew && (
-                                <button
-                                    onClick={onCreateNew}
-                                    className="w-full bg-slate-100/80 hover:bg-slate-200/80 p-4 rounded-xl border border-slate-200 shadow-sm shadow-slate-200/70 hover:shadow-md hover:border-slate-300 transition-all flex items-center justify-between group text-left"
-                                >
-                                    <div>
-                                        <h4 className="text-sm font-bold text-slate-900 group-hover:text-slate-700 transition-colors">Add New Organization</h4>
-                                        <p className="text-xs text-slate-600 mt-0.5">Create a new business entity</p>
-                                    </div>
-                                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-600 border border-slate-200 group-hover:bg-slate-700 group-hover:text-white group-hover:border-slate-700 transition-colors">
-                                        <Plus size={16} />
-                                    </div>
-                                </button>
-                            )}
+                                                <div className="flex-1 min-w-0">
+                                                    <h4 className={cn(
+                                                        "truncate text-[13px] leading-tight",
+                                                        isSelected ? "font-extrabold text-[#4A8AF4]" : "font-bold text-slate-700"
+                                                    )}>
+                                                        {org.name}
+                                                    </h4>
+                                                    <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-400 mt-0.5">
+                                                        <span className="capitalize">{org.role || 'Member'}</span>
+                                                        <span className="h-0.5 w-0.5 rounded-full bg-slate-300" />
+                                                        <span>{org.baseCurrency || 'INR'}</span>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                            </div>
                         </div>
                     )}
 
@@ -722,7 +863,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 value={inviteName}
                                                 onChange={(e) => setInviteName(e.target.value)}
                                                 placeholder="Enter full name"
-                                                className="w-full pl-12 pr-5 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl text-sm font-bold outline-none focus:border-black focus:bg-white transition-all shadow-sm"
+                                                className="w-full pl-10 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-[13px] font-semibold outline-none focus:border-[#4A8AF4] focus:bg-white transition-all shadow-sm"
                                             />
                                         </div>
                                     </div>
@@ -749,10 +890,10 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 }}
                                                 placeholder="Enter email address"
                                                 className={cn(
-                                                    "w-full pl-12 pr-5 py-3.5 bg-gray-50 border rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all shadow-sm",
+                                                    "w-full pl-10 pr-4 py-1.5 bg-gray-50 border rounded-md text-[13px] font-semibold outline-none focus:bg-white transition-all shadow-sm",
                                                     inviteOwnerEmailError
                                                         ? "border-red-300 text-red-600 focus:border-red-500"
-                                                        : "border-gray-200 focus:border-black"
+                                                        : "border-gray-200 focus:border-[#4A8AF4]"
                                                 )}
                                             />
                                         </div>
@@ -774,7 +915,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                         setInviteName('');
                                         setInviteOwnerEmailError('');
                                     }}
-                                    className="flex-1 py-3.5 rounded-2xl text-sm font-extrabold text-gray-700 bg-white border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all shadow-sm"
+                                    className="flex-1 py-1.5 rounded-md text-[12.5px] font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
                                 >
                                     Cancel
                                 </button>
@@ -817,7 +958,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                         }
                                     }}
                                     disabled={inviteLoading || !inviteName.trim() || Boolean(getInviteOwnerEmailError(inviteEmail))}
-                                    className="flex-1 py-3.5 rounded-2xl text-[13px] font-extrabold text-white bg-black hover:bg-black/90 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
+                                    className="flex-1 py-3.5 rounded-md text-[13px] font-extrabold text-white bg-black hover:bg-black/90 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
                                     {inviteLoading && <Loader2 size={16} className="animate-spin" />}
                                     Send Invite
@@ -826,394 +967,242 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                         </div>
                     )}
 
-                    {/* MANAGE VIEW (Details & Members Tabs) */}
+                    {/* MANAGE VIEW (Users Content) */}
                     {view === 'manage' && editingOrg && (
-                        <div className="flex flex-col h-full overflow-hidden">
-                            {/* Tabs - Only visible for Owners */}
-                            {isEditingOrgOwner && (
-                                <div className="flex px-6 border-b border-gray-100 bg-white">
-                                    <button
-                                        onClick={() => setActiveTab('details')}
-                                        className={`px-4 py-3 text-sm font-bold transition-all relative ${activeTab === 'details' ? 'text-black' : 'text-gray-400 hover:text-gray-600'}`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            Details
-                                        </div>
-                                        {activeTab === 'details' && (
-                                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                                        )}
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('members')}
-                                        className={`px-4 py-3 text-sm font-bold transition-all relative ${activeTab === 'members' ? 'text-black' : 'text-gray-400 hover:text-gray-600'}`}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <Users size={16} /> Members
-                                        </div>
-                                        {activeTab === 'members' && (
-                                            <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-black" />
-                                        )}
-                                    </button>
-                                </div>
-                            )}
-
+                        <div className="flex flex-col h-full overflow-hidden bg-white">
                             <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                {activeTab === 'details' ? (
-                                    <form onSubmit={handleUpdateOrg} className="flex flex-col h-full min-h-full bg-white">
-                                        <div className="flex-1 p-6 space-y-6">
-                                            {successMessage && (
-                                                <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-lg border border-green-100 flex items-center gap-2">
-                                                    <Check size={16} /> {successMessage}
-                                                </div>
-                                            )}
-
-                                            {requestError && (
-                                                <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100 flex items-center gap-2">
-                                                    <AlertCircle size={16} /> {requestError}
-                                                </div>
-                                            )}
-
-                                            {/* Logo + Name Section */}
-                                            <div className="p-6 min-h-[160px] bg-gray-50/30 rounded-2xl border border-gray-100 border-dashed space-y-4">
-                                                <div className="flex items-center gap-4">
-                                                    <div className={`w-20 h-20 rounded-xl flex items-center justify-center border border-gray-200 bg-white overflow-hidden relative shrink-0 shadow-sm transition-all hover:border-gray-300 ${!logoPreview ? 'text-gray-300' : ''}`}>
-                                                        {logoPreview ? (
-                                                            <img src={logoPreview} alt="Logo" className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <Plus size={20} />
-                                                        )}
-                                                        <input
-                                                            type="file"
-                                                            accept="image/*"
-                                                            onChange={handleFileChange}
-                                                            className="absolute inset-0 opacity-0 cursor-pointer"
-                                                        />
-                                                    </div>
-                                                    <p className="text-xs text-gray-500 font-medium">Recommended: Square logo, Max 2MB</p>
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] pl-1">Organization Name</label>
-                                                    <div className="relative group">
-                                                        <input
-                                                            type="text"
-                                                            required
-                                                            value={formData.name}
-                                                            onChange={e => setFormData({ ...formData, name: e.target.value })}
-                                                            placeholder="Enter organization name"
-                                                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-base font-bold text-slate-700 transition-all outline-none focus:border-black focus:bg-white shadow-sm group-hover:bg-white"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-5">
-                                                {/* Currency & Timezone Grid */}
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] pl-1">Base Currency</label>
-                                                        <CustomSelect
-                                                            value={formData.baseCurrency}
-                                                            onChange={e => setFormData({ ...formData, baseCurrency: e.target.value })}
-                                                            dropdownContentClassName="max-h-[102px] overflow-y-auto"
-                                                            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-black focus:bg-white transition-all shadow-sm"
-                                                        >
-                                                            {currencyOptions.map((currency) => (
-                                                                <option key={currency.code} value={currency.code}>{currency.label}</option>
-                                                            ))}
-                                                        </CustomSelect>
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] pl-1">Timezone</label>
-                                                        <CustomSelect
-                                                            value={formData.timezone}
-                                                            onChange={e => setFormData({ ...formData, timezone: e.target.value })}
-                                                            dropdownContentClassName="max-h-[102px] overflow-y-auto"
-                                                            className="w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold text-slate-700 outline-none focus:border-black focus:bg-white transition-all shadow-sm"
-                                                        >
-                                                            <option value="Asia/Kolkata">Asia/Kolkata</option>
-                                                            <option value="UTC">UTC</option>
-                                                            <option value="America/New_York">New York</option>
-                                                            <option value="Europe/London">London</option>
-                                                        </CustomSelect>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Footer Actions */}
-                                        <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex gap-4">
-                                            <button
-                                                type="button"
-                                                onClick={() => setView('list')}
-                                                className="flex-1 py-3.5 rounded-2xl text-sm font-extrabold text-gray-700 bg-white border border-gray-100 hover:bg-gray-50 hover:border-gray-200 transition-all shadow-sm"
-                                            >
-                                                Cancel
-                                            </button>
-                                            <button
-                                                type="submit"
-                                                disabled={isLoading}
-                                                className="flex-1 py-3.5 rounded-2xl text-sm font-extrabold text-white bg-black hover:bg-gray-900 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
-                                            >
-                                                {isLoading && <Loader2 size={16} className="animate-spin" />}
-                                                Update
-                                            </button>
-                                        </div>
-                                    </form>
-                                ) : (
-                                    <div className="px-3 py-4 space-y-6 animate-in slide-in-from-right-4 duration-300">
+                                    <div className="p-5 space-y-6 animate-in fade-in duration-300">
                                         {successMessage && (
-                                            <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-lg border border-green-100 flex items-center gap-2">
+                                            <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-md border border-green-100 flex items-center gap-2">
                                                 <Check size={16} /> {successMessage}
                                             </div>
                                         )}
 
                                         {requestError && (
-                                            <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100 flex items-center gap-2">
+                                            <div className="p-3 bg-red-50 text-red-600 text-[11px] font-bold rounded-md border border-red-100 flex items-center gap-2">
                                                 <AlertCircle size={16} /> {requestError}
                                             </div>
                                         )}
 
-                                        <div className={`w-full grid gap-4 items-start ${canManageMembers ? 'lg:grid-cols-[minmax(0,0.72fr)_minmax(0,0.84fr)]' : 'grid-cols-1'}`}>
-                                            {/* INVITATION FORM */}
-                                            {canManageMembers && (
-                                                <div className="space-y-6">
-                                                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] pl-1 flex items-center gap-2">
-                                                        <UserPlus size={14} /> Invite New Member
-                                                    </h4>
-                                                    <form onSubmit={handleInvite} className="space-y-5">
-                                                        <div className="space-y-4">
+                                        {/* Add User Collapsible */}
+                                        {canManageMembers && (
+                                            <div className="bg-white rounded-md overflow-hidden transition-all duration-300 mb-2">
+                                                <button
+                                                    onClick={() => setIsAddingUser(!isAddingUser)}
+                                                    className={cn(
+                                                        "w-full px-4 py-2.5 flex items-center justify-between transition-all group",
+                                                        isAddingUser ? "bg-white" : "bg-slate-50/50 hover:bg-slate-100/50"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-7 h-7 bg-white border border-slate-200 rounded-md shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                                            <Plus size={16} strokeWidth={2.5} />
+                                                        </div>
+                                                        <span className="text-[13px] font-extrabold text-slate-900 tracking-tight">Add User</span>
+                                                    </div>
+                                                    <ChevronDown 
+                                                        size={14} 
+                                                        strokeWidth={2.5}
+                                                        className={cn(
+                                                            "text-slate-400 transition-transform duration-300",
+                                                            isAddingUser ? "rotate-180" : ""
+                                                        )} 
+                                                    />
+                                                </button>
+
+                                                {isAddingUser && (
+                                                    <div className="px-4 pt-2 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-300">
+
+                                                        
+                                                        <div className="space-y-2.5">
                                                             <div className="relative group">
-                                                                <Users className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={16} />
+                                                                <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors" size={17} />
                                                                 <input
                                                                     type="text"
-                                                                    required
                                                                     value={inviteName}
-                                                                    onChange={(e) => {
-                                                                        setInviteName(e.target.value);
-                                                                        if (requestError) setRequestError('');
-                                                                    }}
-                                                                    placeholder="Enter full name"
-                                                                    className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-100 rounded-2xl text-[13px] font-bold outline-none focus:border-black focus:bg-white transition-all shadow-sm"
+                                                                    onChange={e => setInviteName(e.target.value)}
+                                                                    placeholder="Full Name"
+                                                                    className="w-full pl-10 pr-4 py-1.5 bg-white border border-gray-200 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] hover:border-gray-300 transition-all placeholder:text-gray-300 placeholder:font-medium"
                                                                 />
                                                             </div>
-                                                            <div className="relative group">
-                                                                <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-black transition-colors" size={16} />
-                                                                <input
-                                                                    type="email"
-                                                                    required
-                                                                    value={inviteEmail}
-                                                                    onChange={(e) => {
-                                                                        const nextValue = e.target.value;
-                                                                        setInviteEmail(nextValue);
-                                                                        setInviteMemberEmailError(
-                                                                            nextValue.trim() ? getInviteMemberEmailError(nextValue) : ''
-                                                                        );
-                                                                        if (requestError) setRequestError('');
-                                                                    }}
-                                                                    onBlur={() => {
-                                                                        setInviteMemberEmailError(
-                                                                            inviteEmail.trim() ? getInviteMemberEmailError(inviteEmail) : ''
-                                                                        );
-                                                                    }}
-                                                                    placeholder="Enter email address"
-                                                                    className={cn(
-                                                                        "w-full pl-10 pr-4 py-2.5 bg-gray-50 border rounded-2xl text-[13px] font-bold outline-none focus:bg-white transition-all shadow-sm",
-                                                                        inviteMemberEmailError
-                                                                            ? "border-red-300 text-red-600 focus:border-red-500"
-                                                                            : "border-gray-100 focus:border-black"
-                                                                    )}
-                                                                />
-                                                            </div>
-                                                            {inviteMemberEmailError && (
-                                                                <p className="px-1 text-xs font-bold text-red-500">{inviteMemberEmailError}</p>
-                                                            )}
 
-                                                            <div className="space-y-1.5 pt-1">
-                                                                <CustomSelect
-                                                                    value={selectedOrgRole}
-                                                                    onChange={(e) => setSelectedOrgRole(parseInt(e.target.value))}
-                                                                    className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-2xl text-[13px] font-bold outline-none focus:border-black focus:bg-white transition-all shadow-sm"
-                                                                >
-                                                                    <option value="3">Member</option>
-                                                                    {(isEditingOrgOwner || editingOrg?.role?.toLowerCase() === 'admin') && <option value="2">Admin</option>}
-                                                                </CustomSelect>
+                                                            <div>
+                                                                <div className="relative group">
+                                                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors" size={17} />
+                                                                    <input
+                                                                        type="email"
+                                                                        value={inviteEmail}
+                                                                        onChange={e => setInviteEmail(e.target.value)}
+                                                                        placeholder="Email Address"
+                                                                        className={cn(
+                                                                            "w-full pl-10 pr-4 py-1.5 bg-white border rounded-md text-[13px] font-semibold text-gray-800 outline-none transition-all hover:border-gray-300 placeholder:text-gray-300 placeholder:font-medium",
+                                                                            inviteMemberEmailError ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#4A8AF4]"
+                                                                        )}
+                                                                    />
+                                                                </div>
+                                                                {inviteMemberEmailError && <p className="text-[11px] font-bold text-red-500 pl-1 mt-1">{inviteMemberEmailError}</p>}
                                                             </div>
+
+                                                            <CustomSelect
+                                                                value={selectedOrgRole}
+                                                                onChange={e => setSelectedOrgRole(e.target.value)}
+                                                                showSelectedCheck
+                                                                className="w-full px-4 py-1.5 bg-white border border-gray-200 rounded-md text-[13px] font-semibold text-gray-800 hover:border-gray-300 outline-none focus:border-[#4A8AF4] transition-all"
+                                                            >
+                                                                <option value="3">Member</option>
+                                                                {(isEditingOrgOwner || editingOrg?.role?.toLowerCase() === 'admin') && <option value="2">Admin</option>}
+                                                                {isEditingOrgOwner && <option value="1">Owner</option>}
+                                                            </CustomSelect>
 
                                                             {parseInt(selectedOrgRole) === 3 && (
-                                                                <div className="space-y-3 pt-1.5">
+                                                                <div className="space-y-3 pt-1">
                                                                     <div className="flex items-center justify-between px-1">
-                                                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] flex items-center gap-2">
-                                                                            <GitBranch size={14} className="rotate-90" /> Assign Branch Access <span className="text-red-500">*</span>
+                                                                        <label className="text-[10px] font-bold text-[#8FA0B4] uppercase tracking-widest flex items-center gap-2">
+                                                                            Branch Access <span className="text-red-400">*</span>
                                                                         </label>
-                                                                        <span className="text-[10px] font-bold text-indigo-600">{selectedBranchIds.length} branch(es) selected</span>
-                                                                    </div>
-                                                                    {allBranches.length > 0 && (
-                                                                        <button
+                                                                        <button 
                                                                             type="button"
                                                                             onClick={() => {
-                                                                                setSelectedBranchIds(inviteAllBranchesSelected ? [] : allBranchIds);
+                                                                                if (inviteAllBranchesSelected) {
+                                                                                    setSelectedBranchIds([]);
+                                                                                } else {
+                                                                                    setSelectedBranchIds(allBranchIds);
+                                                                                }
                                                                             }}
-                                                                            className="flex items-center gap-2.5 px-1 py-0.5 text-left"
+                                                                            className="text-[10px] font-bold text-[#4A8AF4] hover:text-[#3B7AE6] transition-colors"
                                                                         >
-                                                                            <div className={`w-3.5 h-3.5 shrink-0 rounded-[5px] border-2 flex items-center justify-center transition-all ${inviteAllBranchesSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                                                {inviteAllBranchesSelected && <Check size={10} strokeWidth={3} />}
-                                                                            </div>
-                                                                            <span className="text-[12px] font-bold text-gray-600">Select All</span>
+                                                                            {inviteAllBranchesSelected ? "Deselect All" : "Select All"}
                                                                         </button>
-                                                                    )}
-                                                                    <div className="grid grid-cols-1 gap-2 max-h-[150px] overflow-y-auto custom-scrollbar pr-1">
-                                                                        {allBranches.length > 0 ? (
-                                                                            <>
-                                                                                {allBranches.map(branch => {
+                                                                    </div>
+                                                                    <div className="grid grid-cols-1 gap-2 max-h-[136px] overflow-y-auto custom-scrollbar pr-1">
+                                                                        {allBranches.map(branch => {
                                                                             const isSelected = selectedBranchIds.includes(branch.id);
                                                                             return (
                                                                                 <div key={branch.id}
                                                                                     onClick={() => {
                                                                                         setSelectedBranchIds(prev =>
-                                                                                            prev.includes(branch.id)
-                                                                                                ? prev.filter(id => id !== branch.id)
-                                                                                                : [...prev, branch.id]
+                                                                                            prev.includes(branch.id) ? prev.filter(id => id !== branch.id) : [...prev, branch.id]
                                                                                         );
                                                                                     }}
-                                                                                    className={`flex min-w-0 items-center gap-2.5 p-2.5 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50 border-indigo-200 shadow-sm' : 'bg-gray-50 border-gray-100 hover:bg-gray-100 hover:border-gray-200'}`}
+                                                                                    className={cn(
+                                                                                        "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-all overflow-hidden",
+                                                                                        isSelected ? "bg-[#EEF3FF] border-[#4A8AF4]/30" : "bg-white border-gray-200 hover:border-gray-300"
+                                                                                    )}
                                                                                 >
-                                                                                    <div className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300 bg-white'}`}>
+                                                                                    <div className={cn(
+                                                                                        "w-4 h-4 shrink-0 rounded-[4px] border-2 flex items-center justify-center transition-all",
+                                                                                        isSelected ? "bg-[#4A8AF4] border-[#4A8AF4] text-white" : "border-gray-300 bg-white"
+                                                                                    )}>
                                                                                         {isSelected && <Check size={12} strokeWidth={3} />}
                                                                                     </div>
-                                                                                    <div className="min-w-0 flex-1">
-                                                                                        <span className="block truncate text-[13px] font-bold text-gray-900">{branch.name}</span>
-                                                                                    </div>
+                                                                                    <span className="text-[13px] font-bold text-gray-800 truncate">{branch.name}</span>
                                                                                 </div>
                                                                             );
                                                                         })}
-                                                                            </>
-                                                                        ) : (
-                                                                            <div className="p-4 text-center bg-gray-50 rounded-2xl border border-gray-100 border-dashed">
-                                                                                <p className="text-xs text-gray-400 font-bold italic">No branches available</p>
-                                                                            </div>
-                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             )}
                                                         </div>
 
-                                                        <button
-                                                            type="submit"
-                                                            disabled={inviteLoading || !inviteName.trim() || Boolean(getInviteMemberEmailError(inviteEmail)) || (parseInt(selectedOrgRole) === 3 && selectedBranchIds.length === 0)}
-                                                            className="w-full mt-[-4px] bg-black text-white py-2.5 rounded-2xl font-extrabold text-[12px] hover:bg-black/90 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 group"
-                                                        >
-                                                            {inviteLoading ? <Loader2 size={16} className="animate-spin" /> : (
-                                                                <>
-                                                                    <UserPlus size={18} className="group-hover:scale-110 transition-transform" />
-                                                                    Send Invitation
-                                                                </>
-                                                            )}
-                                                        </button>
-                                                    </form>
-                                                </div>
-                                            )}
-
-                                            {/* MEMBER LIST */}
-                                            <div className={`space-y-4 ${canManageMembers ? 'pt-0' : 'pt-2'}`}>
-                                                <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] pl-1">Current Members ({members.length})</h4>
-
-                                                <div className="relative min-h-[80px]">
-                                                    {loadingMembers && members.length === 0 ? (
-                                                        <div className="min-h-[220px] flex items-center justify-center">
-                                                            <Loader2 className="animate-spin text-gray-500" size={26} />
+                                                        <div className="flex gap-3 pt-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setIsAddingUser(false);
+                                                                    resetMemberInviteForm();
+                                                                }}
+                                                                className="flex-1 py-1.5 text-[12.5px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                                                            >
+                                                                Cancel
+                                                            </button>
+                                                            <button
+                                                                onClick={handleInvite}
+                                                                disabled={inviteLoading || !inviteName.trim() || !inviteEmail.trim() || (parseInt(selectedOrgRole) === 3 && selectedBranchIds.length === 0)}
+                                                                className="flex-1 py-1.5 text-[12.5px] font-bold text-white bg-[#4A8AF4] rounded-md hover:bg-[#3B7AE6] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                                            >
+                                                                {inviteLoading ? <Loader2 size={16} className="animate-spin" /> : <><UserPlus size={16} /> Add</>}
+                                                            </button>
                                                         </div>
-                                                    ) : (
-                                                    <div className="space-y-2.5 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
-                                                        {members.length > 0 ? members.map(member => {
-                                                            const memberBranchIds = parseMemberSelectedBranchIds(member);
-                                                            const memberBranchNames = parseMemberBranchNames(member, allBranches);
-
-                                                            return (
-                                                            <div key={member.id} className="group relative flex items-center justify-between p-3 bg-white border border-gray-100 rounded-2xl hover:border-gray-200 hover:shadow-sm transition-all">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-bold text-[13px] shadow-sm ${member.role === 'owner' ? 'bg-amber-100 text-amber-700' : member.role === 'admin' ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-                                                                    {member.name?.[0] || member.email?.[0] || '?'}
-                                                                </div>
-                                                                <div className="space-y-0.5">
-                                                                    <div className="text-[13px] font-extrabold text-gray-900 leading-tight">{member.name || 'Pending User'}</div>
-                                                                    <div className="text-xs text-gray-400 font-medium leading-tight">{member.email}</div>
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="flex items-center gap-3">
-                                                                {member.role === 'member' && memberBranchNames.length > 0 ? (
-                                                                    <MemberBranchTooltip branchNames={memberBranchNames}>
-                                                                        <span className="text-[10px] uppercase font-black px-2 py-1 rounded-lg tracking-wider bg-gray-100 text-gray-500 cursor-default">
-                                                                            {member.role}
-                                                                        </span>
-                                                                    </MemberBranchTooltip>
-                                                                ) : (
-                                                                    <span className={`text-[10px] uppercase font-black px-2 py-1 rounded-lg tracking-wider ${member.role === 'owner' ? 'bg-amber-50 text-amber-600' : member.role === 'admin' ? 'bg-indigo-50 text-indigo-600' : 'bg-gray-100 text-gray-500'}`}>
-                                                                        {member.role}
-                                                                    </span>
-                                                                )}
-
-                                                                {canManageMembers && (member.id !== user?.id) && (
-                                                                    (isEditingOrgOwner || (editingOrg?.role === 'admin' && member.role === 'member')) ? (
-                                                                        <div className="absolute top-0 right-0 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-200 z-10">
-                                                                            <button
-                                                                                onClick={() => {
-                                                                                    setMemberToEdit(member);
-                                                                                    const roleId = member.role === 'owner' ? 1 : (member.role === 'admin' ? 2 : 3);
-                                                                                    setEditingAccessData({ roleId, branchIds: memberBranchIds.map(Number) });
-                                                                                }}
-                                                                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-bl-md transition-all"
-                                                                                title="Edit Member"
-                                                                            >
-                                                                                <Edit size={12} />
-                                                                            </button>
-                                                                            <button
-                                                                                onClick={() => setMemberToRemove({ id: member.id, name: member.name })}
-                                                                                className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-bl-md rounded-tr-2xl transition-all"
-                                                                                title="Remove Member"
-                                                                            >
-                                                                                <Trash2 size={12} />
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : null
-                                                                )}
-                                                            </div>
-
-                                                            {/* Overlays (Remove) */}
-                                                            {memberToRemove?.id === member.id && (
-                                                                <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-2xl flex items-center justify-between px-4 z-10 animate-in fade-in duration-200">
-                                                                    <span className="text-xs font-black text-red-600 uppercase tracking-wider">Remove this user?</span>
-                                                                    <div className="flex gap-2">
-                                                                        <button onClick={() => setMemberToRemove(null)} className="text-xs font-black text-gray-500 px-3 py-2 hover:bg-gray-100 rounded-xl transition-all">Cancel</button>
-                                                                        <button onClick={handleRemoveMember} className="text-xs font-black text-white bg-red-600 px-4 py-2 rounded-xl shadow-md hover:bg-red-700 active:scale-95 transition-all">Confirm</button>
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                            </div>
-                                                        )}) : !loadingMembers ? (
-                                                            <div className="text-center py-8 text-sm text-gray-400 font-medium">
-                                                                No members found.
-                                                            </div>
-                                                        ) : null}
                                                     </div>
-                                                    )}
-                                                    {loadingMembers && members.length > 0 && (
-                                                        <div className="absolute inset-0 z-10 bg-white/35 backdrop-blur-[1px] rounded-2xl flex flex-col items-center justify-center">
-                                                            <Loader2 className="animate-spin text-gray-500" size={24} />
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Users List Header */}
+                                        <div className="flex items-center justify-between px-1">
+                                            <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Users</h4>
+                                            <span className="text-[10px] font-bold text-slate-300">{members.length}</span>
+                                        </div>
+
+                                        {/* Users List */}
+                                        <div className="bg-white rounded-md overflow-hidden divide-y divide-slate-100">
+                                            {loadingMembers && members.length === 0 ? (
+                                                <div className="py-20 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-300" /></div>
+                                            ) : members.length > 0 ? members.map(member => (
+                                                <div key={member.id} className="group relative flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-all">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[13px] shadow-sm shrink-0 ${member.role === 'owner' ? 'bg-amber-100 text-amber-600' : member.role === 'admin' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
+                                                            {member.name?.[0] || member.email?.[0] || '?'}
+                                                        </div>
+                                                        <div className="space-y-0.5 min-w-0">
+                                                            <div className="text-[13px] font-bold text-slate-900 leading-tight truncate">{member.name || 'Pending User'}</div>
+                                                            <div className="text-[10px] text-slate-400 font-medium leading-tight truncate">{member.email}</div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                                        <span className={cn(
+                                                            "text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wider uppercase",
+                                                            member.role === 'owner' ? "bg-amber-100 text-amber-600" : 
+                                                            member.role === 'admin' ? "bg-indigo-100 text-indigo-600" : 
+                                                            "bg-slate-100 text-slate-500"
+                                                        )}>
+                                                            {member.role === 'owner' ? 'OWNER' : member.role === 'admin' ? 'ADMIN' : 'MEMBER'}
+                                                        </span>
+
+                                                        {canManageMembers && member.id !== user?.id && (
+                                                            <div className="flex items-center gap-0.5 mt-0.5">
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setMemberToEdit(member);
+                                                                        const roleId = member.role === 'owner' ? 1 : (member.role === 'admin' ? 2 : 3);
+                                                                        setEditingAccessData({ roleId, branchIds: parseMemberSelectedBranchIds(member) });
+                                                                    }}
+                                                                    className="p-1 text-slate-400 hover:text-[#4A8AF4] hover:bg-[#EEF3FF] rounded-md transition-all"
+                                                                >
+                                                                    <Edit size={13} />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => setMemberToRemove({ id: member.id, name: member.name })}
+                                                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                                                                >
+                                                                    <Trash2 size={13} />
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Remove Overlay */}
+                                                    {memberToRemove?.id === member.id && (
+                                                        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-md flex items-center justify-between px-4 z-10 animate-in fade-in duration-200">
+                                                            <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Remove User?</span>
+                                                            <div className="flex gap-2">
+                                                                <button onClick={() => setMemberToRemove(null)} className="text-[10px] font-black text-slate-400 px-3 py-1.5 bg-gray-50 rounded-md">No</button>
+                                                                <button onClick={handleRemoveMember} className="text-[10px] font-black text-white bg-red-500 px-4 py-1.5 rounded-md shadow-md">Yes, Remove</button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
-                                            </div>
+                                            )) : (
+                                                <div className="text-center py-12 text-slate-400 text-xs font-bold italic">No members found</div>
+                                            )}
                                         </div>
                                     </div>
-                                )}
                             </div>
 
                             {/* EDIT MEMBER SUB-MODAL */}
                             {memberToEdit && (
-                                <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 rounded-2xl">
-                                    <div className="bg-white w-full max-w-[312px] rounded-2xl shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
+                                <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 rounded-md">
+                                    <div className="bg-white w-full max-w-[312px] rounded-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
                                         <div className="p-4 space-y-4 text-left">
                                             <div className="flex items-center justify-between">
                                                 <div>
@@ -1222,9 +1211,9 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 </div>
                                                 <button
                                                     onClick={() => setMemberToEdit(null)}
-                                                    className="p-2.5 text-gray-400 hover:text-gray-900 hover:bg-gray-50 rounded-2xl transition-all"
+                                                    className="p-1 text-gray-400 hover:text-gray-900 hover:bg-gray-50 rounded-md transition-all"
                                                 >
-                                                    <X size={20} />
+                                                    <X size={14} strokeWidth={2.5} />
                                                 </button>
                                             </div>
 
@@ -1234,7 +1223,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                     <CustomSelect
                                                         value={editingAccessData.roleId}
                                                         onChange={(e) => setEditingAccessData(prev => ({ ...prev, roleId: parseInt(e.target.value) }))}
-                                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold transition-all outline-none focus:border-black focus:bg-white"
+                                                        className="w-full px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-[13px] font-semibold transition-all outline-none focus:border-[#4A8AF4] focus:bg-white"
                                                     >
                                                         {isEditingOrgOwner && <option value="1">Owner</option>}
                                                         {isEditingOrgOwner && <option value="2">Admin</option>}
@@ -1264,7 +1253,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        <div className="bg-gray-50 border border-gray-100 rounded-2xl p-2.5 shadow-sm">
+                                                        <div className="bg-gray-50 border border-gray-100 rounded-md p-2.5 shadow-sm">
                                                             <div className="grid grid-cols-1 gap-2.5 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
                                                             {allBranches.map(branch => {
                                                                 const normalizedBranchId = Number(branch.id);
@@ -1283,7 +1272,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                                                 };
                                                                             });
                                                                         }}
-                                                                        className={`flex min-w-0 items-center gap-4 p-4 rounded-2xl border cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50 border-indigo-200' : 'bg-gray-50 border-gray-100 hover:bg-gray-100'}`}
+                                                                        className={`flex min-w-0 items-center gap-4 p-2.5 rounded-md border cursor-pointer transition-all ${isSelected ? 'bg-[#EEF3FF] border-[#4A8AF4]/30' : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'}`}
                                                                     >
                                                                         <div className={`w-5 h-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300 bg-white'}`}>
                                                                             {isSelected && <Check size={12} strokeWidth={3.5} />}
@@ -1301,14 +1290,14 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                             <div className="flex gap-3 pt-2">
                                                 <button
                                                     onClick={() => setMemberToEdit(null)}
-                                                    className="flex-1 text-[11px] font-black text-gray-500 bg-gray-50 py-3 rounded-xl border border-gray-100 hover:bg-gray-100 transition-all"
+                                                    className="flex-1 text-[12.5px] font-bold text-gray-700 bg-white py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
                                                 >
                                                     Cancel
                                                 </button>
                                                 <button
                                                     onClick={handleUpdateMemberAccess}
                                                     disabled={isLoading || (editingAccessData.roleId === 3 && editingAccessData.branchIds.length === 0)}
-                                                    className="flex-1 text-[11px] font-black text-white bg-black py-3 rounded-xl shadow-xl shadow-black/10 hover:shadow-black/20 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                    className="flex-1 text-[12.5px] font-bold text-white bg-[#4A8AF4] py-1.5 rounded-md shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                 >
                                                     {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Update'}
                                                 </button>
@@ -1318,12 +1307,12 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                 </div>
                             )}
                         </div>
-                    )}
-                </div>
+                )}
             </div>
-        </div>,
-        document.body
-    );
+        </div>
+    </div>,
+    document.body
+);
 };
 
 export default ManageOrganizationModal;
