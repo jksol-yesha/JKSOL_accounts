@@ -20,6 +20,23 @@ import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 
+const CurrencyOption = ({ symbol, code, isSelected }) => (
+    <div className="flex items-center gap-3 w-full">
+        <span className={cn(
+            "text-[14px] w-5 text-center font-bold",
+            isSelected ? "text-[#4A8AF4]" : "text-slate-400"
+        )}>
+            {symbol}
+        </span>
+        <span className={cn(
+            "text-[13px] font-black tracking-tight",
+            isSelected ? "text-[#4A8AF4]" : "text-slate-900"
+        )}>
+            {code}
+        </span>
+    </div>
+);
+
 const TIME_ZONE_OPTIONS = [
     { value: 'Asia/Kolkata', label: 'Asia/Kolkata' },
     { value: 'America/New_York', label: 'America/New_York' },
@@ -1002,11 +1019,8 @@ const ManageOrganization = () => {
                     )}
                 </div>
                 <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                    <h1 className="truncate text-[20px] font-bold tracking-tight text-slate-900">
                         Manage Organization
-                    </p>
-                    <h1 className="mt-1 truncate text-[20px] font-bold tracking-tight text-slate-900">
-                        {selectedOrg?.name || 'Organization'}
                     </h1>
                 </div>
             </div>
@@ -1467,22 +1481,20 @@ const ManageOrganization = () => {
                                             setCreateOrgForm((previous) => ({ ...previous, baseCurrency: option.code }));
                                             setShowCreateCurrencyDropdown(false);
                                         }}
-                                        className="group flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-[#EEF0FC]"
+                                        className={cn(
+                                            "group flex w-full items-center justify-between px-3 py-2 text-left transition-colors",
+                                            isSelected ? "bg-[#EEF3FF]" : "hover:bg-[#EEF3FF]"
+                                        )}
                                     >
                                         <div className="flex items-center gap-1.5 pr-1">
                                             <div className="w-4 flex justify-center shrink-0">
                                                 {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                             </div>
-                                            <p
-                                                className={cn(
-                                                    "whitespace-normal break-words leading-tight text-[13px]",
-                                                    isSelected
-                                                        ? "font-bold text-slate-800"
-                                                        : "font-medium text-slate-600 group-hover:text-slate-800"
-                                                )}
-                                            >
-                                                {option.label}
-                                            </p>
+                                            <CurrencyOption 
+                                                symbol={option.symbol} 
+                                                code={option.code} 
+                                                isSelected={isSelected} 
+                                            />
                                         </div>
                                     </button>
                                 );

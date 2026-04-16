@@ -12,6 +12,7 @@ import { useYear } from '../../../context/YearContext';
 import { usePreferences } from '../../../context/PreferenceContext';
 import { useOrganization } from '../../../context/OrganizationContext';
 import { useAuth } from '../../../context/AuthContext';
+import AccountNameTooltip from '../../../components/common/AccountNameTooltip';
 
 // --- BANK AVATAR LOGIC ---
 const bankLogoModules = import.meta.glob('../../../assets/bank-logos/*.{png,jpg,jpeg,svg}', {
@@ -183,9 +184,11 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                             subtypeLabel={cat.subtypeLabel}
                                             sizeClass="w-6 h-6"
                                         />
-                                        <span className="text-[13px] font-medium text-slate-800 truncate">
-                                            {cat.displayName}
-                                        </span>
+                                        <AccountNameTooltip 
+                                            name={cat.displayName}
+                                            className="min-w-0 flex-1"
+                                            textClassName="text-[13px] font-medium text-slate-800"
+                                        />
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
                                         <span className="w-32 text-right text-[13px] font-medium text-slate-800">

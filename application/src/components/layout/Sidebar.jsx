@@ -10,7 +10,9 @@ import {
     Check,
     Camera,
     AlignLeft,
-    ArrowRight
+    ArrowRight,
+    Loader2,
+    Trash2
 } from 'lucide-react';
 import {
     Home,
@@ -28,7 +30,8 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 
-import { useAuth } from '../../context/AuthContext'; // Import useAuth
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 
 const dateFormats = [
     { value: 'DD MMM, YYYY (d M, Y)', label: '08 Jan, 2026' },
@@ -77,6 +80,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const [isPreferencesExpanded, setIsPreferencesExpanded] = React.useState(false);
     const [openPrefDropdown, setOpenPrefDropdown] = React.useState(null);
     const [tempProfilePhoto, setTempProfilePhoto] = React.useState(null);
+    const [showDeleteOption, setShowDeleteOption] = React.useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
     const [showSidebarControlMenu, setShowSidebarControlMenu] = React.useState(false);
     const sidebarRef = React.useRef(null);
@@ -88,6 +92,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const location = useLocation();
     const { selectedOrg } = useOrganization();
     const { user, logout, updateUser } = useAuth();
+    const { showToast } = useToast();
     const { preferences, updatePreferences } = usePreferences();
     const { currencyOptions } = useCurrencyOptions();
     const { sidebarMode, setSidebarMode, setSidebarHoverExpanded } = useSidebarLayout();
@@ -177,6 +182,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             setActiveEditField(null);
             setIsPreferencesExpanded(false);
             setOpenPrefDropdown(null);
+            setShowDeleteOption(false);
         }
     }, [showProfileMenu, rawName, user?.email, user?.profilePhoto, preferences]);
 
@@ -234,6 +240,8 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         setHoveredItem(null);
         setShowSidebarControlMenu(false);
         setOpenPrefDropdown(null);
+        setIsPreferencesExpanded(false);
+        setActiveEditField(null);
         setShowLogoutConfirm(true);
     };
 
@@ -251,11 +259,9 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         }
     };
 
-    const handleProfileClick = () => {
-        setHoveredItem(null);
-        setShowLogoutConfirm(false);
-        setShowSidebarControlMenu(false);
-        setShowProfileMenu((current) => !current);
+    const handleProfileClick = (e) => {
+        e.stopPropagation();
+        setShowProfileMenu(!showProfileMenu);
     };
 
     const handleSidebarModeSelect = (nextMode) => {
@@ -269,14 +275,31 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         }
     };
 
-    const handleImageChange = (event) => {
+    const handleImageChange = async (event) => {
         const file = event.target.files?.[0];
         if (!file) return;
-        if (file.size > 5 * 1024 * 1024) return;
+        if (file.size > 5 * 1024 * 1024) {
+            console.error('File too large');
+            return;
+        }
 
         const reader = new FileReader();
-        reader.onloadend = () => {
-            setTempProfilePhoto(reader.result);
+        reader.onloadend = async () => {
+            const base64data = reader.result;
+            setIsSaving(true);
+            try {
+                await updateUser({
+                    profilePhoto: base64data
+                });
+                setTempProfilePhoto(base64data);
+                if (fileInputRef.current) fileInputRef.current.value = '';
+                showToast('Profile photo updated successfully', 'success');
+            } catch (error) {
+                console.error('Failed to upload profile photo', error);
+                showToast('Failed to upload profile photo', 'error');
+            } finally {
+                setIsSaving(false);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -286,18 +309,45 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         setDraftPreferences((previous) => ({ ...previous, [name]: value }));
     };
 
+    const handleRemovePhoto = async (e) => {
+        if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        
+        console.log('Remove photo triggered');
+        showToast('Remove action started', 'info');
+        setIsSaving(true);
+        try {
+            await updateUser({
+                profilePhoto: null
+            });
+            setTempProfilePhoto(null);
+            setShowDeleteOption(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            showToast('Profile photo removed', 'success');
+        } catch (error) {
+            console.error('Failed to remove profile photo', error);
+            showToast('Failed to remove photo', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleSaveProfile = async () => {
         if (!hasChanges) return;
 
         setIsSaving(true);
         try {
-            if (hasNameChange || hasEmailChange || hasPhotoChange) {
+            if (hasNameChange || hasEmailChange || (hasPhotoChange && !isSaving)) {
                 await updateUser({
                     name: hasNameChange ? tempDisplayName : undefined,
                     email: hasEmailChange ? tempEmail : undefined,
                     profilePhoto: hasPhotoChange ? tempProfilePhoto : undefined,
                 });
             }
+            
+            showToast('Profile saved successfully', 'success');
 
             if (hasPreferenceChanges) {
                 const changedPreferences = Object.entries(draftPreferences || {}).reduce((accumulator, [key, value]) => {
@@ -457,26 +507,78 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     type="button"
                     onClick={handleSaveProfile}
                     disabled={isSaving}
-                    className="absolute left-6 top-3 inline-flex items-center gap-1 rounded-full bg-slate-900 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[0.14em] text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    title={isSaving ? 'Saving...' : 'Save Changes'}
+                    className="absolute left-6 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 active:scale-95"
                 >
-                    <Check size={11} strokeWidth={3} />
-                    <span>{isSaving ? 'Saving...' : 'Save'}</span>
+                    {isSaving ? (
+                        <Loader2 size={12} className="animate-spin" />
+                    ) : (
+                        <Check size={14} strokeWidth={3.5} />
+                    )}
                 </button>
             )}
 
             <div className="flex justify-center pt-4 pb-2">
-                <div
-                    className="group/avatar relative flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[2px] border-white bg-slate-100 text-slate-400 shadow-[0_4px_12px_rgb(15,23,42,0.1)] cursor-pointer"
-                    onClick={() => fileInputRef.current?.click()}
+                <div 
+                    className="relative cursor-pointer group/avatar"
+                    onMouseDown={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        const nextState = !showDeleteOption;
+                        setShowDeleteOption(nextState);
+                        showToast(`Click detected. Toggle: ${nextState ? 'Show' : 'Hide'}`, 'info', { duration: 1500 });
+                    }}
                 >
-                    {tempProfilePhoto ? (
-                        <img src={tempProfilePhoto} alt="Profile" className="h-full w-full object-cover" />
-                    ) : (
-                        <UserIcon size={22} strokeWidth={1.5} />
-                    )}
-                    <div className="absolute inset-0 flex items-center justify-center bg-slate-950/35 opacity-0 transition-opacity group-hover/avatar:opacity-100">
-                        <Camera size={15} className="text-white drop-shadow-md" />
+                    <div
+                        className="relative flex h-[46px] w-[46px] shrink-0 items-center justify-center overflow-hidden rounded-full border-[2px] border-white bg-slate-100 text-slate-400 shadow-[0_4px_12px_rgb(15,23,42,0.1)] transition-transform active:scale-95 z-10"
+                    >
+                        {tempProfilePhoto ? (
+                            <img src={tempProfilePhoto} alt="Profile" className="h-full w-full object-cover" />
+                        ) : (
+                            <UserIcon size={22} strokeWidth={1.5} />
+                        )}
+                        
+                        {/* Saving overlay */}
+                        {isSaving && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-20">
+                                <Loader2 size={16} className="animate-spin text-slate-900" />
+                            </div>
+                        )}
+
+                        {/* Hover Overlay - Only Camera Icon visible on hover */}
+                        <div 
+                            className="absolute inset-0 flex items-center justify-center bg-slate-950/40 opacity-0 transition-opacity group-hover/avatar:opacity-100 pointer-events-none z-30"
+                        >
+                            <button
+                                type="button"
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    fileInputRef.current?.click();
+                                }}
+                                className="p-2 rounded-full hover:bg-white/20 transition-colors pointer-events-auto"
+                                title="Upload Photo"
+                            >
+                                <Camera size={18} className="text-white drop-shadow-md" />
+                            </button>
+                        </div>
                     </div>
+                    
+                    {tempProfilePhoto && (
+                        <button
+                            type="button"
+                            onMouseDown={(e) => {
+                                e.stopPropagation();
+                                handleRemovePhoto(e);
+                            }}
+                            title="Remove Photo"
+                            className={cn(
+                                "absolute -top-1.5 -right-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-white text-slate-900 shadow-xl ring-1 ring-slate-200 transition-all hover:bg-slate-50 active:scale-95 z-50 duration-200",
+                                showDeleteOption ? "scale-100 opacity-100" : "scale-0 opacity-0 pointer-events-none"
+                            )}
+                        >
+                            <X size={14} strokeWidth={2.5} />
+                        </button>
+                    )}
                 </div>
                 <input
                     type="file"
@@ -503,7 +605,10 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         </p>
                         <button
                             type="button"
-                            onClick={() => setActiveEditField('name')}
+                            onClick={() => {
+                                setShowLogoutConfirm(false);
+                                setActiveEditField('name');
+                            }}
                             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/name:opacity-100 group-hover/name:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
                         >
                             <Edit2 size={13} strokeWidth={2} />
@@ -526,7 +631,10 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         </p>
                         <button
                             type="button"
-                            onClick={() => setActiveEditField('email')}
+                            onClick={() => {
+                                setShowLogoutConfirm(false);
+                                setActiveEditField('email');
+                            }}
                             className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-slate-400 opacity-0 pointer-events-none transition-all duration-200 group-hover/email:opacity-100 group-hover/email:pointer-events-auto hover:bg-slate-50 hover:text-slate-600"
                         >
                             <Edit2 size={13} strokeWidth={2} />
@@ -607,6 +715,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         className="flex w-full cursor-pointer items-center justify-between py-2 px-6 text-left"
                         onClick={() => {
                             setOpenPrefDropdown(null);
+                            setShowLogoutConfirm(false);
                             setIsPreferencesExpanded((current) => !current);
                         }}
                     >
@@ -677,7 +786,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             )}
 
             <aside className={cn(
-                "fixed inset-y-0 left-0 z-[70] w-[208px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-full overflow-visible",
+                "fixed inset-y-0 left-0 z-[70] w-[208px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-screen min-h-screen max-h-screen rounded-none overflow-visible",
                 usesHoverOverlay ? "md:fixed md:translate-x-0" : "md:relative md:translate-x-0",
                 isTabletViewport ? (effectiveCollapsed ? "md:w-[50px]" : "md:w-[208px]") : (isCollapsed && "lg:w-[52px]"),
                 usesHoverOverlay && !effectiveCollapsed && "md:z-[85] md:shadow-[0_18px_40px_rgba(15,23,42,0.14)]",
@@ -699,7 +808,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             >
                 <div className={cn(
                     "flex flex-col pt-4 mb-0.5 flex-none",
-                    effectiveCollapsed ? "items-center px-2" : "px-3"
+                    effectiveCollapsed ? "items-center px-0" : "px-3"
                 )}>
                     <OrganizationSelector isCollapsed={effectiveCollapsed} />
                 </div>
@@ -715,7 +824,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 {/* Navigation */}
                 <div className={cn(
                     "flex-1 overflow-y-auto overflow-x-visible pt-1 pb-2 px-3 space-y-0.5 custom-scrollbar",
-                    effectiveCollapsed && "no-scrollbar px-2"
+                    effectiveCollapsed && "no-scrollbar px-0 items-center"
                 )}>
 
                     {/* Menu Label Removed for Minimalism */}
@@ -733,7 +842,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     isActive
                                         ? "bg-[#4A8AF4] text-white border-[#4A8AF4]"
                                         : "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                    effectiveCollapsed && "justify-center px-2 md:px-2.5",
+                                    effectiveCollapsed && "justify-center px-0",
                                     showHoverExpandPanel && "overflow-visible"
                                 )}
                             >
@@ -774,8 +883,8 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             type="button"
                             onClick={handleProfileClick}
                             className={cn(
-                                "flex h-10 w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900",
-                                effectiveCollapsed ? "justify-center px-2 md:px-2.5" : "gap-3.5 px-6",
+                                "flex h-[38px] w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900 px-3",
+                                effectiveCollapsed ? "justify-center" : "gap-3",
                                 showHoverExpandPanel && "overflow-visible",
                                 location.pathname.startsWith('/profile') && "bg-white text-slate-800 shadow-sm border-slate-200"
                             )}
@@ -830,7 +939,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         })()}
 
                         {showProfileMenu && !effectiveCollapsed && (
-                            <div className="relative w-full border-t border-slate-100 bg-[#f4f6fe] animate-in slide-in-from-top-2 duration-200">
+                            <div className="relative w-full border-t border-slate-100 bg-[#f4f6fe] overflow-visible animate-in slide-in-from-top-2 duration-200">
                                 {profileMenuContent}
                             </div>
                         )}
@@ -839,8 +948,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             <div className="absolute bottom-0 left-full z-[120] ml-1 w-64 overflow-visible animate-in fade-in zoom-in-95 slide-in-from-left-2 duration-300 ease-out">
                                 <div
                                     className={cn(
-                                        "relative rounded-2xl border border-slate-100 bg-[#f4f6fe] shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)]",
-                                        openPrefDropdown ? "overflow-visible" : "overflow-hidden"
+                                        "relative rounded-2xl border border-slate-100 bg-[#f4f6fe] shadow-[0_10px_30px_rgba(0,0,0,0.08),0_4px_12px_rgba(0,0,0,0.03)] overflow-visible",
                                     )}
                                 >
                                     {profileMenuContent}
@@ -864,7 +972,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     onMouseLeave={clearHoveredItem}
                                     className={cn(
                                         "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent bg-[#EEF0FC] text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                        effectiveCollapsed ? "justify-center px-4" : "justify-start px-6",
+                                        effectiveCollapsed ? "justify-center px-0" : "justify-start px-6",
                                         showHoverExpandPanel && "overflow-visible",
                                         showSidebarControlMenu && "text-slate-900"
                                     )}

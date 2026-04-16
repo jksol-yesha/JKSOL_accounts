@@ -4,7 +4,7 @@ import CustomSelect from '../../../components/common/CustomSelect';
 import { useCurrencyOptions } from '../../../hooks/useCurrencyOptions';
 import { usePreferences } from '../../../context/PreferenceContext';
 import { cn } from '../../../utils/cn';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Check, Loader2 } from 'lucide-react';
 
 const dateFormats = [
     { value: 'DD MMM, YYYY (d M, Y)', label: '08 Jan, 2026 (d M, Y)' },
@@ -33,7 +33,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
     const { currencyOptions } = useCurrencyOptions();
 
     return (
-    <div className={cn("space-y-6 py-2", className)}>
+    <div className={cn("space-y-4 py-1", className)}>
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
             <label className="md:col-span-4 text-sm font-semibold text-gray-700 flex items-center gap-2">
                 Currency
@@ -43,7 +43,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     name="currency"
                     value={draftPreferences.currency || 'INR'}
                     onChange={onChange}
-                    className="w-full py-2 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
+                    className="w-full py-1.5 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
                 >
                     {currencyOptions.map((currency) => (
                         <option key={currency.code} value={currency.code}>{currency.label}</option>
@@ -61,7 +61,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     name="dateFormat"
                     value={draftPreferences.dateFormat}
                     onChange={onChange}
-                    className="w-full py-2 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
+                    className="w-full py-1.5 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
                 >
                     {dateFormats.map((format) => (
                         <option key={format.value} value={format.value}>{format.label}</option>
@@ -79,7 +79,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     name="numberFormat"
                     value={draftPreferences.numberFormat}
                     onChange={onChange}
-                    className="w-full py-2 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
+                    className="w-full py-1.5 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
                 >
                     {numberFormats.map((format) => (
                         <option key={format.value} value={format.value}>{format.label}</option>
@@ -100,7 +100,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     name="timeZone"
                     value={draftPreferences.timeZone}
                     onChange={onChange}
-                    className="w-full py-2 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
+                    className="w-full py-1.5 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
                 >
                     {timeZones.map((timeZone) => (
                         <option key={timeZone.value} value={timeZone.value}>{timeZone.label}</option>
@@ -161,10 +161,10 @@ const PreferenceSettingsSection = ({ className = '' }) => {
                     <div className="md:col-span-8 flex justify-end">
                         <button
                             onClick={handleSave}
-                            className="px-6 py-2 bg-black hover:bg-black/90 text-white text-sm font-bold rounded-lg shadow-md transition-all active:scale-95"
-                        >
-                            Save Changes
-                        </button>
+                                className="w-11 h-11 rounded-full bg-black hover:bg-black/90 text-white shadow-md transition-all active:scale-95 flex items-center justify-center shadow-black/20"
+                            >
+                                <Check size={20} strokeWidth={3.5} />
+                            </button>
                     </div>
                 </div>
             </Card>

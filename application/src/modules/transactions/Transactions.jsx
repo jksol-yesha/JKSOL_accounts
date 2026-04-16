@@ -26,6 +26,7 @@ import ImportTransactionModal from './ImportTransactionModal';
 // import ImportPDFModal from './ImportPDFModal';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
+import AccountNameTooltip from '../../components/common/AccountNameTooltip';
 import { notifyTransactionDataChanged } from './transactionDataSync';
 
 const createInitialDeleteDialog = () => ({
@@ -1295,12 +1296,18 @@ const Transactions = () => {
             sortKey: 'account',
             headerClassName: 'sticky top-0 z-10 px-2 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
             cellClassName: 'px-2 py-1.5 text-xs font-medium text-gray-600 whitespace-nowrap',
-            render: (txn) => (
-                txn.accountName ||
-                (typeof txn.account === 'object' && txn.account !== null ? txn.account.name : txn.account) ||
-                txn.method ||
-                '-'
-            )
+            render: (txn) => {
+                const accountName = txn.accountName ||
+                    (typeof txn.account === 'object' && txn.account !== null ? txn.account.name : txn.account) ||
+                    txn.method ||
+                    '-';
+                return (
+                    <AccountNameTooltip 
+                        name={accountName}
+                        textClassName="text-xs font-medium text-gray-600"
+                    />
+                );
+            }
         },
         {
             key: 'category',
