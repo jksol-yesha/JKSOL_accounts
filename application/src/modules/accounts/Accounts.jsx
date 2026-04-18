@@ -1266,9 +1266,9 @@ const Accounts = () => {
     if (groupBy !== "none") {
       // Sort the list by the grouping field first to ensure cohesive groups
       result.sort((a, b) => {
-        const valA = (groupBy === "type" ? a.accountType : a.subtype) || "";
-        const valB = (groupBy === "type" ? b.accountType : b.subtype) || "";
-        return valA.localeCompare(valB);
+        const valA = String((groupBy === "type" ? a.accountType : a.subtype) ?? "");
+        const valB = String((groupBy === "type" ? b.accountType : b.subtype) ?? "");
+        return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
       });
       return result;
     }
