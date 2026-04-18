@@ -189,10 +189,15 @@ const Layout = ({ children }) => {
                 </div>
 
                 <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out print:w-full print:block print:h-auto print:overflow-visible">
-                    <main className={cn(
+                    <main
+                        id="app-main-content"
+                        tabIndex={-1}
+                        className={cn(
                         "flex-1 no-scrollbar relative min-h-0 flex flex-col print:h-auto print:overflow-visible print:block print:w-full print:flex-none",
                         isDashboard ? "overflow-hidden" : "overflow-y-auto"
-                    )} ref={mainRef}>
+                    )}
+                        ref={mainRef}
+                    >
                         <div className={cn(
                             "w-full flex flex-col print:h-auto print:block print:w-full",
                             "h-full min-h-0 flex-1", isDashboard && "overflow-hidden"

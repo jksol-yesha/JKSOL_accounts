@@ -518,7 +518,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                                                 />
                                             </div>
                                             <div>
-                                                <p className="text-sm font-bold text-gray-900">Organization Logo</p>
+                                                <p className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest pl-1">Organization Logo</p>
                                                 <p className="text-xs text-gray-500 mt-0.5">Recommended: Square, Max 2MB</p>
                                             </div>
                                         </div>

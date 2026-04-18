@@ -12,13 +12,13 @@ import { isValidEmail } from '../../utils/validation';
 const CurrencyOption = ({ symbol, code, isSelected }) => (
     <div className="flex items-center gap-2 w-full pr-1">
         <span className={cn(
-            "text-[13px] min-w-[16px] text-right font-medium whitespace-nowrap",
+            "text-[12px] min-w-[16px] text-right font-medium whitespace-nowrap",
             isSelected ? "text-slate-900" : "text-slate-400"
         )}>
             {symbol}
         </span>
         <span className={cn(
-            "text-[12px] tracking-wide whitespace-nowrap",
+            "text-[11px] tracking-wide whitespace-nowrap",
             isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"
         )}>
             {code}
@@ -29,7 +29,7 @@ const CurrencyOption = ({ symbol, code, isSelected }) => (
 const TimezoneOption = ({ label, isSelected }) => (
     <div className="flex items-center gap-2 w-full">
         <span className={cn(
-            "text-[12px] tracking-wide whitespace-nowrap",
+            "text-[11px] tracking-wide whitespace-nowrap",
             isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"
         )}>
             {label}
@@ -298,6 +298,8 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             setMemberToRemove(null);
             setMemberToEdit(null);
             setEditingAccessData({ roleId: 3, branchIds: [] });
+            setIsAddingOrg(initialView === 'create');
+            setIsAddingUser(false);
         } else {
             setView('list');
             setEditingOrg(null);
@@ -578,13 +580,13 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
     return createPortal(
         <div 
-            className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-[12px] animate-in fade-in duration-300"
+            className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm animate-fade-in"
             onClick={onClose}
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                    "manage-org-modal-shell bg-white h-full w-full md:w-[420px] shadow-[0_0_50px_rgba(0,0,0,0.1)] animate-in slide-in-from-right duration-500 ease-in-out relative flex flex-col",
+                    "manage-org-modal-shell bg-white h-screen w-full md:w-[420px] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] animate-slide-in-right relative flex flex-col",
                     view === 'manage' ? "manage-org-modal-manage" : ""
                 )}
             >
@@ -597,9 +599,12 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                 <Building2 size={14} strokeWidth={2.5} />
                             </div>
                             <div className="flex flex-col">
-                                <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                                <h2 className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
                                     Manage Organization
                                 </h2>
+                                <p className="text-[10px] text-slate-500 font-bold tracking-wider">
+                                    Settings & Hierarchy
+                                </p>
                             </div>
                         </div>
                         <button
@@ -619,13 +624,13 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             setView('list');
                         }}
                         className={cn(
-                            "px-5 py-3.5 text-[13px] font-bold transition-all relative",
-                            view === 'list' ? "text-gray-900" : "text-[#8FA0B4] hover:text-gray-600"
+                            "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
+                            view === 'list' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
                         )}
                     >
                         Organization
                         {view === 'list' && (
-                            <div className="absolute bottom-0 left-4 right-4 h-[3px] rounded-t-full bg-[#4A8AF4]" />
+                            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
                         )}
                     </button>
                     <button
@@ -636,23 +641,23 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             setView('manage');
                         }}
                         className={cn(
-                            "px-5 py-3.5 text-[13px] font-bold transition-all relative",
-                            view === 'manage' ? "text-gray-900" : "text-[#8FA0B4] hover:text-gray-600"
+                            "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
+                            view === 'manage' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
                         )}
                     >
                         Users
                         {view === 'manage' && (
-                            <div className="absolute bottom-0 left-4 right-4 h-[3px] rounded-t-full bg-[#4A8AF4]" />
+                            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
                         )}
                     </button>
                 </div>
 
                 {/* Body */}
-                <div className="flex-1 overflow-y-auto min-h-0 bg-white">
+                <div className="flex-1 flex flex-col min-h-0 bg-white">
 
                     {/* LIST VIEW */}
                     {view === 'list' && (
-                        <div className="p-5 space-y-6">
+                        <div className="flex-1 overflow-y-auto custom-scrollbar p-5 space-y-6">
                             {successMessage && (
                                 <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-md border border-green-100 flex items-center gap-2">
                                     <Check size={16} /> {successMessage}
@@ -678,7 +683,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                         <div className="w-7 h-7 bg-white border border-slate-200 rounded-md shadow-sm flex items-center justify-center text-[#4A8AF4]">
                                             <Plus size={16} strokeWidth={2.5} />
                                         </div>
-                                        <span className="text-[13px] font-extrabold text-slate-900 tracking-tight">Add Organization</span>
+                                        <span className="text-[11.5px] font-extrabold text-slate-600 tracking-tight">Add Organization</span>
                                     </div>
                                     <ChevronDown 
                                         size={14} 
@@ -710,26 +715,31 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 />
                                             </div>
                                             <div className="space-y-1">
-                                                <h5 className="text-[13.5px] font-bold text-gray-900">Organization Logo</h5>
-                                                <p className="text-[11.5px] text-[#8FA0B4] font-medium leading-tight">Square logo recommended. PNG or JPG up to 2MB.</p>
+                                                <label className="text-[11px] font-bold text-slate-600 block">Organization Logo</label>
+                                                <p className="text-[10.5px] text-[#8FA0B4] font-medium leading-tight">Square logo recommended. PNG or JPG up to 2MB.</p>
                                             </div>
                                         </div>
 
-                                        <div className="space-y-2.5">
-                                            <input
-                                                type="text"
-                                                value={createFormData.name}
-                                                onChange={e => setCreateFormData({ ...createFormData, name: e.target.value })}
-                                                placeholder="Organization Name"
-                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all placeholder:text-gray-300 placeholder:font-medium"
-                                            />
+                                        <div className="space-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block">Organization Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={createFormData.name}
+                                                    onChange={e => setCreateFormData({ ...createFormData, name: e.target.value })}
+                                                    placeholder="e.g. Acme Corp"
+                                                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all placeholder:text-slate-300"
+                                                />
+                                            </div>
 
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block">Base Currency</label>
                                             <CustomSelect
-                                                value={createFormData.baseCurrency}
-                                                onChange={e => setCreateFormData({ ...createFormData, baseCurrency: e.target.value })}
-                                                showSelectedCheck
-                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all"
-                                            >
+                                                    value={createFormData.baseCurrency}
+                                                    onChange={e => setCreateFormData({ ...createFormData, baseCurrency: e.target.value })}
+                                                    showSelectedCheck
+                                                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                >
                                                 {currencyOptions
                                                     .filter(c => ['INR', 'USD', 'EUR', 'GBP', 'AED'].includes(c.code))
                                                     .map((currency) => (
@@ -738,13 +748,16 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                     </option>
                                                 ))}
                                             </CustomSelect>
+                                            </div>
 
-                                            <CustomSelect
-                                                value={createFormData.timezone}
-                                                onChange={e => setCreateFormData({ ...createFormData, timezone: e.target.value })}
-                                                showSelectedCheck
-                                                className="w-full px-3 py-1.5 bg-white border border-gray-200 hover:border-gray-300 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] transition-all"
-                                            >
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block">Timezone</label>
+                                                <CustomSelect
+                                                    value={createFormData.timezone}
+                                                    onChange={e => setCreateFormData({ ...createFormData, timezone: e.target.value })}
+                                                    showSelectedCheck
+                                                    className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                >
                                                 <option value="Asia/Kolkata">
                                                     <TimezoneOption label="Asia/Kolkata" isSelected={createFormData.timezone === 'Asia/Kolkata'} />
                                                 </option>
@@ -759,18 +772,19 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 </option>
                                             </CustomSelect>
                                         </div>
+                                    </div>
 
                                         <div className="flex justify-end gap-3 pt-1">
                                             <button
                                                 onClick={() => setIsAddingOrg(false)}
-                                                className="px-5 py-1.5 text-[12.5px] font-bold text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
+                                                className="px-3 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
                                             >
                                                 Cancel
                                             </button>
                                             <button
                                                 onClick={handleCreateOrg}
                                                 disabled={isLoading || !createFormData.name.trim()}
-                                                className="px-5 py-1.5 text-[12.5px] font-bold text-white bg-[#4A8AF4] rounded-md hover:bg-[#3B7AE6] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                                                className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
                                                 {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Create'}
                                             </button>
@@ -782,7 +796,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             {/* Organizations List */}
                             <div className="space-y-4">
                                 <div className="flex items-center justify-between px-1">
-                                    <h4 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#8FA0B4]">Organizations</h4>
+                                    <h4 className="text-[10px] font-bold tracking-wider text-slate-500">Organizations</h4>
                                 </div>
                                 <div className="bg-white rounded-md overflow-hidden divide-y divide-slate-100">
                                     {(organizations || []).map(org => {
@@ -816,12 +830,12 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
                                                 <div className="flex-1 min-w-0">
                                                     <h4 className={cn(
-                                                        "truncate text-[13px] leading-tight",
+                                                        "truncate text-[11px] leading-tight",
                                                         isSelected ? "font-extrabold text-[#4A8AF4]" : "font-bold text-slate-700"
                                                     )}>
                                                         {org.name}
                                                     </h4>
-                                                    <div className="flex items-center gap-1.5 text-[10.5px] font-bold text-slate-400 mt-0.5">
+                                                    <div className="flex items-center gap-1.5 text-[8.5px] font-bold text-slate-400 mt-0.5">
                                                         <span className="capitalize">{org.role || 'Member'}</span>
                                                         <span className="h-0.5 w-0.5 rounded-full bg-slate-300" />
                                                         <span>{org.baseCurrency || 'INR'}</span>
@@ -969,245 +983,389 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
                     {/* MANAGE VIEW (Users Content) */}
                     {view === 'manage' && editingOrg && (
-                        <div className="flex flex-col h-full overflow-hidden bg-white">
-                            <div className="flex-1 overflow-y-auto custom-scrollbar">
-                                    <div className="p-5 space-y-6 animate-in fade-in duration-300">
-                                        {successMessage && (
-                                            <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-md border border-green-100 flex items-center gap-2">
-                                                <Check size={16} /> {successMessage}
+                        <>
+                            <div className="flex-1 flex flex-col overflow-y-auto custom-scrollbar p-5 pb-0 space-y-6 animate-in fade-in duration-300">
+                                {successMessage && (
+                                    <div className="p-3 bg-green-50 text-green-700 text-sm font-bold rounded-md border border-green-100 flex items-center gap-2">
+                                        <Check size={16} /> {successMessage}
+                                    </div>
+                                )}
+
+                                {requestError && (
+                                    <div className="p-3 bg-red-50 text-red-600 text-[11px] font-bold rounded-md border border-red-100 flex items-center gap-2">
+                                        <AlertCircle size={16} /> {requestError}
+                                    </div>
+                                )}
+
+                                {canManageMembers && (
+                                    <div className="bg-white rounded-md overflow-hidden transition-all duration-300 mb-2">
+                                        <button
+                                            onClick={() => setIsAddingUser(!isAddingUser)}
+                                            className={cn(
+                                                "w-full px-4 py-2.5 flex items-center justify-between transition-all group",
+                                                isAddingUser
+                                                    ? "bg-white"
+                                                    : "bg-slate-50/50 hover:bg-slate-100/50",
+                                            )}
+                                        >
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-7 h-7 bg-white border border-slate-200 rounded-md shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                                    <Plus size={16} strokeWidth={2.5} />
+                                                </div>
+                                                <span className="text-[11.5px] font-extrabold text-slate-600 tracking-tight">
+                                                    Add User
+                                                </span>
                                             </div>
-                                        )}
-
-                                        {requestError && (
-                                            <div className="p-3 bg-red-50 text-red-600 text-[11px] font-bold rounded-md border border-red-100 flex items-center gap-2">
-                                                <AlertCircle size={16} /> {requestError}
-                                            </div>
-                                        )}
-
-                                        {/* Add User Collapsible */}
-                                        {canManageMembers && (
-                                            <div className="bg-white rounded-md overflow-hidden transition-all duration-300 mb-2">
-                                                <button
-                                                    onClick={() => setIsAddingUser(!isAddingUser)}
-                                                    className={cn(
-                                                        "w-full px-4 py-2.5 flex items-center justify-between transition-all group",
-                                                        isAddingUser ? "bg-white" : "bg-slate-50/50 hover:bg-slate-100/50"
-                                                    )}
-                                                >
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-7 h-7 bg-white border border-slate-200 rounded-md shadow-sm flex items-center justify-center text-[#4A8AF4]">
-                                                            <Plus size={16} strokeWidth={2.5} />
-                                                        </div>
-                                                        <span className="text-[13px] font-extrabold text-slate-900 tracking-tight">Add User</span>
-                                                    </div>
-                                                    <ChevronDown 
-                                                        size={14} 
-                                                        strokeWidth={2.5}
-                                                        className={cn(
-                                                            "text-slate-400 transition-transform duration-300",
-                                                            isAddingUser ? "rotate-180" : ""
-                                                        )} 
-                                                    />
-                                                </button>
-
-                                                {isAddingUser && (
-                                                    <div className="px-4 pt-2 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-300">
-
-                                                        
-                                                        <div className="space-y-2.5">
-                                                            <div className="relative group">
-                                                                <Users className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors" size={17} />
-                                                                <input
-                                                                    type="text"
-                                                                    value={inviteName}
-                                                                    onChange={e => setInviteName(e.target.value)}
-                                                                    placeholder="Full Name"
-                                                                    className="w-full pl-10 pr-4 py-1.5 bg-white border border-gray-200 rounded-md text-[13px] font-semibold text-gray-800 outline-none focus:border-[#4A8AF4] hover:border-gray-300 transition-all placeholder:text-gray-300 placeholder:font-medium"
-                                                                />
-                                                            </div>
-
-                                                            <div>
-                                                                <div className="relative group">
-                                                                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors" size={17} />
-                                                                    <input
-                                                                        type="email"
-                                                                        value={inviteEmail}
-                                                                        onChange={e => setInviteEmail(e.target.value)}
-                                                                        placeholder="Email Address"
-                                                                        className={cn(
-                                                                            "w-full pl-10 pr-4 py-1.5 bg-white border rounded-md text-[13px] font-semibold text-gray-800 outline-none transition-all hover:border-gray-300 placeholder:text-gray-300 placeholder:font-medium",
-                                                                            inviteMemberEmailError ? "border-red-300 focus:border-red-400" : "border-gray-200 focus:border-[#4A8AF4]"
-                                                                        )}
-                                                                    />
-                                                                </div>
-                                                                {inviteMemberEmailError && <p className="text-[11px] font-bold text-red-500 pl-1 mt-1">{inviteMemberEmailError}</p>}
-                                                            </div>
-
-                                                            <CustomSelect
-                                                                value={selectedOrgRole}
-                                                                onChange={e => setSelectedOrgRole(e.target.value)}
-                                                                showSelectedCheck
-                                                                className="w-full px-4 py-1.5 bg-white border border-gray-200 rounded-md text-[13px] font-semibold text-gray-800 hover:border-gray-300 outline-none focus:border-[#4A8AF4] transition-all"
-                                                            >
-                                                                <option value="3">Member</option>
-                                                                {(isEditingOrgOwner || editingOrg?.role?.toLowerCase() === 'admin') && <option value="2">Admin</option>}
-                                                                {isEditingOrgOwner && <option value="1">Owner</option>}
-                                                            </CustomSelect>
-
-                                                            {parseInt(selectedOrgRole) === 3 && (
-                                                                <div className="space-y-3 pt-1">
-                                                                    <div className="flex items-center justify-between px-1">
-                                                                        <label className="text-[10px] font-bold text-[#8FA0B4] uppercase tracking-widest flex items-center gap-2">
-                                                                            Branch Access <span className="text-red-400">*</span>
-                                                                        </label>
-                                                                        <button 
-                                                                            type="button"
-                                                                            onClick={() => {
-                                                                                if (inviteAllBranchesSelected) {
-                                                                                    setSelectedBranchIds([]);
-                                                                                } else {
-                                                                                    setSelectedBranchIds(allBranchIds);
-                                                                                }
-                                                                            }}
-                                                                            className="text-[10px] font-bold text-[#4A8AF4] hover:text-[#3B7AE6] transition-colors"
-                                                                        >
-                                                                            {inviteAllBranchesSelected ? "Deselect All" : "Select All"}
-                                                                        </button>
-                                                                    </div>
-                                                                    <div className="grid grid-cols-1 gap-2 max-h-[136px] overflow-y-auto custom-scrollbar pr-1">
-                                                                        {allBranches.map(branch => {
-                                                                            const isSelected = selectedBranchIds.includes(branch.id);
-                                                                            return (
-                                                                                <div key={branch.id}
-                                                                                    onClick={() => {
-                                                                                        setSelectedBranchIds(prev =>
-                                                                                            prev.includes(branch.id) ? prev.filter(id => id !== branch.id) : [...prev, branch.id]
-                                                                                        );
-                                                                                    }}
-                                                                                    className={cn(
-                                                                                        "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-all overflow-hidden",
-                                                                                        isSelected ? "bg-[#EEF3FF] border-[#4A8AF4]/30" : "bg-white border-gray-200 hover:border-gray-300"
-                                                                                    )}
-                                                                                >
-                                                                                    <div className={cn(
-                                                                                        "w-4 h-4 shrink-0 rounded-[4px] border-2 flex items-center justify-center transition-all",
-                                                                                        isSelected ? "bg-[#4A8AF4] border-[#4A8AF4] text-white" : "border-gray-300 bg-white"
-                                                                                    )}>
-                                                                                        {isSelected && <Check size={12} strokeWidth={3} />}
-                                                                                    </div>
-                                                                                    <span className="text-[13px] font-bold text-gray-800 truncate">{branch.name}</span>
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-
-                                                        <div className="flex gap-3 pt-1">
-                                                            <button
-                                                                onClick={() => {
-                                                                    setIsAddingUser(false);
-                                                                    resetMemberInviteForm();
-                                                                }}
-                                                                className="flex-1 py-1.5 text-[12.5px] font-semibold text-gray-700 bg-white border border-gray-200 rounded-md hover:bg-gray-50 hover:border-gray-300 transition-all"
-                                                            >
-                                                                Cancel
-                                                            </button>
-                                                            <button
-                                                                onClick={handleInvite}
-                                                                disabled={inviteLoading || !inviteName.trim() || !inviteEmail.trim() || (parseInt(selectedOrgRole) === 3 && selectedBranchIds.length === 0)}
-                                                                className="flex-1 py-1.5 text-[12.5px] font-bold text-white bg-[#4A8AF4] rounded-md hover:bg-[#3B7AE6] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                                                            >
-                                                                {inviteLoading ? <Loader2 size={16} className="animate-spin" /> : <><UserPlus size={16} /> Add</>}
-                                                            </button>
-                                                        </div>
-                                                    </div>
+                                            <ChevronDown
+                                                size={14}
+                                                strokeWidth={2.5}
+                                                className={cn(
+                                                    "text-slate-400 transition-transform duration-300",
+                                                    isAddingUser ? "rotate-180" : "",
                                                 )}
-                                            </div>
-                                        )}
+                                            />
+                                        </button>
 
-                                        {/* Users List Header */}
-                                        <div className="flex items-center justify-between px-1">
-                                            <h4 className="text-[10px] font-black uppercase tracking-[0.15em] text-slate-400">Users</h4>
-                                            <span className="text-[10px] font-bold text-slate-300">{members.length}</span>
-                                        </div>
-
-                                        {/* Users List */}
-                                        <div className="bg-white rounded-md overflow-hidden divide-y divide-slate-100">
-                                            {loadingMembers && members.length === 0 ? (
-                                                <div className="py-20 flex justify-center"><Loader2 size={24} className="animate-spin text-slate-300" /></div>
-                                            ) : members.length > 0 ? members.map(member => (
-                                                <div key={member.id} className="group relative flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-all">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[13px] shadow-sm shrink-0 ${member.role === 'owner' ? 'bg-amber-100 text-amber-600' : member.role === 'admin' ? 'bg-indigo-100 text-indigo-600' : 'bg-slate-100 text-slate-500'}`}>
-                                                            {member.name?.[0] || member.email?.[0] || '?'}
-                                                        </div>
-                                                        <div className="space-y-0.5 min-w-0">
-                                                            <div className="text-[13px] font-bold text-slate-900 leading-tight truncate">{member.name || 'Pending User'}</div>
-                                                            <div className="text-[10px] text-slate-400 font-medium leading-tight truncate">{member.email}</div>
-                                                        </div>
+                                        {isAddingUser && (
+                                            <div className="px-4 pt-2 pb-4 space-y-3 animate-in slide-in-from-top-2 duration-300">
+                                                <div className="space-y-2.5">
+                                                    <div className="relative group">
+                                                        <Users
+                                                            className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors"
+                                                            size={17}
+                                                        />
+                                                        <input
+                                                            type="text"
+                                                            value={inviteName}
+                                                            onChange={(e) =>
+                                                                setInviteName(e.target.value)
+                                                            }
+                                                            placeholder="Full Name"
+                                                            className="w-full pl-10 pr-4 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all placeholder:text-slate-300"
+                                                        />
                                                     </div>
 
-                                                    <div className="flex flex-col items-end gap-1 shrink-0">
-                                                        <span className={cn(
-                                                            "text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wider uppercase",
-                                                            member.role === 'owner' ? "bg-amber-100 text-amber-600" : 
-                                                            member.role === 'admin' ? "bg-indigo-100 text-indigo-600" : 
-                                                            "bg-slate-100 text-slate-500"
-                                                        )}>
-                                                            {member.role === 'owner' ? 'OWNER' : member.role === 'admin' ? 'ADMIN' : 'MEMBER'}
-                                                        </span>
-
-                                                        {canManageMembers && member.id !== user?.id && (
-                                                            <div className="flex items-center gap-0.5 mt-0.5">
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setMemberToEdit(member);
-                                                                        const roleId = member.role === 'owner' ? 1 : (member.role === 'admin' ? 2 : 3);
-                                                                        setEditingAccessData({ roleId, branchIds: parseMemberSelectedBranchIds(member) });
-                                                                    }}
-                                                                    className="p-1 text-slate-400 hover:text-[#4A8AF4] hover:bg-[#EEF3FF] rounded-md transition-all"
-                                                                >
-                                                                    <Edit size={13} />
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => setMemberToRemove({ id: member.id, name: member.name })}
-                                                                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
-                                                                >
-                                                                    <Trash2 size={13} />
-                                                                </button>
-                                                            </div>
+                                                    <div>
+                                                        <div className="relative group">
+                                                            <Mail
+                                                                className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#4A8AF4] transition-colors"
+                                                                size={17}
+                                                            />
+                                                            <input
+                                                                type="email"
+                                                                value={inviteEmail}
+                                                                onChange={(e) =>
+                                                                    setInviteEmail(e.target.value)
+                                                                }
+                                                                placeholder="Email Address"
+                                                                className={cn(
+                                                                    "w-full pl-10 pr-4 py-1.5 bg-white border rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none transition-all placeholder:text-slate-300 placeholder:font-medium",
+                                                                    inviteMemberEmailError
+                                                                        ? "border-rose-300 focus:ring-rose-500/10"
+                                                                        : "border-slate-200 focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10",
+                                                                )}
+                                                            />
+                                                        </div>
+                                                        {inviteMemberEmailError && (
+                                                            <p className="text-[8px] font-bold text-red-500 pl-1 mt-1">
+                                                                {inviteMemberEmailError}
+                                                            </p>
                                                         )}
                                                     </div>
 
-                                                    {/* Remove Overlay */}
-                                                    {memberToRemove?.id === member.id && (
-                                                        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-md flex items-center justify-between px-4 z-10 animate-in fade-in duration-200">
-                                                            <span className="text-[10px] font-black text-red-500 uppercase tracking-widest">Remove User?</span>
-                                                            <div className="flex gap-2">
-                                                                <button onClick={() => setMemberToRemove(null)} className="text-[10px] font-black text-slate-400 px-3 py-1.5 bg-gray-50 rounded-md">No</button>
-                                                                <button onClick={handleRemoveMember} className="text-[10px] font-black text-white bg-red-500 px-4 py-1.5 rounded-md shadow-md">Yes, Remove</button>
+                                                    <CustomSelect
+                                                        value={selectedOrgRole}
+                                                        onChange={(e) =>
+                                                            setSelectedOrgRole(e.target.value)
+                                                        }
+                                                        showSelectedCheck
+                                                        className="w-full px-4 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                    >
+                                                        <option value="3">Member</option>
+                                                        {(isEditingOrgOwner ||
+                                                            editingOrg?.role?.toLowerCase() ===
+                                                                'admin') && (
+                                                            <option value="2">Admin</option>
+                                                        )}
+                                                        {isEditingOrgOwner && (
+                                                            <option value="1">Owner</option>
+                                                        )}
+                                                    </CustomSelect>
+
+                                                    {parseInt(selectedOrgRole) === 3 && (
+                                                        <div className="space-y-3 pt-1">
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                                                    Branch Access{" "}
+                                                                    <span className="text-rose-400">
+                                                                        *
+                                                                    </span>
+                                                                </label>
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        if (inviteAllBranchesSelected) {
+                                                                            setSelectedBranchIds([]);
+                                                                        } else {
+                                                                            setSelectedBranchIds(
+                                                                                allBranchIds,
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                    className="text-[8px] font-bold text-[#4A8AF4] hover:text-[#3B7AE6] transition-colors"
+                                                                >
+                                                                    {inviteAllBranchesSelected
+                                                                        ? "Deselect All"
+                                                                        : "Select All"}
+                                                                </button>
+                                                            </div>
+                                                            <div className="grid grid-cols-1 gap-2 max-h-[136px] overflow-y-auto custom-scrollbar pr-1">
+                                                                {allBranches.map((branch) => {
+                                                                    const isSelected =
+                                                                        selectedBranchIds.includes(
+                                                                            branch.id,
+                                                                        );
+                                                                    return (
+                                                                        <div
+                                                                            key={branch.id}
+                                                                            onClick={() => {
+                                                                                setSelectedBranchIds(
+                                                                                    (prev) =>
+                                                                                        prev.includes(
+                                                                                            branch.id,
+                                                                                        )
+                                                                                            ? prev.filter(
+                                                                                                  (id) =>
+                                                                                                      id !==
+                                                                                                      branch.id,
+                                                                                              )
+                                                                                            : [
+                                                                                                  ...prev,
+                                                                                                  branch.id,
+                                                                                              ],
+                                                                                );
+                                                                            }}
+                                                                            className={cn(
+                                                                                "flex items-center gap-3 p-2.5 rounded-md border cursor-pointer transition-all overflow-hidden",
+                                                                                isSelected
+                                                                                    ? "bg-[#EEF3FF] border-[#4A8AF4]/30"
+                                                                                    : "bg-white border-gray-200 hover:border-gray-300",
+                                                                            )}
+                                                                        >
+                                                                            <div
+                                                                                className={cn(
+                                                                                    "w-4 h-4 shrink-0 rounded-[4px] border-2 flex items-center justify-center transition-all",
+                                                                                    isSelected
+                                                                                        ? "bg-[#4A8AF4] border-[#4A8AF4] text-white"
+                                                                                        : "border-gray-300 bg-white",
+                                                                                )}
+                                                                            >
+                                                                                {isSelected && (
+                                                                                    <Check
+                                                                                        size={12}
+                                                                                        strokeWidth={3}
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="text-[10.5px] font-bold text-gray-800 truncate">
+                                                                                {branch.name}
+                                                                            </span>
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     )}
                                                 </div>
-                                            )) : (
-                                                <div className="text-center py-12 text-slate-400 text-xs font-bold italic">No members found</div>
-                                            )}
-                                        </div>
+
+                                                <div className="flex gap-3 pt-1">
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsAddingUser(false);
+                                                            resetMemberInviteForm();
+                                                        }}
+                                                        className="flex-1 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                    <button
+                                                        onClick={handleInvite}
+                                                        disabled={
+                                                            inviteLoading ||
+                                                            !inviteName.trim() ||
+                                                            !inviteEmail.trim() ||
+                                                            (parseInt(selectedOrgRole) === 3 &&
+                                                                selectedBranchIds.length === 0)
+                                                        }
+                                                        className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                    >
+                                                        {inviteLoading ? (
+                                                            <Loader2
+                                                                size={16}
+                                                                className="animate-spin"
+                                                            />
+                                                        ) : (
+                                                            'Invite Member'
+                                                        )}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
+                                )}
+
+                                <div className="flex flex-1 flex-col gap-2">
+                                    <div className="flex items-center justify-between px-1">
+                                        <h4 className="text-[10px] font-bold tracking-wider text-slate-500">
+                                            Users
+                                        </h4>
+                                        <span className="text-[10px] font-bold text-slate-400">
+                                            {members.length}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex-1 bg-white overflow-hidden divide-y divide-slate-100 min-h-[400px]">
+                                        {loadingMembers && members.length === 0 ? (
+                                            <div className="py-20 flex justify-center">
+                                                <Loader2
+                                                    size={24}
+                                                    className="animate-spin text-slate-300"
+                                                />
+                                            </div>
+                                        ) : members.length > 0 ? (
+                                            members.map((member) => (
+                                                <div
+                                                    key={member.id}
+                                                    className="group relative flex items-center justify-between p-4 bg-white hover:bg-slate-50 transition-all"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div
+                                                            className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold text-[11px] shadow-sm shrink-0 ${
+                                                                member.role === 'owner'
+                                                                    ? 'bg-amber-100 text-amber-600'
+                                                                    : member.role === 'admin'
+                                                                      ? 'bg-indigo-100 text-indigo-600'
+                                                                      : 'bg-slate-100 text-slate-500'
+                                                            }`}
+                                                        >
+                                                            {member.name?.[0] ||
+                                                                member.email?.[0] ||
+                                                                '?'}
+                                                        </div>
+                                                        <div className="space-y-0.5 min-w-0">
+                                                            <div className="text-[11.5px] font-bold text-slate-700 leading-tight truncate">
+                                                                {member.name || 'Pending User'}
+                                                            </div>
+                                                            <div className="text-[9px] text-slate-400 font-medium leading-tight truncate">
+                                                                {member.email}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                                        <span
+                                                            className={cn(
+                                                                "text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wider uppercase",
+                                                                member.role === 'owner'
+                                                                    ? "bg-amber-100 text-amber-600"
+                                                                    : member.role === 'admin'
+                                                                      ? "bg-indigo-100 text-indigo-600"
+                                                                      : "bg-slate-100 text-slate-500",
+                                                            )}
+                                                        >
+                                                            {member.role === 'owner'
+                                                                ? 'OWNER'
+                                                                : member.role === 'admin'
+                                                                  ? 'ADMIN'
+                                                                  : 'MEMBER'}
+                                                        </span>
+
+                                                        {canManageMembers &&
+                                                            member.id !== user?.id && (
+                                                                <div className="flex items-center gap-0.5 mt-0.5">
+                                                                    <button
+                                                                        onClick={() => {
+                                                                            setMemberToEdit(member);
+                                                                            const roleId =
+                                                                                member.role === 'owner'
+                                                                                    ? 1
+                                                                                    : member.role ===
+                                                                                        'admin'
+                                                                                      ? 2
+                                                                                      : 3;
+                                                                            setEditingAccessData({
+                                                                                roleId,
+                                                                                branchIds:
+                                                                                    parseMemberSelectedBranchIds(
+                                                                                        member,
+                                                                                    ),
+                                                                            });
+                                                                        }}
+                                                                        className="p-1 text-slate-400 hover:text-[#4A8AF4] hover:bg-[#EEF3FF] rounded-md transition-all"
+                                                                    >
+                                                                        <Edit size={13} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={() =>
+                                                                            setMemberToRemove({
+                                                                                id: member.id,
+                                                                                name: member.name,
+                                                                            })
+                                                                        }
+                                                                        className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-all"
+                                                                    >
+                                                                        <Trash2 size={13} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                    </div>
+
+                                                    {memberToRemove?.id === member.id && (
+                                                        <div className="absolute inset-0 bg-white/95 backdrop-blur-sm rounded-md flex items-center justify-between px-4 z-10 animate-in fade-in duration-200">
+                                                            <span className="text-[8px] font-black text-red-500 uppercase tracking-widest">
+                                                                Remove User?
+                                                            </span>
+                                                            <div className="flex gap-2">
+                                                                <button
+                                                                    onClick={() =>
+                                                                        setMemberToRemove(null)
+                                                                    }
+                                                                    className="text-[8px] font-black text-slate-400 px-3 py-1.5 bg-gray-50 rounded-md"
+                                                                >
+                                                                    No
+                                                                </button>
+                                                                <button
+                                                                    onClick={handleRemoveMember}
+                                                                    className="text-[8px] font-black text-white bg-red-500 px-4 py-1.5 rounded-md shadow-md"
+                                                                >
+                                                                    Yes, Remove
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-12 text-slate-400 text-[8px] font-bold italic">
+                                                No members found
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
                             </div>
 
-                            {/* EDIT MEMBER SUB-MODAL */}
                             {memberToEdit && (
                                 <div className="absolute inset-0 z-[60] flex items-center justify-center p-6 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 rounded-md">
                                     <div className="bg-white w-full max-w-[312px] rounded-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
                                         <div className="p-4 space-y-4 text-left">
                                             <div className="flex items-center justify-between">
                                                 <div>
-                                                    <h4 className="text-base font-black text-gray-900 uppercase tracking-tight">Edit Access</h4>
-                                                    <p className="text-xs text-gray-500 font-bold truncate max-w-[200px]">{memberToEdit.name || memberToEdit.email}</p>
+                                                    <h4 className="text-[11px] font-bold text-slate-900 uppercase tracking-tight">
+                                                        Edit Access
+                                                    </h4>
+                                                    <p className="text-[10px] text-slate-500 font-bold truncate max-w-[200px]">
+                                                        {memberToEdit.name || memberToEdit.email}
+                                                    </p>
                                                 </div>
                                                 <button
                                                     onClick={() => setMemberToEdit(null)}
@@ -1219,14 +1377,27 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
                                             <div className="space-y-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">Role</label>
+                                                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block pl-1">
+                                                        Role
+                                                    </label>
                                                     <CustomSelect
                                                         value={editingAccessData.roleId}
-                                                        onChange={(e) => setEditingAccessData(prev => ({ ...prev, roleId: parseInt(e.target.value) }))}
-                                                        className="w-full px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-[13px] font-semibold transition-all outline-none focus:border-[#4A8AF4] focus:bg-white"
+                                                        onChange={(e) =>
+                                                            setEditingAccessData((prev) => ({
+                                                                ...prev,
+                                                                roleId: parseInt(
+                                                                    e.target.value,
+                                                                ),
+                                                            }))
+                                                        }
+                                                        className="w-full px-4 py-1.5 bg-gray-50 border border-gray-200 rounded-md text-[12px] font-semibold transition-all outline-none focus:border-[#4A8AF4] focus:bg-white"
                                                     >
-                                                        {isEditingOrgOwner && <option value="1">Owner</option>}
-                                                        {isEditingOrgOwner && <option value="2">Admin</option>}
+                                                        {isEditingOrgOwner && (
+                                                            <option value="1">Owner</option>
+                                                        )}
+                                                        {isEditingOrgOwner && (
+                                                            <option value="2">Admin</option>
+                                                        )}
                                                         <option value="3">Member</option>
                                                     </CustomSelect>
                                                 </div>
@@ -1234,53 +1405,113 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 {editingAccessData.roleId === 3 && (
                                                     <div className="space-y-2">
                                                         <div className="flex items-center justify-between gap-3 pl-1">
-                                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Branch Access</label>
+                                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">
+                                                                Branch Access
+                                                            </label>
                                                             {allBranches.length > 0 && (
                                                                 <button
                                                                     type="button"
                                                                     onClick={() => {
-                                                                        setEditingAccessData(prev => ({
-                                                                            ...prev,
-                                                                            branchIds: editAllBranchesSelected ? [] : allBranchIds
-                                                                        }));
+                                                                        setEditingAccessData(
+                                                                            (prev) => ({
+                                                                                ...prev,
+                                                                                branchIds:
+                                                                                    editAllBranchesSelected
+                                                                                        ? []
+                                                                                        : allBranchIds,
+                                                                            }),
+                                                                        );
                                                                     }}
                                                                     className="flex items-center gap-2 text-left"
                                                                 >
-                                                                    <div className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center transition-all ${editAllBranchesSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                                        {editAllBranchesSelected && <Check size={10} strokeWidth={3.5} />}
+                                                                    <div
+                                                                        className={`w-4 h-4 shrink-0 rounded-md border-2 flex items-center justify-center transition-all ${
+                                                                            editAllBranchesSelected
+                                                                                ? 'bg-indigo-600 border-indigo-600 text-white'
+                                                                                : 'border-gray-300 bg-white'
+                                                                        }`}
+                                                                    >
+                                                                        {editAllBranchesSelected && (
+                                                                            <Check
+                                                                                size={10}
+                                                                                strokeWidth={3.5}
+                                                                            />
+                                                                        )}
                                                                     </div>
-                                                                    <span className="truncate text-[11px] font-bold text-gray-600">Select All</span>
+                                                                    <span className="truncate text-[11px] font-bold text-gray-600">
+                                                                        Select All
+                                                                    </span>
                                                                 </button>
                                                             )}
                                                         </div>
                                                         <div className="bg-gray-50 border border-gray-100 rounded-md p-2.5 shadow-sm">
                                                             <div className="grid grid-cols-1 gap-2.5 max-h-[260px] overflow-y-auto custom-scrollbar pr-1">
-                                                            {allBranches.map(branch => {
-                                                                const normalizedBranchId = Number(branch.id);
-                                                                const isSelected = editSelectedBranchIds.includes(normalizedBranchId);
-                                                                return (
-                                                                    <div
-                                                                        key={branch.id}
-                                                                        onClick={() => {
-                                                                            setEditingAccessData(prev => {
-                                                                                const currentIds = Array.isArray(prev.branchIds) ? prev.branchIds.map(Number) : [];
-                                                                                return {
-                                                                                    ...prev,
-                                                                                    branchIds: currentIds.includes(normalizedBranchId)
-                                                                                        ? currentIds.filter(id => id !== normalizedBranchId)
-                                                                                        : [...currentIds, normalizedBranchId]
-                                                                                };
-                                                                            });
-                                                                        }}
-                                                                        className={`flex min-w-0 items-center gap-4 p-2.5 rounded-md border cursor-pointer transition-all ${isSelected ? 'bg-[#EEF3FF] border-[#4A8AF4]/30' : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'}`}
-                                                                    >
-                                                                        <div className={`w-5 h-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-indigo-600 border-indigo-600 text-white' : 'border-gray-300 bg-white'}`}>
-                                                                            {isSelected && <Check size={12} strokeWidth={3.5} />}
+                                                                {allBranches.map((branch) => {
+                                                                    const normalizedBranchId =
+                                                                        Number(branch.id);
+                                                                    const isSelected =
+                                                                        editSelectedBranchIds.includes(
+                                                                            normalizedBranchId,
+                                                                        );
+                                                                    return (
+                                                                        <div
+                                                                            key={branch.id}
+                                                                            onClick={() => {
+                                                                                setEditingAccessData(
+                                                                                    (prev) => {
+                                                                                        const currentIds =
+                                                                                            Array.isArray(
+                                                                                                prev.branchIds,
+                                                                                            )
+                                                                                                ? prev.branchIds.map(
+                                                                                                      Number,
+                                                                                                  )
+                                                                                                : [];
+                                                                                        return {
+                                                                                            ...prev,
+                                                                                            branchIds:
+                                                                                                currentIds.includes(
+                                                                                                    normalizedBranchId,
+                                                                                                )
+                                                                                                    ? currentIds.filter(
+                                                                                                          (id) =>
+                                                                                                              id !==
+                                                                                                              normalizedBranchId,
+                                                                                                      )
+                                                                                                    : [
+                                                                                                          ...currentIds,
+                                                                                                          normalizedBranchId,
+                                                                                                      ],
+                                                                                        };
+                                                                                    },
+                                                                                );
+                                                                            }}
+                                                                            className={`flex min-w-0 items-center gap-4 p-2.5 rounded-md border cursor-pointer transition-all ${
+                                                                                isSelected
+                                                                                    ? 'bg-[#EEF3FF] border-[#4A8AF4]/30'
+                                                                                    : 'bg-gray-50 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
+                                                                            }`}
+                                                                        >
+                                                                            <div
+                                                                                className={`w-5 h-5 shrink-0 rounded-lg border-2 flex items-center justify-center transition-all ${
+                                                                                    isSelected
+                                                                                        ? 'bg-indigo-600 border-indigo-600 text-white'
+                                                                                        : 'border-gray-300 bg-white'
+                                                                                }`}
+                                                                            >
+                                                                                {isSelected && (
+                                                                                    <Check
+                                                                                        size={12}
+                                                                                        strokeWidth={3.5}
+                                                                                    />
+                                                                                )}
+                                                                            </div>
+                                                                            <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-700">
+                                                                                {branch.name}
+                                                                            </span>
                                                                         </div>
-                                                                        <span className="min-w-0 flex-1 truncate text-sm font-bold text-gray-700">{branch.name}</span>
-                                                                    </div>
-                                                                );
-                                                            })}
+                                                                    );
+                                                                })}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1290,27 +1521,38 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                             <div className="flex gap-3 pt-2">
                                                 <button
                                                     onClick={() => setMemberToEdit(null)}
-                                                    className="flex-1 text-[12.5px] font-bold text-gray-700 bg-white py-1.5 rounded-md border border-gray-200 hover:bg-gray-50 hover:border-gray-300 transition-all"
+                                                    className="flex-1 px-3 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
                                                 >
                                                     Cancel
                                                 </button>
                                                 <button
                                                     onClick={handleUpdateMemberAccess}
-                                                    disabled={isLoading || (editingAccessData.roleId === 3 && editingAccessData.branchIds.length === 0)}
-                                                    className="flex-1 text-[12.5px] font-bold text-white bg-[#4A8AF4] py-1.5 rounded-md shadow-sm active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                                    disabled={
+                                                        isLoading ||
+                                                        (editingAccessData.roleId === 3 &&
+                                                            editingAccessData.branchIds.length === 0)
+                                                    }
+                                                    className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {isLoading ? <Loader2 size={18} className="animate-spin" /> : 'Update'}
+                                                    {isLoading ? (
+                                                        <Loader2
+                                                            size={18}
+                                                            className="animate-spin"
+                                                        />
+                                                    ) : (
+                                                        'Update'
+                                                    )}
                                                 </button>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
-                        </div>
-                )}
+                        </>
+                    )}
+                </div>
             </div>
-        </div>
-    </div>,
+        </div>,
     document.body
 );
 };

@@ -1031,7 +1031,10 @@ const ManageOrganization = () => {
                         ref={createOrgButtonRef}
                         type="button"
                         onClick={() => setShowCreateOrgForm((current) => !current)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-700 transition-colors hover:bg-slate-50"
+                        className={cn(
+                            "inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-[12px] font-bold text-slate-700 transition-colors outline-none",
+                            !showCreateOrgForm && "hover:bg-slate-50 focus-visible:bg-slate-50"
+                        )}
                     >
                         <Plus size={15} strokeWidth={2.2} />
                         <span>New</span>
@@ -1053,7 +1056,10 @@ const ManageOrganization = () => {
                             }
                             setShowEditOrgForm((current) => !current);
                         }}
-                        className="inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-[#2F5FC6]"
+                        className={cn(
+                            "inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-4 py-2 text-[12px] font-bold text-white transition-colors outline-none",
+                            !showEditOrgForm && "hover:bg-[#2F5FC6] focus-visible:bg-[#2F5FC6]"
+                        )}
                     >
                         <Edit size={15} strokeWidth={2.2} />
                         <span>Edit</span>
@@ -1103,7 +1109,10 @@ const ManageOrganization = () => {
                                 ref={inviteUserButtonRef}
                                 type="button"
                                 onClick={() => setShowInviteUserForm((current) => !current)}
-                                className="w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
+                                className={cn(
+                                    "w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-400 outline-none",
+                                    !showInviteUserForm && "hover:bg-gray-50 hover:text-gray-600 focus-visible:bg-gray-50 focus-visible:text-gray-600"
+                                )}
                                 title="Add User"
                             >
                                 <Plus size={20} strokeWidth={2.5} />
@@ -1391,16 +1400,16 @@ const ManageOrganization = () => {
                                     setShowCreateTimezoneDropdown(false);
                                     setShowCreateCurrencyDropdown((current) => !current);
                                 }}
-                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-slate-50"
+                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-[#F0F9FF] hover:border-blue-200"
                             >
                                 <Building2 size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
-                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800">
+                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 group-hover:text-primary transition-colors">
                                     {selectedCreateCurrencyOption?.label || createOrgForm.baseCurrency}
                                 </span>
                                 <ChevronDown
                                     size={14}
                                     className={cn(
-                                        "ml-1 shrink-0 text-gray-400 transition-transform",
+                                        "ml-1 shrink-0 text-gray-400 transition-transform group-hover:text-primary",
                                         showCreateCurrencyDropdown && "rotate-180 text-primary"
                                     )}
                                 />
@@ -1417,16 +1426,16 @@ const ManageOrganization = () => {
                                     setShowCreateCurrencyDropdown(false);
                                     setShowCreateTimezoneDropdown((current) => !current);
                                 }}
-                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-slate-50"
+                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-[#F0F9FF] hover:border-blue-200"
                             >
                                 <Clock3 size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
-                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800">
+                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 group-hover:text-primary transition-colors">
                                     {selectedCreateTimezoneOption.label}
                                 </span>
                                 <ChevronDown
                                     size={14}
                                     className={cn(
-                                        "ml-1 shrink-0 text-gray-400 transition-transform",
+                                        "ml-1 shrink-0 text-gray-400 transition-transform group-hover:text-primary",
                                         showCreateTimezoneDropdown && "rotate-180 text-primary"
                                     )}
                                 />
@@ -1651,16 +1660,16 @@ const ManageOrganization = () => {
                                         setShowEditTimezoneDropdown(false);
                                         setShowEditCurrencyDropdown((current) => !current);
                                     }}
-                                    className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-slate-50"
+                                    className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-[#F0F9FF] hover:border-blue-200"
                                 >
                                     <Building2 size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
-                                    <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800">
+                                    <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 group-hover:text-primary transition-colors">
                                         {selectedEditCurrencyOption?.label || editOrgForm.baseCurrency}
                                     </span>
                                     <ChevronDown
                                         size={14}
                                         className={cn(
-                                            "ml-1 shrink-0 text-gray-400 transition-transform",
+                                            "ml-1 shrink-0 text-gray-400 transition-transform group-hover:text-primary",
                                             showEditCurrencyDropdown && "rotate-180 text-primary"
                                         )}
                                     />
@@ -1679,7 +1688,7 @@ const ManageOrganization = () => {
                                                             setEditOrgForm((previous) => ({ ...previous, baseCurrency: option.code }));
                                                             setShowEditCurrencyDropdown(false);
                                                         }}
-                                                        className="group flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-[#EEF0FC]"
+                                                        className="group flex w-full items-center justify-between px-3 py-2 text-left transition-colors hover:bg-[#F0F9FF]"
                                                     >
                                                         <div className="flex items-center gap-1.5 pr-1">
                                                             <div className="w-4 flex justify-center shrink-0">
@@ -1711,16 +1720,16 @@ const ManageOrganization = () => {
                                     setShowEditCurrencyDropdown(false);
                                     setShowEditTimezoneDropdown((current) => !current);
                                 }}
-                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-slate-50"
+                                className="group relative flex w-full items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm transition-colors hover:bg-[#F0F9FF] hover:border-blue-200"
                             >
                                 <Clock3 size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
-                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800">
+                                <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold text-slate-800 group-hover:text-primary transition-colors">
                                     {selectedEditTimezoneOption.label}
                                 </span>
                                 <ChevronDown
                                     size={14}
                                     className={cn(
-                                        "ml-1 shrink-0 text-gray-400 transition-transform",
+                                        "ml-1 shrink-0 text-gray-400 transition-transform group-hover:text-primary",
                                         showEditTimezoneDropdown && "rotate-180 text-primary"
                                     )}
                                 />

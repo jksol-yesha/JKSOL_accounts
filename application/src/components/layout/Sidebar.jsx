@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
     X,
     LogOut,
@@ -88,8 +88,9 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const sidebarControlRef = React.useRef(null);
     const logoutConfirmRef = React.useRef(null);
     const fileInputRef = React.useRef(null);
-    const prefSelectRefs = React.useRef({});
+    const pendingPageFocusPathRef = React.useRef(null);
     const location = useLocation();
+    const navigate = useNavigate();
     const { selectedOrg } = useOrganization();
     const { user, logout, updateUser } = useAuth();
     const { showToast } = useToast();
@@ -235,6 +236,143 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             setHoveredItem(null);
         }
     };
+
+    const getSidebarFocusableElements = React.useCallback(() => {
+        if (!sidebarRef.current) return [];
+
+        return Array.from(
+            sidebarRef.current.querySelectorAll('[data-sidebar-focusable="true"]')
+        ).filter((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            if (element.hasAttribute('disabled')) return false;
+            return element.getClientRects().length > 0;
+        });
+    }, []);
+
+    const focusNextSidebarItem = React.useCallback((currentElement) => {
+        const focusableElements = getSidebarFocusableElements();
+        const currentIndex = focusableElements.indexOf(currentElement);
+
+        if (currentIndex === -1) {
+            return false;
+        }
+
+        for (let index = currentIndex + 1; index < focusableElements.length; index += 1) {
+            const nextElement = focusableElements[index];
+            if (nextElement && typeof nextElement.focus === 'function') {
+                nextElement.focus();
+                return true;
+            }
+        }
+
+        return false;
+    }, [getSidebarFocusableElements]);
+
+    const focusPageContent = React.useCallback(() => {
+        if (typeof document === 'undefined') return;
+
+        const mainContent = document.getElementById('app-main-content') || document.querySelector('main');
+        if (!mainContent) return;
+
+        const focusableSelector = [
+            'button:not([disabled])',
+            '[href]',
+            'input:not([disabled]):not([type="hidden"])',
+            'select:not([disabled])',
+            'textarea:not([disabled])',
+            '[tabindex]:not([tabindex="-1"])'
+        ].join(', ');
+
+        const firstFocusable = Array.from(mainContent.querySelectorAll(focusableSelector)).find((element) => {
+            if (!(element instanceof HTMLElement)) return false;
+            if (element.getAttribute('aria-hidden') === 'true') return false;
+            if (element.closest('[aria-hidden="true"]')) return false;
+            return element.getClientRects().length > 0;
+        });
+
+        const target = firstFocusable || mainContent;
+
+        if (target instanceof HTMLElement) {
+            target.focus({ preventScroll: true });
+            if (typeof target.select === 'function' && target.matches('input, textarea')) {
+                target.select();
+            }
+        }
+    }, []);
+
+    React.useEffect(() => {
+        if (!pendingPageFocusPathRef.current) return;
+        if (location.pathname !== pendingPageFocusPathRef.current) return;
+
+        const focusTimer = window.setTimeout(() => {
+            focusPageContent();
+            pendingPageFocusPathRef.current = null;
+        }, 0);
+
+        return () => window.clearTimeout(focusTimer);
+    }, [focusPageContent, location.pathname]);
+
+    const handleSidebarEnterToNext = React.useCallback((event) => {
+        if (event.key !== 'Enter') return false;
+        event.preventDefault();
+        const moved = focusNextSidebarItem(event.currentTarget);
+        if (!moved) {
+            focusPageContent();
+        }
+        return true;
+    }, [focusNextSidebarItem, focusPageContent]);
+
+    const handleSidebarButtonKeyDown = React.useCallback((event) => {
+        if (event.key === 'Tab' && !event.shiftKey) {
+            event.preventDefault();
+            focusPageContent();
+            return;
+        }
+
+        handleSidebarEnterToNext(event);
+    }, [focusPageContent, handleSidebarEnterToNext]);
+
+    const activateSidebarItem = React.useCallback((path) => {
+        setHoveredItem(null);
+        setShowProfileMenu(false);
+        setShowLogoutConfirm(false);
+        setShowSidebarControlMenu(false);
+
+        if (location.pathname !== path) {
+            navigate(path);
+        }
+
+        if (isMobileViewport) {
+            onClose?.();
+        }
+    }, [isMobileViewport, location.pathname, navigate, onClose]);
+
+    const handleSidebarItemActivate = React.useCallback((event, path) => {
+        event.preventDefault();
+        activateSidebarItem(path);
+    }, [activateSidebarItem]);
+
+    const handleSidebarItemKeyDown = React.useCallback((event, path) => {
+        if (event.key === 'Tab' && !event.shiftKey) {
+            event.preventDefault();
+            if (location.pathname !== path) {
+                pendingPageFocusPathRef.current = path;
+                activateSidebarItem(path);
+            } else {
+                focusPageContent();
+            }
+            return;
+        }
+
+        if (handleSidebarEnterToNext(event)) {
+            return;
+        }
+
+        if (event.key === ' ') {
+            event.preventDefault();
+            activateSidebarItem(path);
+        }
+    }, [activateSidebarItem, focusPageContent, handleSidebarEnterToNext, location.pathname]);
 
     const openProfileLogoutConfirm = () => {
         setHoveredItem(null);
@@ -807,15 +945,21 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 }}
             >
                 <div className={cn(
-                    "flex flex-col pt-4 mb-0.5 flex-none",
+                    "flex flex-col pt-4 md:pt-0 mb-0.5 flex-none",
                     effectiveCollapsed ? "items-center px-0" : "px-3"
                 )}>
-                    <OrganizationSelector isCollapsed={effectiveCollapsed} />
+                    <OrganizationSelector
+                        isCollapsed={effectiveCollapsed}
+                        onTriggerKeyDown={handleSidebarButtonKeyDown}
+                        buttonProps={{ 'data-sidebar-focusable': 'true' }}
+                    />
                 </div>
 
                 {/* Mobile Close Button */}
                 <button
                     onClick={onClose}
+                    onKeyDown={handleSidebarButtonKeyDown}
+                    data-sidebar-focusable="true"
                     className="md:hidden p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors absolute top-4 right-4"
                 >
                     <X size={20} />
@@ -835,6 +979,9 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             <NavLink
                                 key={item.path}
                                 to={item.path}
+                                onClick={(event) => handleSidebarItemActivate(event, item.path)}
+                                onKeyDown={(event) => handleSidebarItemKeyDown(event, item.path)}
+                                data-sidebar-focusable="true"
                                 onMouseEnter={(event) => handleItemHover(event, item, isActive)}
                                 onMouseLeave={clearHoveredItem}
                                 className={() => cn(
@@ -842,7 +989,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     isActive
                                         ? "bg-[#4A8AF4] text-white border-[#4A8AF4]"
                                         : "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                    effectiveCollapsed && "justify-center px-0",
+                                    effectiveCollapsed && "mx-auto h-9 w-9 justify-center px-0 py-0",
                                     showHoverExpandPanel && "overflow-visible"
                                 )}
                             >
@@ -882,9 +1029,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         <button
                             type="button"
                             onClick={handleProfileClick}
+                            onKeyDown={handleSidebarButtonKeyDown}
+                            data-sidebar-focusable="true"
                             className={cn(
                                 "flex h-[38px] w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900 px-3",
-                                effectiveCollapsed ? "justify-center" : "gap-3",
+                                effectiveCollapsed ? "mx-auto h-[38px] w-[38px] justify-center rounded-md px-0" : "gap-3",
                                 showHoverExpandPanel && "overflow-visible",
                                 location.pathname.startsWith('/profile') && "bg-white text-slate-800 shadow-sm border-slate-200"
                             )}
@@ -968,11 +1117,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         setShowLogoutConfirm(false);
                                         setShowSidebarControlMenu((current) => !current);
                                     }}
+                                    onKeyDown={handleSidebarButtonKeyDown}
+                                    data-sidebar-focusable="true"
                                     onMouseEnter={(event) => handleItemHover(event, { id: 'sidebar-control', label: sidebarControlLabel, icon: SidebarToggleIcon })}
                                     onMouseLeave={clearHoveredItem}
                                     className={cn(
                                         "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent bg-[#EEF0FC] text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                        effectiveCollapsed ? "justify-center px-0" : "justify-start px-6",
+                                        effectiveCollapsed ? "mx-auto h-9 w-9 justify-center rounded-md px-0" : "justify-start px-6",
                                         showHoverExpandPanel && "overflow-visible",
                                         showSidebarControlMenu && "text-slate-900"
                                     )}

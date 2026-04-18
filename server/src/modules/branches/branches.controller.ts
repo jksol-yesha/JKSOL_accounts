@@ -21,14 +21,14 @@ export const getBranches = async ({ headers, user, orgId, set }: ElysiaContext) 
     }
 };
 
-export const getBranchesQuery = async ({ body, headers, branchId, user, orgId, set }: ElysiaContext & { body: { orgId?: string, skipBranch?: boolean } }) => {
+export const getBranchesQuery = async ({ body, headers, branchId, user, orgId, set }: ElysiaContext & { body: { orgId?: string | number, skipBranch?: boolean } }) => {
     try {
         if (!user) {
             set.status = 401;
             return { success: false, message: "Unauthorized" };
         }
 
-        const finalOrgId = orgId || (body.orgId ? parseInt(body.orgId) : undefined);
+        const finalOrgId = orgId || (body.orgId ? Number(body.orgId) : undefined);
         if (!finalOrgId) {
             set.status = 400;
             return { success: false, message: "Organization ID is required" };

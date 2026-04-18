@@ -307,7 +307,7 @@ export const DashboardService = {
         const accountFilters = [
             eq(accounts.orgId, orgId),
             isNotDeleted(accounts),
-            eq(accounts.status, 1)
+            inArray(accounts.status, [1, 2])
         ];
 
         const activeAccounts = await db.select({
@@ -926,7 +926,7 @@ export const DashboardService = {
         .where(and(
             eq(accounts.orgId, orgId),
             isNotDeleted(accounts),
-            eq(accounts.status, 1),
+            inArray(accounts.status, [1, 2]),
             inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
         ));
 
@@ -1071,7 +1071,7 @@ export const DashboardService = {
             // Keep the final chart point aligned with the same active-account totals shown in the accounts summary cards.
             const latestAccounts = await getAllAccounts(
                 orgId,
-                1,
+                undefined,
                 displayCurrency,
                 user,
                 financialYearId

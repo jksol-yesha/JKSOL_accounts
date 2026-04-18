@@ -28,37 +28,153 @@ export const createAccount = async ({ body, user, orgId, headers, set }: ElysiaC
 
     const targetCurrency = headers['x-base-currency'];
 
-    // Pass account data to service
-    const newAccount = await AccountService.createAccount({
-        ...body,
-        orgId,
-        userId: user.id,
+    try {
+        // Pass account data to service
+        const newAccount = await AccountService.createAccount({
+            ...body,
+            orgId,
+            userId: user.id,
 
-        // Explicitly ensuring types
-        accountType: Number(body.accountType),
-        subtype: (body.subtype !== undefined && body.subtype !== null) ? Number(body.subtype) : null,
-        currencyCode: body.currencyCode,
-        fxRate: body.fxRate,
-        targetCurrency: typeof targetCurrency === 'string' ? targetCurrency : undefined,
-        description: body.description,
-        accountHolderName: (body.accountHolderName || body.account_holder_name || ''),
-        bankName: (body.bankName || body.bank_name || null),
-        accountNumber: (body.accountNumber || body.account_no || body.account_number || null),
-        ifsc: (body.ifsc || null),
-        zipCode: (body.zipCode || body.zip_code || null),
-        bankBranchName: (body.bankBranchName || body.bank_branch_name || body.bank_branch || null),
-        isActive: body.isActive !== undefined ? body.isActive : true,
-        openingBalance: body.openingBalance,
-        openingBalanceDate: body.openingBalanceDate
-    });
+            // Explicitly ensuring types
+            accountType: Number(body.accountType),
+            subtype: (body.subtype !== undefined && body.subtype !== null) ? Number(body.subtype) : null,
+            currencyCode: body.currencyCode,
+            fxRate: body.fxRate,
+            targetCurrency: typeof targetCurrency === 'string' ? targetCurrency : undefined,
+            description: body.description,
+            accountHolderName: (body.accountHolderName || body.account_holder_name || ''),
+            bankName: (body.bankName || body.bank_name || null),
+            accountNumber: (body.accountNumber || body.account_no || body.account_number || null),
+            ifsc: (body.ifsc || null),
+            zipCode: (body.zipCode || body.zip_code || null),
+            bankBranchName: (body.bankBranchName || body.bank_branch_name || body.bank_branch || null),
+            isActive: body.isActive !== undefined ? body.isActive : true,
+            openingBalance: body.openingBalance,
+            openingBalanceDate: body.openingBalanceDate,
+            branchId: body.branchId ? Number(body.branchId) : null
+        });
 
-    // 🔥 Broadcast to all users in the org
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'account:created',
-        data: newAccount
-    });
+        // 🔥 Broadcast to all users in the org
+        WebSocketService.broadcastToOrg(orgId, {
+            event: 'account:created',
+            data: newAccount
+        });
 
-    return successResponse('Account created successfully', newAccount);
+        return successResponse('Account created successfully', newAccount);
+    } catch (error: any) {
+        const errCode = error?.code || error?.cause?.code;
+        const errMessage = error?.message || '';
+        const causeMessage = error?.cause?.message || '';
+        const normalizedName = String(body?.name || 'this account').trim() || 'this account';
+        const combinedMessage = `${errMessage}\n${causeMessage}`;
+
+        if (
+            errCode === 'ER_DUP_ENTRY' ||
+            errMessage.includes('already exists in this organization') ||
+            errMessage.includes('Duplicate entry') ||
+            causeMessage.includes('Duplicate entry')
+        ) {
+            set.status = 409;
+            return {
+                success: false,
+                message: `Account '${normalizedName}' already exists in this organization.`
+            };
+        }
+
+        if (
+            errMessage.includes('Current user is invalid. Please log in again.') ||
+            causeMessage.includes('Current user is invalid. Please log in again.')
+        ) {
+            set.status = 401;
+            return {
+                success: false,
+                message: 'Failed to create account because the current user session is invalid. Please log in again.'
+            };
+        }
+
+        if (
+            errCode === 'ER_NO_REFERENCED_ROW_2' ||
+            errCode === 'ER_NO_REFERENCED_ROW' ||
+            errMessage.includes('foreign key constraint fails') ||
+            causeMessage.includes('foreign key constraint fails')
+        ) {
+            if (
+                combinedMessage.includes('accounts_created_by_users_id_fk') &&
+                combinedMessage.includes('users_old')
+            ) {
+                set.status = 500;
+                return {
+                    success: false,
+                    message: 'Failed to create account because the database is still linking account creators to the old users table. This needs a schema fix.'
+                };
+            }
+
+            set.status = 400;
+
+            if (
+                combinedMessage.includes('accounts_branch_id_branches_id_fk') ||
+                combinedMessage.includes('fk_accounts_branch')
+            ) {
+                return {
+                    success: false,
+                    message: 'Failed to create account because the selected office branch is invalid or no longer exists.'
+                };
+            }
+
+            if (combinedMessage.includes('accounts_currency_id_currencies_id_fk')) {
+                return {
+                    success: false,
+                    message: 'Failed to create account because the selected currency is invalid or no longer exists.'
+                };
+            }
+
+            if (combinedMessage.includes('accounts_org_id_organizations_id_fk')) {
+                return {
+                    success: false,
+                    message: 'Failed to create account because the selected organization is invalid or no longer exists.'
+                };
+            }
+
+            if (combinedMessage.includes('accounts_created_by_users_id_fk')) {
+                return {
+                    success: false,
+                    message: 'Failed to create account because the current user reference is invalid. Please log in again.'
+                };
+            }
+
+            return {
+                success: false,
+                message: 'Failed to create account because one of the selected branch, currency, organization, or user references is invalid.'
+            };
+        }
+
+        if (
+            errMessage.includes('Selected office branch is invalid') ||
+            errMessage.includes('IFSC is required for Indian bank accounts') ||
+            errMessage.includes('SWIFT/BIC code is required for Indian bank accounts') ||
+            errMessage.includes('Currency code is required') ||
+            errMessage.includes('is not supported') ||
+            errCode === 'ER_BAD_NULL_ERROR' ||
+            errCode === 'ER_TRUNCATED_WRONG_VALUE_FOR_FIELD' ||
+            errMessage.includes('cannot be null') ||
+            causeMessage.includes('cannot be null') ||
+            errMessage.includes('Incorrect') ||
+            causeMessage.includes('Incorrect')
+        ) {
+            set.status = 400;
+            return {
+                success: false,
+                message: error?.cause?.sqlMessage || causeMessage || errMessage || 'Invalid account data.'
+            };
+        }
+
+        console.error('Create Account Error:', error);
+        set.status = 500;
+        return {
+            success: false,
+            message: error?.cause?.sqlMessage || causeMessage || errMessage || 'Failed to create account'
+        };
+    }
 };
 
 export const updateAccount = async ({ params, body, user, orgId, set }: ElysiaContext & { params: { id: string }, body: any }) => {

@@ -1,20 +1,40 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import React, {
+    useState,
+    useRef,
+    useEffect,
+    useLayoutEffect,
+    useImperativeHandle,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Check } from 'lucide-react';
 import { CURRENCY_OPTIONS } from '../../utils/constants';
+import { cn } from '../../utils/cn';
 
-const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
+const CurrencySelector = React.forwardRef(({
+    value,
+    onChange,
+    options = CURRENCY_OPTIONS,
+    disabled = false,
+    name,
+    onKeyDown,
+    onFocusNext,
+    className = '',
+}, ref) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
     const dropdownMenuRef = useRef(null);
     const [dropdownPosition, setDropdownPosition] = useState(null);
+    const currentValue = String(value || '');
+    const getInitialHighlightedIndex = React.useCallback(() => {
+        if (options.length === 0) return -1;
+        const selectedIndex = options.findIndex((opt) => String(opt.value) === currentValue);
+        return selectedIndex >= 0 ? selectedIndex : 0;
+    }, [options, currentValue]);
 
     useLayoutEffect(() => {
-        if (!isOpen) {
-            setDropdownPosition(null);
-            return;
-        }
+        if (!isOpen) return;
 
         const updatePosition = () => {
             if (!buttonRef.current) return;
@@ -44,6 +64,7 @@ const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
 
             if (!clickedTrigger && !clickedMenu) {
                 setIsOpen(false);
+                setHighlightedIndex(-1);
             }
         };
 
@@ -51,50 +72,183 @@ const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const selectedOption = options.find(opt => opt.value === value) || options[0] || { label: 'Select...' };
+    useImperativeHandle(ref, () => buttonRef.current);
+
+    useEffect(() => {
+        if (disabled && isOpen) {
+            const timer = window.setTimeout(() => {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }, 0);
+
+            return () => window.clearTimeout(timer);
+        }
+    }, [disabled, isOpen]);
+
+    const selectedOption =
+        options.find((opt) => String(opt.value) === currentValue) ||
+        (currentValue ? { value: currentValue, label: currentValue } : null) ||
+        options[0] ||
+        { label: 'Select...' };
+    const hasSymbolLabel = selectedOption.label?.includes(' - ');
+
+    const openDropdown = () => {
+        if (disabled) return;
+        setHighlightedIndex(getInitialHighlightedIndex());
+        setIsOpen(true);
+    };
 
     const handleSelect = (val) => {
         onChange(val);
         setIsOpen(false);
+        setHighlightedIndex(-1);
+        setTimeout(() => {
+            onFocusNext?.();
+        }, 0);
+    };
+
+    const handleInternalKeyDown = (event) => {
+        if (disabled) return;
+
+        if (!isOpen) {
+            if (
+                event.key === 'Enter' ||
+                event.key === ' ' ||
+                event.key === 'ArrowDown' ||
+                event.key === 'ArrowUp'
+            ) {
+                event.preventDefault();
+                event.stopPropagation();
+                openDropdown();
+                return;
+            }
+
+            onKeyDown?.(event);
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                event.stopPropagation();
+                setHighlightedIndex((prev) => {
+                    const next = prev + 1;
+                    if (next >= options.length) return 0;
+                    return next;
+                });
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                event.stopPropagation();
+                setHighlightedIndex((prev) => {
+                    const next = prev - 1;
+                    if (next < 0) return options.length - 1;
+                    return next;
+                });
+                break;
+            case 'Enter':
+                event.preventDefault();
+                event.stopPropagation();
+                if (highlightedIndex >= 0 && options[highlightedIndex]) {
+                    handleSelect(options[highlightedIndex].value);
+                } else {
+                    setIsOpen(false);
+                    setHighlightedIndex(-1);
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                event.stopPropagation();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            default:
+                break;
+        }
     };
 
     return (
         <div className="relative" ref={dropdownRef}>
             <button
                 ref={buttonRef}
-                onClick={() => setIsOpen(!isOpen)}
-                className="group relative flex items-center justify-center px-2.5 h-[38px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm focus:outline-none"
+                type="button"
+                name={name}
+                role="combobox"
+                aria-haspopup="listbox"
+                aria-expanded={isOpen}
+                aria-controls={isOpen ? `currency-selector-${name || 'default'}` : undefined}
+                data-custom-select-trigger="true"
+                disabled={disabled}
+                onClick={() => {
+                    if (disabled) return;
+                    setIsOpen((prev) => {
+                        const nextIsOpen = !prev;
+                        setHighlightedIndex(
+                            nextIsOpen ? getInitialHighlightedIndex() : -1,
+                        );
+                        return nextIsOpen;
+                    });
+                }}
+                onKeyDown={handleInternalKeyDown}
+                className={cn(
+                    "group relative flex h-[38px] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 shadow-sm transition-colors focus:outline-none",
+                    disabled
+                        ? "cursor-not-allowed opacity-70"
+                        : "hover:bg-slate-50",
+                    className,
+                )}
             >
                 <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-800">
-                    <span className="text-[#4A8AF4] font-bold opacity-90">{selectedOption.label.split(' - ')[0]}</span>
-                    <span>{selectedOption.value}</span>
+                    {hasSymbolLabel ? (
+                        <>
+                            <span className="text-[#4A8AF4] font-bold opacity-90">
+                                {selectedOption.label.split(' - ')[0]}
+                            </span>
+                            <span>{selectedOption.value || 'Select...'}</span>
+                        </>
+                    ) : (
+                        <span>{selectedOption.value || selectedOption.label || 'Select...'}</span>
+                    )}
                 </div>
+                <ChevronDown
+                    size={14}
+                    className={cn(
+                        "ml-1 text-slate-500 transition-transform",
+                        isOpen ? "rotate-180" : "",
+                    )}
+                />
             </button>
 
             {isOpen && dropdownPosition && typeof document !== 'undefined' && createPortal(
                 <div
                     ref={dropdownMenuRef}
-                    className="fixed bg-white rounded-md shadow-lg border border-slate-200 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                    id={`currency-selector-${name || 'default'}`}
+                    role="listbox"
+                    className="fixed z-[100] rounded-md border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in zoom-in-95 duration-200"
                     style={{ top: dropdownPosition.top, right: dropdownPosition.right, width: dropdownPosition.width }}
                 >
-                    {options.map((option) => (
+                    {options.map((option, index) => (
                         <button
                             key={option.value}
+                            type="button"
+                            role="option"
+                            aria-selected={currentValue === option.value}
                             onClick={() => handleSelect(option.value)}
                             className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
-                                value === option.value 
+                                currentValue === option.value || index === highlightedIndex
                                 ? 'bg-[#EEF0FC]' 
                                 : 'hover:bg-[#EEF0FC]'
                             }`}
                         >
                             <div className="w-4 flex justify-center shrink-0">
-                                {value === option.value && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                {currentValue === option.value && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                             </div>
                             <span className="text-[13px] tracking-tight text-slate-800">
-                                <span className={`font-bold mr-1 ${value === option.value ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
+                                <span className={`font-bold mr-1 ${currentValue === option.value || index === highlightedIndex ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
                                     {option.label.split(' - ')[0]}
                                 </span>
-                                <span className={value === option.value ? 'font-bold' : 'font-medium'}>
+                                <span className={currentValue === option.value || index === highlightedIndex ? 'font-bold' : 'font-medium'}>
                                     {option.value}
                                 </span>
                             </span>
@@ -105,6 +259,8 @@ const CurrencySelector = ({ value, onChange, options = CURRENCY_OPTIONS }) => {
             )}
         </div>
     );
-};
+});
+
+CurrencySelector.displayName = 'CurrencySelector';
 
 export default CurrencySelector;

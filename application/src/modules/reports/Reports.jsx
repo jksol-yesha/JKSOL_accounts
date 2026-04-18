@@ -888,7 +888,7 @@ const Reports = () => {
                                         value={filters.branch}
                                         onChange={(e) => setFilters({ ...filters, branch: e.target.value })}
                                         onKeyDown={(e) => handleKeyDown(e, 0)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
+                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-[#F0F9FF] focus:border-primary/50 focus:ring-4 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-blue-200 transition-all"
                                         buttonLabelClassName="whitespace-nowrap"
                                         optionLabelClassName="whitespace-nowrap overflow-hidden text-ellipsis break-normal"
                                     >

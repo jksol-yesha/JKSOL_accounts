@@ -27,6 +27,7 @@ export const accountsRoutes = new Elysia({ prefix: '/accounts' })
             ifsc: t.Optional(t.Union([t.String(), t.Null()])),
             zipCode: t.Optional(t.Union([t.String(), t.Null()])),
             bankBranchName: t.Optional(t.Union([t.String(), t.Null()])),
+            branchId: t.Optional(t.Union([t.Numeric(), t.Null()])),
             description: t.Optional(t.String()),
             isActive: t.Optional(t.Boolean()),
             orgId: t.Optional(t.Numeric())

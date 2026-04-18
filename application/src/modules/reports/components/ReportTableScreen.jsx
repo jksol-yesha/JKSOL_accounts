@@ -220,21 +220,8 @@ const ReportTableScreen = ({
                     </div>
                 </div>
 
-                {/* Bottom Total Bar */}
-                <div className="grid grid-cols-2 border-t border-gray-400">
-                    <div className="border-r border-gray-300 p-2 flex justify-between items-center bg-gray-50/30">
-                        <span className="text-[12px] font-bold">Total</span>
-                        <span className="text-[12px] font-extrabold tabular-nums underline decoration-double decoration-gray-400">
-                            {formatCurrency(d.totalLeft, preferences.currency)}
-                        </span>
-                    </div>
-                    <div className="p-2 flex justify-between items-center bg-gray-50/30">
-                        <span className="text-[12px] font-bold">Total</span>
-                        <span className="text-[12px] font-extrabold tabular-nums underline decoration-double decoration-gray-400">
-                            {formatCurrency(d.totalRight, preferences.currency)}
-                        </span>
-                    </div>
-                </div>
+                {/* Bottom Total Bar Removed */}
+                <div className="pb-4" />
 
                 {/* Print/Export Controls (Moved to bottom or top-right no-print) */}
                 <div className="absolute top-1 right-8 flex gap-2 no-print">
@@ -296,7 +283,16 @@ const ReportTableScreen = ({
                             <button onClick={onExportPdf} className="w-10 h-10 flex items-center justify-center rounded-xl border border-gray-100 text-gray-500 hover:bg-gray-50 no-print" title="Download as PDF">
                                 <Printer size={18} />
                             </button>
-                            <div className="relative w-64 hidden xl:block no-print"><Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} placeholder="Search..." className="w-full pl-9 pr-4 py-2 bg-[#f1f3f9] border border-gray-100 rounded-xl text-sm outline-none" /></div>
+                        <div className="relative w-64 hidden xl:block no-print group">
+                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 transition-colors" />
+                            <input 
+                                type="text" 
+                                value={searchTerm} 
+                                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }} 
+                                placeholder="Search..." 
+                                className="w-full pl-9 pr-4 py-2 bg-[#f1f3f9] border border-gray-100 rounded-xl text-sm outline-none hover:bg-[#F0F9FF] hover:border-blue-200 focus:bg-[#F0F9FF] focus:border-blue-400 transition-all placeholder:transition-colors group-hover:placeholder:text-blue-400" 
+                            />
+                        </div>
                         </div>
                     </>
                 )}
@@ -352,7 +348,7 @@ const ReportTableScreen = ({
                         <tbody className="divide-y divide-gray-100">
                             {reportData.type === 'ledger' && (currentPage === 1 && !searchTerm) && (<tr className="bg-gray-50/50"><td colSpan="5" className="px-6 py-3 text-[13px] font-bold text-gray-800">Opening Balance</td><td className="px-6 py-3 text-[13px] font-bold text-right tabular-nums">{formatCurrency(reportData.openingBalance, preferences.currency)}</td></tr>)}
                             {paginatedData.length > 0 ? paginatedData.map((item, index) => (
-                                <tr key={item.id || index} className="hover:bg-gray-50/50 transition-colors">
+                                <tr key={item.id || index} className="hover:bg-[#F0F9FF] transition-colors">
                                     {(reportData.type === 'transactions' || reportData.type === 'ledger') && (
                                         <>
                                             <td className="px-4 py-1.5 text-[12px] font-medium text-gray-600 whitespace-nowrap">{formatDate(item.date)}</td>

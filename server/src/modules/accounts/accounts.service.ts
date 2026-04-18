@@ -322,9 +322,15 @@ export const createAccount = async (data: {
 
     orgId?: number;
     userId: number;
+    branchId?: number | null;
     targetCurrency?: string;
 }) => {
     const orgId = data.orgId || DEFAULT_ORG_ID;
+    const normalizedBranchId =
+        data.branchId === undefined || data.branchId === null
+            ? null
+            : Number(data.branchId);
+    let branchCurrencyCode: string | null = null;
 
     // Validate Type & Subtype
     let accountSubtype = data.subtype !== undefined ? data.subtype : null;
@@ -334,9 +340,29 @@ export const createAccount = async (data: {
         throw new Error(`Invalid Subtype ${accountSubtype} for Account Type ${data.accountType}`);
     }
 
+    if (normalizedBranchId !== null) {
+        if (!Number.isFinite(normalizedBranchId)) {
+            throw new Error('Selected office branch is invalid.');
+        }
+
+        const [selectedBranch] = await db.select({ id: branches.id, currencyCode: branches.currencyCode })
+            .from(branches)
+            .where(and(eq(branches.id, normalizedBranchId), eq(branches.orgId, orgId)))
+            .limit(1);
+
+        if (!selectedBranch) {
+            throw new Error('Selected office branch is invalid or no longer exists for this organization.');
+        }
+
+        branchCurrencyCode = selectedBranch.currencyCode || null;
+    }
+
     const isBankAccount = data.accountType === ACCOUNT_TYPES.ASSET && accountSubtype === ACCOUNT_SUBTYPES.BANK;
     const normalizedAccountHolderName = String(data.accountHolderName ?? (data as any).account_holder_name ?? '').trim();
     const normalizedBankName = String(data.bankName ?? (data as any).bank_name ?? '').trim();
+    const normalizedIfscOrIban = String(data.ifsc || '').trim().toUpperCase();
+    const normalizedSwiftOrNic = String(data.zipCode ?? (data as any).zip_code ?? '').trim().toUpperCase();
+    const isForexBranch = branchCurrencyCode ? branchCurrencyCode.toUpperCase() !== 'INR' : false;
 
     if (isBankAccount && !normalizedAccountHolderName) {
         throw new Error('Account holder name is required for Bank accounts');
@@ -344,6 +370,14 @@ export const createAccount = async (data: {
 
     if (isBankAccount && !normalizedBankName) {
         throw new Error('Bank name is required for Bank accounts');
+    }
+
+    if (isBankAccount && !isForexBranch && !normalizedIfscOrIban) {
+        throw new Error('IFSC is required for Indian bank accounts');
+    }
+
+    if (isBankAccount && !isForexBranch && !normalizedSwiftOrNic) {
+        throw new Error('SWIFT/BIC code is required for Indian bank accounts');
     }
 
 
@@ -360,31 +394,38 @@ export const createAccount = async (data: {
     const currencyId = resolvedCurrency.id;
     const normalizedCurrencyCode = resolvedCurrency.code;
 
-    const insertValues: any = {
-        orgId: orgId,
+    const [creator] = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.id, data.userId))
+        .limit(1);
+
+    if (!creator) {
+        throw new Error('Current user is invalid. Please log in again.');
+    }
+
+    const insertValues = {
+        orgId,
         name: data.name,
         accountType: data.accountType,
         subtype: accountSubtype,
-        description: data.description || null,
-
-        // Ensure numeric storage for balance
         openingBalance: String(data.openingBalance || '0'),
         openingBalanceDate: data.openingBalanceDate,
-
         accountHolderName: isBankAccount ? normalizedAccountHolderName : '',
         bankName: isBankAccount ? normalizedBankName : '',
-        accountNumber: (data.accountNumber || (data as any).accountNo || null),
-        ifsc: (data.ifsc || null),
-        zipCode: (data.zipCode || (data as any).zip_code || null),
-        bankBranchName: (data.bankBranchName || (data as any).bank_branch_name || null),
-        currencyId: currencyId,
+        accountNumber: data.accountNumber || (data as any).accountNo || null,
+        ifsc: normalizedIfscOrIban || null,
+        description: data.description || null,
         status: (data.isActive === false) ? 2 : 1,
-        createdBy: data.userId
+        createdBy: data.userId,
+        currencyId,
+        branchId: normalizedBranchId,
+        zipCode: normalizedSwiftOrNic || null,
+        bankBranchName: data.bankBranchName || (data as any).bank_branch_name || null,
     };
 
-    const [result] = await db.insert(accounts).values(insertValues);
-
-    const [newAccount] = await db.select().from(accounts).where(eq(accounts.id, result.insertId));
+    const result = await db.insert(accounts).values(insertValues);
+    const insertedId = Number((result as any)?.[0]?.insertId ?? (result as any)?.insertId);
+    const [newAccount] = await db.select().from(accounts).where(eq(accounts.id, insertedId));
 
     if (newAccount) {
         await AuditService.log(
@@ -449,6 +490,7 @@ export const updateAccount = async (id: number, data: {
     ifsc?: string | null;
     zipCode?: string | null;
     bankBranchName?: string | null;
+    branchId?: number | null;
     status?: 1 | 2;
 }, orgId: number = DEFAULT_ORG_ID, userId?: number) => {
     const [account] = await db.select().from(accounts).where(and(eq(accounts.id, id), isNotDeleted(accounts)));
@@ -501,6 +543,28 @@ export const updateAccount = async (id: number, data: {
     const nextAccountType = data.accountType !== undefined ? data.accountType : account.accountType;
     const nextSubtype = data.subtype !== undefined ? data.subtype : account.subtype;
     const isBankAccount = nextAccountType === ACCOUNT_TYPES.ASSET && nextSubtype === ACCOUNT_SUBTYPES.BANK;
+    const requestedBranchId =
+        data.branchId === undefined || data.branchId === null
+            ? account.branchId
+            : Number(data.branchId);
+    let branchCurrencyCode: string | null = null;
+
+    if (requestedBranchId !== null && requestedBranchId !== undefined) {
+        if (!Number.isFinite(requestedBranchId)) {
+            throw new Error('Selected office branch is invalid.');
+        }
+
+        const [selectedBranch] = await db.select({ id: branches.id, currencyCode: branches.currencyCode })
+            .from(branches)
+            .where(and(eq(branches.id, requestedBranchId), eq(branches.orgId, orgId)))
+            .limit(1);
+
+        if (!selectedBranch) {
+            throw new Error('Selected office branch is invalid or no longer exists for this organization.');
+        }
+
+        branchCurrencyCode = selectedBranch.currencyCode || null;
+    }
 
     // Active/Status Logic
     if (data.isActive !== undefined) {
@@ -514,10 +578,12 @@ export const updateAccount = async (id: number, data: {
     else if ((data as any).accountNo !== undefined) updateData.accountNumber = (data as any).accountNo;
     else if ((data as any).account_number !== undefined) updateData.accountNumber = (data as any).account_number;
 
-    if (data.ifsc !== undefined) updateData.ifsc = (data.ifsc || null);
+    if (data.ifsc !== undefined) updateData.ifsc = (String(data.ifsc || '').trim().toUpperCase() || null);
 
-    if (data.zipCode !== undefined) updateData.zipCode = (data.zipCode || null);
-    else if ((data as any).zip_code !== undefined) updateData.zipCode = ((data as any).zip_code || null);
+    if (data.zipCode !== undefined) updateData.zipCode = (String(data.zipCode || '').trim().toUpperCase() || null);
+    else if ((data as any).zip_code !== undefined) updateData.zipCode = (String((data as any).zip_code || '').trim().toUpperCase() || null);
+
+    if (data.branchId !== undefined) updateData.branchId = (data.branchId || null);
 
     if (data.bankBranchName !== undefined) updateData.bankBranchName = (data.bankBranchName || null);
     else if ((data as any).bank_branch_name !== undefined) updateData.bankBranchName = ((data as any).bank_branch_name || null);
@@ -537,6 +603,18 @@ export const updateAccount = async (id: number, data: {
 
     if (isBankAccount && !(updateData.bankName ?? account.bankName)?.trim()) {
         throw new Error('Bank name is required for Bank accounts');
+    }
+
+    const isForexBranch = branchCurrencyCode ? branchCurrencyCode.toUpperCase() !== 'INR' : false;
+    const nextIfscOrIban = String(updateData.ifsc ?? account.ifsc ?? '').trim().toUpperCase();
+    const nextSwiftOrNic = String(updateData.zipCode ?? account.zipCode ?? '').trim().toUpperCase();
+
+    if (isBankAccount && !isForexBranch && !nextIfscOrIban) {
+        throw new Error('IFSC is required for Indian bank accounts');
+    }
+
+    if (isBankAccount && !isForexBranch && !nextSwiftOrNic) {
+        throw new Error('SWIFT/BIC code is required for Indian bank accounts');
     }
 
     await db.update(accounts).set(updateData).where(eq(accounts.id, id));

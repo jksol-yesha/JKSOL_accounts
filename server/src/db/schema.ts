@@ -112,12 +112,13 @@ export const accounts = mysqlTable("accounts", {
   ifsc: varchar("ifsc", { length: 20 }),
   zipCode: varchar("zip_code", { length: 20 }),
   bankBranchName: varchar("bank_branch_name", { length: 120 }),
+  branchId: bigint("branch_id", { mode: "number", unsigned: true }).references(() => branches.id),
   description: varchar("description", { length: 255 }),
 
   status: int("status").notNull().default(1),
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).references(() => users.id),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     ukAccOrgName: uniqueIndex("uk_acc_org_name").on(table.orgId, table.name),

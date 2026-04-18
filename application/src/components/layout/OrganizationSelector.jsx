@@ -4,7 +4,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
 import ManageOrganizationModal from './ManageOrganizationModal';
 
-const OrganizationSelector = ({ isCollapsed }) => {
+const OrganizationSelector = ({ isCollapsed, onTriggerKeyDown, buttonProps = {} }) => {
     const { user } = useAuth();
     const { selectedOrg } = useOrganization();
     const [showManageOrgDrawer, setShowManageOrgDrawer] = useState(false);
@@ -23,7 +23,9 @@ const OrganizationSelector = ({ isCollapsed }) => {
         <>
             <button
                 onClick={handleOpenManageOrg}
+                onKeyDown={onTriggerKeyDown}
                 disabled={isMember || !canOpenManageOrg}
+                {...buttonProps}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'gap-3 px-2.5'} py-2.5 rounded-lg border border-transparent transition-all duration-200 group relative ${isMember || !canOpenManageOrg ? 'cursor-default' : 'text-slate-700 hover:bg-slate-200/50'}`}
             >
                 <div className="w-9 h-9 rounded bg-white shadow-sm flex items-center justify-center shrink-0 overflow-hidden text-slate-500 border border-slate-200 transition-colors relative z-10">
@@ -58,7 +60,7 @@ const OrganizationSelector = ({ isCollapsed }) => {
             <ManageOrganizationModal
                 isOpen={showManageOrgDrawer}
                 onClose={() => setShowManageOrgDrawer(false)}
-                initialView={selectedOrg ? 'manage' : 'list'}
+                initialView="list"
                 initialOrg={selectedOrg}
             />
         </>
