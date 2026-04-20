@@ -68,7 +68,7 @@ export const generateReport = async ({ body, set, headers, user, orgId, branchId
     if (!user || !orgId) throw new Error("Unauthorized: User or Organization not identified");
     try {
         const rawBranchId = body.branchId ?? contextBranchId;
-        const branchId = rawBranchId === 'all'
+        const branchId: number | number[] | 'all' = rawBranchId === 'all'
             ? 'all'
             : (Array.isArray(rawBranchId) ? rawBranchId.map(Number).filter(Boolean) : Number(rawBranchId));
         const reportType = body.type; // 'Summary', 'Detailed', 'Category-wise', 'Account-wise', 'Debit/Credit', 'Profit/Loss'
@@ -84,7 +84,7 @@ export const generateReport = async ({ body, set, headers, user, orgId, branchId
             party: body.party ? String(body.party) : undefined
         };
 
-        if ((!branchId && branchId !== 'all') || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
+        if (!branchId || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
             set.status = 400;
             return { success: false, message: 'Missing required parameters: branchId, type, startDate, endDate' };
         }
@@ -156,7 +156,7 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
     if (!user || !orgId) throw new Error("Unauthorized: User or Organization not identified");
     try {
         const rawBranchId = body.branchId ?? contextBranchId;
-        const branchId = rawBranchId === 'all'
+        const branchId: number | number[] | 'all' = rawBranchId === 'all'
             ? 'all'
             : (Array.isArray(rawBranchId) ? rawBranchId.map(Number).filter(Boolean) : Number(rawBranchId));
         const reportType = body.type;
@@ -172,7 +172,7 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
             party: body.party ? String(body.party) : undefined
         };
 
-        if ((!branchId && branchId !== 'all') || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
+        if (!branchId || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
             set.status = 400;
             return { success: false, message: 'Missing required parameters: branchId, type, startDate, endDate' };
         }
@@ -269,7 +269,7 @@ export const getProfitLossReport = async ({ query, set, headers, user, orgId, br
         const startDate = source.startDate;
         const endDate = source.endDate;
 
-        if ((!branchId && branchId !== 'all') || !startDate || !endDate || (Array.isArray(branchId) && branchId.length === 0)) {
+        if (!branchId || !startDate || !endDate || (Array.isArray(branchId) && branchId.length === 0)) {
             set.status = 400;
             return { success: false, message: 'Missing required parameters: branchId, startDate, endDate' };
         }
@@ -315,8 +315,8 @@ export const getProfitLossReport = async ({ query, set, headers, user, orgId, br
             success: true,
             data: {
                 summary: result.summary,
-                income: result.income,
-                expenses: result.expenses,
+                income: result.data.incomes,
+                expenses: result.data.expenses,
                 currency: result.currency
             }
         };

@@ -2,14 +2,24 @@
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
+import { AgGridReact } from "ag-grid-react";
+import {
+  ModuleRegistry,
+  AllCommunityModule,
+  themeQuartz,
+} from "ag-grid-community";
+
+ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity
 } from 'lucide-react';
+import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
+
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuth } from '../../context/AuthContext';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
@@ -19,12 +29,16 @@ import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
 import { cn } from '../../utils/cn';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
-import MobilePagination from '../../components/common/MobilePagination';
+
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CustomSelect from '../../components/common/CustomSelect';
 import ImportTransactionModal from './ImportTransactionModal';
+import CreateTransaction from './components/CreateTransaction';
 // import ImportPDFModal from './ImportPDFModal';
 import DateRangePicker from '../../components/common/DateRangePicker';
+import BranchSelector from '../../components/layout/BranchSelector';
+import CurrencySelector from '../../components/layout/CurrencySelector';
+import { generateDatePresets } from '../../utils/constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 import AccountNameTooltip from '../../components/common/AccountNameTooltip';
 import { notifyTransactionDataChanged } from './transactionDataSync';
@@ -98,6 +112,68 @@ const BranchTooltip = ({ branchNames }) => {
                 </span>
             )}
         </span>
+    );
+};
+
+const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const buttonRef = useRef(null);
+    const popupRef = useRef(null);
+    const [position, setPosition] = useState(null);
+
+    useLayoutEffect(() => {
+        if (!isOpen) return;
+        const rect = buttonRef.current.getBoundingClientRect();
+        setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+        
+        const handleClickOutside = (e) => {
+            if (!buttonRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) {
+                setIsOpen(false);
+            }
+        };
+        window.addEventListener('mousedown', handleClickOutside);
+        return () => window.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    const toggleColumn = (key) => {
+        setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    return (
+        <div className="relative inline-block text-left whitespace-nowrap">
+            <button
+                ref={buttonRef}
+                onClick={() => setIsOpen(!isOpen)}
+                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+            >
+                <Settings2 size={14} className="text-gray-500" />
+                <span className="hidden sm:inline">Columns</span>
+            </button>
+            {isOpen && createPortal(
+                <div
+                    ref={popupRef}
+                    style={{ position: 'fixed', top: position?.top, right: position?.right, zIndex: 9999 }}
+                    className="w-48 bg-white border border-gray-200 rounded-lg shadow-xl shadow-gray-200/50 py-1.5 z-[100]"
+                >
+                    <div className="px-3 py-2 border-b border-gray-100 mb-1">
+                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Toggle Columns</span>
+                    </div>
+                    {columns.map(col => (
+                        <button
+                            key={col.key}
+                            onClick={() => toggleColumn(col.key)}
+                            className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 text-[13px] font-medium text-gray-700 transition-colors"
+                        >
+                            <div className={cn("w-4 h-4 roundedborder flex items-center justify-center transition-colors border", visibleColumns[col.key] ? "bg-primary border-primary" : "border-gray-300 bg-white")}>
+                                {visibleColumns[col.key] && <Check size={12} className="text-white" strokeWidth={3} />}
+                            </div>
+                            {col.label}
+                        </button>
+                    ))}
+                </div>,
+                document.body
+            )}
+        </div>
     );
 };
 
@@ -193,397 +269,206 @@ const enrichTransaction = (txn) => {
     };
 };
 
-const TransactionFilters = ({ isOpen, onClose, filters, setFilters, uniquePayees, onApply, onReset, anchorRef }) => {
-    const [panelPosition, setPanelPosition] = useState(null);
-
-    useLayoutEffect(() => {
-        if (!isOpen) {
-            setPanelPosition(null);
-            return;
-        }
-
-        const updatePosition = () => {
-            if (!anchorRef?.current) return;
-
-            const rect = anchorRef.current.getBoundingClientRect();
-            const viewportPadding = 16;
-            const panelWidth = Math.min(600, window.innerWidth - viewportPadding * 2);
-            const left = Math.min(
-                Math.max(viewportPadding, rect.right - panelWidth),
-                window.innerWidth - panelWidth - viewportPadding
-            );
-            const top = rect.bottom + 8;
-            const maxHeight = Math.max(280, window.innerHeight - top - viewportPadding);
-
-            setPanelPosition({
-                top,
-                left,
-                width: panelWidth,
-                maxHeight,
-            });
-        };
-
-        updatePosition();
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-
-        return () => {
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-        };
-    }, [isOpen, anchorRef]);
-
-    if (!isOpen) return null;
-
-    const handleChange = (key, value) => {
-        setFilters(prev => {
-            const updates = { [key]: value };
-            // Reset Scope if Money Flow changes
-            if (key === 'moneyFlow') {
-                updates.scope = 'All Transactions';
-                updates.category = 'All'; // Also reset category since it cascades
-                updates.payee = 'All';    // Also reset payee
-            }
-            return { ...prev, ...updates };
-        });
-    };
-
-    if (!panelPosition || typeof document === 'undefined') return null;
-
-    return createPortal(
-        <>
-            <div className="fixed inset-0 z-[110] bg-transparent" onClick={onClose} />
-            <div
-                className="fixed z-[120] overflow-y-auto bg-white rounded-2xl shadow-2xl border border-gray-100 p-6 animate-in fade-in slide-in-from-top-2 duration-200"
-                style={panelPosition}
-                onClick={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onMouseUp={(e) => e.stopPropagation()}
-            >
-                <div className="flex items-center justify-between mb-6">
-                    <h3 className="text-sm font-bold text-gray-900">Transaction Filters</h3>
-                    <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
-                        <X size={18} />
-                    </button>
-                </div>
-
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-6">
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Money Flow</label>
-                        <CustomSelect
-                            dropdownGroup="transaction-filter"
-                            value={filters.moneyFlow}
-                            onChange={(e) => handleChange('moneyFlow', e.target.value)}
-                            className="w-full h-10 px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-black transition-all"
-                        >
-                            <option value="All">All</option>
-                            <option value="In">In</option>
-                            <option value="Out">Out</option>
-                        </CustomSelect>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Transaction Type</label>
-                        <CustomSelect
-                            dropdownGroup="transaction-filter"
-                            value={filters.scope}
-                            onChange={(e) => handleChange('scope', e.target.value)}
-                            className="w-full h-10 px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-black transition-all"
-                        >
-                            <option value="All Transactions">All Transactions</option>
-                            {(filters.moneyFlow === 'All' || filters.moneyFlow === 'In') && <option value="Income">Income</option>}
-                            {(filters.moneyFlow === 'All' || filters.moneyFlow === 'Out') && <option value="Expense">Expense</option>}
-                            {(filters.moneyFlow === 'All' || filters.moneyFlow === 'Out') && <option value="Transfer">Transfer</option>}
-                            {(filters.moneyFlow === 'All' || filters.moneyFlow === 'Out') && <option value="Investment">Investment</option>}
-                        </CustomSelect>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Time Period</label>
-                        <CustomSelect
-                            dropdownGroup="transaction-filter"
-                            value={filters.timePeriod}
-                            onChange={(e) => handleChange('timePeriod', e.target.value)}
-                            className="w-full h-10 px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-black transition-all"
-                        >
-                            <option value="All Time">All Time</option>
-                            <option value="This Month">This Month</option>
-                            <option value="Last Month">Last Month</option>
-                            <option value="Last 6 Months">Last 6 Months</option>
-                            <option value="This Year">This Year</option>
-                            <option value="Last Year">Last Year</option>
-                            <option value="Custom Range">Custom Range</option>
-                        </CustomSelect>
-                    </div>
-
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Custom Range</label>
-                        <div className={cn("transition-all duration-200", filters.timePeriod !== 'Custom Range' && "opacity-50 pointer-events-none grayscale")}>
-                            <DateRangePicker
-                                startDate={filters.startDate}
-                                endDate={filters.endDate}
-                                onChange={(dates) => setFilters(prev => ({ ...prev, ...dates }))}
-                                placeholder="Select dates..."
-                            />
-                        </div>
-                    </div>
-
-
-                    <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Payee</label>
-                        <CustomSelect
-                            dropdownGroup="transaction-filter"
-                            value={filters.payee}
-                            onChange={(e) => handleChange('payee', e.target.value)}
-                            className="w-full h-10 px-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-black transition-all"
-                        >
-                            <option value="All">All Payees</option>
-                            {uniquePayees.map(payee => (
-                                <option key={payee} value={payee}>{payee}</option>
-                            ))}
-                        </CustomSelect>
-                    </div>
-
-                </div>
-
-                <div className="flex items-center justify-between mt-8 pt-6 border-t border-gray-50">
-                    <button
-                        onClick={onReset}
-                        className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors border border-gray-200"
-                    >
-                        Reset
-                    </button>
-                    <button
-                        onClick={onApply}
-                        className="px-6 py-2 bg-black text-white text-xs font-bold rounded-lg hover:bg-gray-800 transition-all shadow-lg shadow-gray-200 active:scale-95"
-                    >
-                        Apply Filters
-                    </button>
-                </div>
-            </div>
-        </>,
-        document.body
-    );
-};
-
-const TransactionColumnSettings = ({
+const FilterDropdown = ({
     value,
-    onApplySelection,
-    onBeforeOpen,
-    externalCloseSignal
-}) => {
+    onChange,
+    options,
+    variant = "default",
+    hideIcon = false,
+    placeholder = "",
+  }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const triggerRef = useRef(null);
     const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
     const [dropdownPosition, setDropdownPosition] = useState(null);
-    const [anchorMetrics, setAnchorMetrics] = useState(null);
-
-    const normalizedSelection = useMemo(() => normalizeTxnColumns(value), [value]);
-
-    const handleCloseDropdown = React.useCallback(() => {
-        setDropdownPosition(null);
-        setIsOpen(false);
-    }, []);
-
+  
     useLayoutEffect(() => {
-        if (!isOpen) {
-            setDropdownPosition(null);
-            return;
-        }
-
-        const updatePosition = () => {
-            if (!dropdownRef.current || !anchorMetrics) return;
-            const width = 170;
-            const viewportPadding = 12;
-            const preferredHeight = 420;
-            const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            const anchorX = anchorMetrics.clickX;
-            const measuredHeight = dropdownRef.current.offsetHeight || preferredHeight;
-            const left = Math.min(
-                Math.max(viewportPadding, anchorX - (width / 2)),
-                Math.max(viewportPadding, viewportWidth - width - viewportPadding)
-            );
-            const availableBelow = Math.max(0, viewportHeight - anchorMetrics.triggerBottom - viewportPadding);
-            const maxHeight = Math.max(0, Math.min(preferredHeight, availableBelow));
-            const actualHeight = Math.min(measuredHeight, maxHeight || measuredHeight);
-            const top = Math.min(anchorMetrics.triggerBottom, viewportHeight - viewportPadding - actualHeight);
-
-            setDropdownPosition({
-                top,
-                left,
-                maxHeight
-            });
-        };
-
-        updatePosition();
-        return undefined;
-    }, [anchorMetrics, isOpen]);
-
-    useEffect(() => {
-        if (!isOpen) return undefined;
-
-        const handleClickOutside = (event) => {
-            const clickedTrigger = triggerRef.current?.contains(event.target);
-            const clickedDropdown = dropdownRef.current?.contains(event.target);
-
-            if (!clickedTrigger && !clickedDropdown) {
-                handleCloseDropdown();
-            }
-        };
-
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [handleCloseDropdown, isOpen]);
-
-    useEffect(() => {
-        if (!isOpen || !externalCloseSignal) return undefined;
-        handleCloseDropdown();
-        return undefined;
-    }, [externalCloseSignal, handleCloseDropdown, isOpen]);
-
-    const handleToggleOpen = (event) => {
-        if (isOpen) {
-            handleCloseDropdown();
-            return;
-        }
-
-        onBeforeOpen?.();
+      if (!isOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setDropdownPosition(null);
-        if (triggerRef.current) {
-            const rect = triggerRef.current.getBoundingClientRect();
-            setAnchorMetrics({
-                clickX: typeof event.clientX === 'number' ? event.clientX : rect.left + (rect.width / 2),
-                triggerBottom: rect.bottom
-            });
-        }
-        setIsOpen(true);
-    };
-
-    const toggleColumn = (key) => {
-        onApplySelection({
-            ...normalizedSelection,
-            [key]: !normalizedSelection[key]
+        return;
+      }
+      const updatePosition = () => {
+        if (!buttonRef.current) return;
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          left: rect.left,
+          minWidth: Math.max(160, rect.width),
         });
+      };
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }, [isOpen]);
+  
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (
+          !dropdownRef.current?.contains(event.target) &&
+          !dropdownMenuRef.current?.contains(event.target)
+        )
+          setIsOpen(false);
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+  
+    const selectedOption = options.find((opt) => opt.value === value) || {
+      label: placeholder || options[0]?.label,
     };
-
+    const isTitleVar = variant === "title";
+  
     return (
-        <>
-            <div className="relative hidden lg:block" ref={triggerRef}>
+      <div className="relative" ref={dropdownRef}>
+        <button
+          ref={buttonRef}
+          onClick={() => setIsOpen(!isOpen)}
+          className={`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : "h-[32px] px-3 bg-white text-gray-600 border border-gray-200 text-[13px] font-medium rounded-md hover:bg-gray-50 focus:ring-4 focus:ring-primary/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"}`}
+        >
+          <div
+            className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
+          >
+            <span>{selectedOption?.label}</span>
+          </div>
+          {!hideIcon && (
+            <ChevronDown
+              size={isTitleVar ? 16 : 14}
+              className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-primary" : "text-gray-400 group-hover:text-gray-600"}`}
+            />
+          )}
+        </button>
+  
+        {isOpen &&
+          dropdownPosition &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={dropdownMenuRef}
+              className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
+              style={{
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                minWidth: dropdownPosition.minWidth,
+              }}
+            >
+              {options.map((option) => (
                 <button
-                    type="button"
-                    onClick={handleToggleOpen}
-                    className={cn(
-                        "w-10 h-10 flex items-center justify-center rounded-xl border transition-all relative z-50",
-                        isOpen
-                            ? "bg-gray-100 text-gray-700 border-gray-200"
-                            : "bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-200"
-                    )}
-                    title="Columns"
+                  key={option.value}
+                  onClick={() => {
+                    onChange(option.value);
+                    setIsOpen(false);
+                  }}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"}`}
                 >
-                    <Settings2 size={18} strokeWidth={2.2} />
-                </button>
-            </div>
-
-            {isOpen && createPortal(
-                <div
-                    ref={dropdownRef}
-                    className="fixed z-[120] w-[170px] overflow-y-auto no-scrollbar rounded-xl border border-gray-100 bg-white px-3 pt-3 pb-2 shadow-2xl"
-                    style={dropdownPosition
-                        ? { top: dropdownPosition.top, left: dropdownPosition.left, maxHeight: dropdownPosition.maxHeight }
-                        : { top: -9999, left: -9999, visibility: 'hidden' }}
-                >
-                    <div className="max-h-48 overflow-y-auto py-0.5 no-scrollbar">
-                        {TXN_TABLE_COLUMNS.map((column) => {
-                            const isSelected = normalizedSelection[column.key];
-                            return (
-                                <button
-                                    key={column.key}
-                                    type="button"
-                                    onClick={() => toggleColumn(column.key)}
-                                    className={cn(
-                                        "group flex w-full items-center justify-between rounded-lg px-1.5 py-1 text-left transition-colors hover:bg-gray-50",
-                                        isSelected ? "font-medium text-gray-900" : "font-medium text-gray-600"
-                                    )}
-                                >
-                                    <span className="truncate pr-2 text-[12px]">{column.label}</span>
-                                    <span className={cn("shrink-0", isSelected ? "text-primary" : "text-transparent")}>
-                                        <Eye size={12} />
-                                    </span>
-                                </button>
-                            );
-                        })}
+                  <span
+                    className={`text-[13px] w-full flex items-center gap-2 ${value === option.value ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                  >
+                    <div className="w-4 flex justify-center shrink-0">
+                      {value === option.value && (
+                        <Check
+                          size={14}
+                          className="text-[#4A8AF4]"
+                          strokeWidth={2.5}
+                        />
+                      )}
                     </div>
-                </div>,
-                document.body
-            )}
-        </>
+                    {option.label}
+                  </span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
+  };
+      
+const DateCellRenderer = (props) => {
+    const { value, data, context } = props;
+    if (!value) return null;
+    return (
+        <span className="font-medium text-gray-700">
+            {context.formatDate ? context.formatDate(value) : value}
+        </span>
     );
 };
 
-const AttachmentPreview = ({ attachmentPath, isOpen, onClose, onViewFullScreen, className = "left-0 top-full mt-2" }) => {
-    if (!attachmentPath || !isOpen) return null;
+const AmountCellRenderer = (props) => {
+    const { value, data, context } = props;
+    if (!data) return null;
+    const isIncome = data.txnType === 'income' || data.transactionType?.name === 'income';
+    const isExpense = data.txnType === 'expense' || data.transactionType?.name === 'expense';
+    
+    return (
+        <span className={props.className || (
+            isIncome ? "text-emerald-600 font-bold shrink-0 tabular-nums" :
+                isExpense ? "text-gray-900 font-bold shrink-0 tabular-nums" :
+                    "text-blue-600 font-bold shrink-0 tabular-nums"
+        )}>
+            {context.formatCurrency ? context.formatCurrency(value) : value}
+        </span>
+    );
+};
 
-    const isImage = attachmentPath.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-    const fileName = attachmentPath.split('/').pop().split('-').slice(5).join('-') || attachmentPath.split('/').pop();
-    const fullUrl = buildAttachmentUrl(attachmentPath);
+const ActionCellRenderer = (props) => {
+    const { data, context } = props;
+    if (!data) return null;
 
     return (
-        <div className={cn(
-            "absolute w-72 bg-white rounded-xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-gray-100 p-3 z-[100] animate-in fade-in slide-in-from-top-2 duration-200 pointer-events-auto",
-            className
-        )}>
-            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1 mb-3 pb-2 border-b border-gray-100 flex justify-between items-center">
-                <span>Attachment</span>
+        <div className="flex justify-end gap-1 px-1">
+            <div className="relative">
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
-                        onClose();
+                        if (data.attachmentPath && context.setFullScreenAttachment) {
+                            context.setFullScreenAttachment({ isOpen: true, path: data.attachmentPath });
+                        }
                     }}
-                    className="p-1 hover:bg-gray-100 rounded-md text-gray-400 hover:text-gray-600 transition-colors"
+                    className={`p-1.5 rounded-lg transition-all ${
+                        data.attachmentPath
+                            ? "text-gray-400 hover:text-primary hover:bg-primary/5 active:scale-95"
+                            : "text-gray-200 cursor-not-allowed"
+                    }`}
+                    title={data.attachmentPath ? "View Attachment" : "No Attachment"}
+                    disabled={!data.attachmentPath}
                 >
-                    <X size={14} />
+                    <Paperclip size={14} strokeWidth={2.5} />
                 </button>
             </div>
-            <div className="space-y-1.5 max-h-72 overflow-y-auto no-scrollbar">
-                <button
-                    type="button"
-                    className="flex w-full text-left items-center gap-3 p-2 hover:bg-primary/5 rounded-lg transition-all group/item border border-transparent hover:border-primary/10"
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (onClose) onClose();
-                        if (onViewFullScreen) onViewFullScreen(attachmentPath);
-                    }}
-                >
-                    <div className="w-12 h-12 rounded-lg bg-gray-50 flex items-center justify-center shrink-0 overflow-hidden border border-gray-100 shadow-sm group-hover/item:border-primary/20 transition-colors">
-                        {isImage ? (
-                            <img src={fullUrl} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                            <div className="flex flex-col items-center justify-center gap-0.5">
-                                <FileText size={18} className="text-gray-400 group-hover/item:text-primary transition-colors" />
-                                <span className="text-[8px] font-bold text-gray-300 uppercase">{attachmentPath.split('.').pop()}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-bold text-gray-700 truncate group-hover/item:text-primary transition-colors" title={fileName}>{fileName}</div>
-                        <div className="text-[9px] text-gray-400 flex items-center gap-1 mt-0.5">
-                            <ExternalLink size={10} className="group-hover/item:translate-x-0.5 group-hover/item:-translate-y-0.5 transition-transform" />
-                            <span className="font-semibold uppercase tracking-wider">Open Attachment</span>
-                        </div>
-                    </div>
-                </button>
-            </div>
+            <button
+                onClick={() => context.handleEdit && context.handleEdit(data)}
+                disabled={!context.canEditTxn || !context.canEditTxn(data)}
+                className={`p-1.5 rounded-lg transition-colors ${
+                    (context.canEditTxn && context.canEditTxn(data)) ? "text-gray-400 hover:text-blue-600 hover:bg-blue-50" : "text-gray-200 cursor-not-allowed"
+                }`}
+                title={(context.canEditTxn && context.canEditTxn(data)) ? "Edit" : "You do not have access to edit this transaction"}
+            >
+                <Edit size={14} />
+            </button>
+            <button
+                type="button"
+                onClick={(e) => context.handleDelete && context.handleDelete(e, data)}
+                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                title="Delete"
+            >
+                <Trash2 size={14} />
+            </button>
         </div>
     );
 };
 
 const Transactions = () => {
     const navigate = useNavigate();
-    const { selectedBranch, branches } = useBranch();
+    const { selectedBranch, selectedBranchIds, branches } = useBranch();
     const { user } = useAuth();
-    const { selectedYear } = useYear();
-    const { formatCurrency, formatDate } = usePreferences();
+    const { selectedYear, financialYears } = useYear();
+    const { preferences, formatCurrency, formatDate, updatePreferences } = usePreferences();
 
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -595,38 +480,73 @@ const Transactions = () => {
 
     // Toolbar States
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeDropdown, setActiveDropdown] = useState(null);
-    const pageSize = 20;
-    const [currentPage, setCurrentPage] = useState(1);
-    const [isFilterOpen, setIsFilterOpen] = useState(false);
-    const [sortConfig, setSortConfig] = useState({ key: 'txnDate', direction: 'desc' });
     const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_TXN_COLUMNS);
 
+
+    
+    const colDefs = useMemo(() => {
+        return [
+            { field: 'id', headerName: 'Id', hide: !visibleColumns.id, minWidth: 80, maxWidth: 100 },
+            { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
+            { field: 'date', headerName: 'Date', hide: !visibleColumns.date, valueGetter: params => params.data?.txnDate, cellRenderer: DateCellRenderer, minWidth: 120, sort: 'desc' },
+            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, cellRenderer: (params) => <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{params.value}</span> },
+            { field: 'branch', headerName: 'Branch', hide: !visibleColumns.branch, cellRenderer: (params) => <BranchTooltip branchNames={params.data?.branchNames} />, minWidth: 140 },
+            { field: 'account', headerName: 'Account', hide: !visibleColumns.account, valueGetter: params => params.data?.account?.name || '-', minWidth: 150, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
+            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
+            { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 1, minWidth: 200 },
+            { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.finalAmountLocal ?? params.data?.amountBase, cellRenderer: AmountCellRenderer, minWidth: 120, type: 'rightAligned' },
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByDisplayName || params.data?.creatorName || '-', minWidth: 130 },
+            { headerName: '', field: 'actions', minWidth: 100, maxWidth: 100, pinned: 'right', cellRenderer: ActionCellRenderer, sortable: false, filter: false }
+        ];
+    }, [visibleColumns]);
+
+    const defaultColDef = useMemo(() => ({
+        sortable: true,
+        filter: true,
+        resizable: true,
+        suppressMovable: true,
+        menuTabs: []
+    }), []);
+    
+    // Original state:
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [activeAttachmentTxnId, setActiveAttachmentTxnId] = useState(null); // Keep for legacy if needed, but we use object now
     const [attachmentViewer, setAttachmentViewer] = useState({ isOpen: false, txnId: null, path: null, position: { top: 0, right: 0 } });
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
     const isPrinting = false;
     const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
-    const [desktopViewportHeight, setDesktopViewportHeight] = useState(null);
-    const [desktopTableHeight, setDesktopTableHeight] = useState(null);
-    const filterBoxRef = useRef(null);
-    const pageViewportRef = useRef(null);
-    const desktopTableRef = useRef(null);
-    const toolbarRef = useRef(null);
-    const desktopPaginationRef = useRef(null);
+    
+    // CreateTransaction Drawer State
+    const [drawerState, setDrawerState] = useState({ open: false, transaction: null });
 
     // Filter Logic State
-    const [tempFilters, setTempFilters] = useState({
-        moneyFlow: 'All',
-        scope: 'All Transactions',
-        timePeriod: 'All Time',
-        startDate: '',
-        endDate: '',
-        payee: 'All'
+    const [appliedFilters, setAppliedFilters] = useState({
+        type: 'all',
+        dateRange: null,
+        currency: preferences?.currency || 'INR',
+        party: 'all'
     });
-    const [appliedFilters, setAppliedFilters] = useState({ ...tempFilters });
+    
+    // Date Presets Generation
+    const datePresets = useMemo(() => {
+        const sortedFinancialYears = [...(financialYears || [])].sort((a, b) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime());
+        const selectedYearIndex = sortedFinancialYears.findIndex((y) => Number(y.id) === Number(selectedYear?.id));
+        const prevYear = selectedYearIndex > 0 ? sortedFinancialYears[selectedYearIndex - 1] : null;
+        return generateDatePresets(selectedYear, prevYear);
+    }, [selectedYear, financialYears]);
+
+    // Auto-select Current FY by default on load & year toggle
+    useEffect(() => {
+        if (!selectedYear || datePresets.length === 0) return;
+        const currentFyPreset = datePresets.find(p => p.value === 'current');
+        if (currentFyPreset?.range) {
+            setAppliedFilters(prev => ({ ...prev, dateRange: currentFyPreset.range }));
+        }
+    }, [selectedYear, datePresets]);
+
+    const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
     const cacheKey = `transactions:list:v2:${selectedYear?.id || 'fy'}`;
     const columnSettingsKey = `${TXN_TABLE_COLUMN_STORAGE_KEY}:${user?.id || 'user'}`;
     const showInitialLoader = loading && !hasFetchedOnce;
@@ -675,103 +595,9 @@ const Transactions = () => {
         }
     }, [columnSettingsKey, user?.id, visibleColumns]);
 
-    useLayoutEffect(() => {
-        if (typeof window === 'undefined') return undefined;
+    
 
-        const main = document.querySelector('main');
-        if (!main) return undefined;
-
-        let frameId = 0;
-        let resizeObserver = null;
-
-        const updateHeight = () => {
-            const shouldConstrain = window.innerWidth >= 1024;
-
-            if (!shouldConstrain) {
-                setDesktopViewportHeight((prev) => (prev === null ? prev : null));
-                return;
-            }
-
-            const footer = main.querySelector('footer');
-            const footerHeight = footer ? footer.getBoundingClientRect().height : 0;
-            const nextHeight = Math.max(0, Math.floor(main.getBoundingClientRect().height - footerHeight));
-
-            setDesktopViewportHeight((prev) => (prev === nextHeight ? prev : nextHeight));
-        };
-
-        const scheduleUpdate = () => {
-            if (frameId) {
-                window.cancelAnimationFrame(frameId);
-            }
-            frameId = window.requestAnimationFrame(updateHeight);
-        };
-
-        scheduleUpdate();
-        window.addEventListener('resize', scheduleUpdate);
-
-        if ('ResizeObserver' in window) {
-            resizeObserver = new window.ResizeObserver(scheduleUpdate);
-            resizeObserver.observe(main);
-        }
-
-        return () => {
-            if (frameId) {
-                window.cancelAnimationFrame(frameId);
-            }
-            window.removeEventListener('resize', scheduleUpdate);
-            resizeObserver?.disconnect();
-        };
-    }, []);
-
-    useLayoutEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-
-        let frameId = 0;
-        let resizeObserver = null;
-
-        const updateTableHeight = () => {
-            const shouldConstrain = window.innerWidth >= 1024;
-
-            if (!shouldConstrain) {
-                setDesktopTableHeight((prev) => (prev === null ? prev : null));
-                return;
-            }
-
-            const pageViewportBottom = pageViewportRef.current?.getBoundingClientRect().bottom || window.innerHeight;
-            const tableTop = desktopTableRef.current?.getBoundingClientRect().top || 0;
-            const paginationHeight = desktopPaginationRef.current?.getBoundingClientRect().height || 0;
-            const viewportGutter = window.innerWidth >= 1280 ? 24 : 16;
-            const nextHeight = Math.max(240, Math.floor(pageViewportBottom - tableTop - paginationHeight - viewportGutter));
-
-            setDesktopTableHeight((prev) => (prev === nextHeight ? prev : nextHeight));
-        };
-
-        const scheduleUpdate = () => {
-            if (frameId) {
-                window.cancelAnimationFrame(frameId);
-            }
-            frameId = window.requestAnimationFrame(updateTableHeight);
-        };
-
-        scheduleUpdate();
-        window.addEventListener('resize', scheduleUpdate);
-
-        if ('ResizeObserver' in window) {
-            resizeObserver = new window.ResizeObserver(scheduleUpdate);
-            if (pageViewportRef.current) resizeObserver.observe(pageViewportRef.current);
-            if (desktopTableRef.current) resizeObserver.observe(desktopTableRef.current);
-            if (toolbarRef.current) resizeObserver.observe(toolbarRef.current);
-            if (desktopPaginationRef.current) resizeObserver.observe(desktopPaginationRef.current);
-        }
-
-        return () => {
-            if (frameId) {
-                window.cancelAnimationFrame(frameId);
-            }
-            window.removeEventListener('resize', scheduleUpdate);
-            resizeObserver?.disconnect();
-        };
-    }, [desktopViewportHeight]);
+    
 
     const canEditTxn = (txn) => {
         if (user?.role === 'owner') return true;
@@ -856,45 +682,10 @@ const Transactions = () => {
     }, [fetchTransactions, on]); // Only depend on stable fetcher and listener binder
 
     // Sorting Handlers
-    const handleSort = (key) => {
-        let direction = 'asc';
-        if (sortConfig.key === key && sortConfig.direction === 'asc') {
-            direction = 'desc';
-        }
-        setSortConfig({ key, direction });
-    };
+    
 
 
-    const availablePayees = useMemo(() => {
-        let filtered = Array.isArray(transactions) ? transactions : [];
 
-        // Same cascading logic for payees
-        if (tempFilters.moneyFlow !== 'All') {
-            if (tempFilters.moneyFlow === 'In') filtered = filtered.filter(t => (t.type || t.txnType) === 'income');
-            else if (tempFilters.moneyFlow === 'Out') filtered = filtered.filter(t => (t.type || t.txnType) === 'expense' || (t.type || t.txnType) === 'transfer');
-        }
-        if (tempFilters.scope !== 'All Transactions') {
-            filtered = filtered.filter(t => (t.type || t.txnType) === tempFilters.scope.toLowerCase());
-        }
-
-        const payees = new Set(filtered.map(t => t.contact || t.payee || t.counterpartyName).filter(Boolean));
-        return Array.from(payees).sort();
-    }, [transactions, tempFilters.moneyFlow, tempFilters.scope]);
-
-
-    useEffect(() => {
-        if (!isFilterOpen) return;
-        const handleOutsideClick = (event) => {
-            if (event.target?.closest?.('[data-custom-select-dropdown="true"]')) {
-                return;
-            }
-            if (filterBoxRef.current && !filterBoxRef.current.contains(event.target)) {
-                setIsFilterOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleOutsideClick);
-        return () => document.removeEventListener('mousedown', handleOutsideClick);
-    }, [isFilterOpen]);
 
     const groupedTransactions = useMemo(() => {
         // We bypass the global filter, so it's intrinsically ALWAYS 'multi' mode in terms of grouping logic
@@ -961,143 +752,117 @@ const Transactions = () => {
             );
         }
 
-        // 2. Applied Filters logic
-        // Money Flow
-        if (appliedFilters.moneyFlow !== 'All') {
-            if (appliedFilters.moneyFlow === 'In') {
-                result = result.filter(t => t.txnType === 'income');
-            } else if (appliedFilters.moneyFlow === 'Out') {
-                result = result.filter(t => t.txnType === 'expense' || t.txnType === 'transfer' || t.txnType === 'investment');
-            }
+        // 2. Toolbar Macro Filters
+        if (appliedFilters.type !== 'all') {
+            result = result.filter(t => (t.transactionType?.name || t.txnType || '').toLowerCase() === appliedFilters.type);
         }
 
-        // Scope
-        if (appliedFilters.scope !== 'All Transactions') {
-            result = result.filter(t => (t.transactionType?.name || t.txnType || '').toLowerCase() === appliedFilters.scope.toLowerCase());
-        }
-
-
-        // Payee
-        if (appliedFilters.payee !== 'All') {
-            result = result.filter(t => (t.contact || t.payee || t.counterpartyName) === appliedFilters.payee);
-        }
-
-        // Time Period
-        if (appliedFilters.timePeriod !== 'All Time') {
-            const now = new Date();
+        // Time Period via DateRange
+        if (appliedFilters.dateRange?.startDate) {
+            const startStr = appliedFilters.dateRange.startDate;
+            const endStr = appliedFilters.dateRange.endDate || startStr;
+            const start = new Date(startStr).getTime();
+            const end = new Date(endStr).setHours(23, 59, 59, 999);
 
             result = result.filter(t => {
-                const date = new Date(t.txnDate);
-                if (appliedFilters.timePeriod === 'This Month') {
-                    return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
-                }
-                if (appliedFilters.timePeriod === 'Last Month') {
-                    const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-                    return date.getMonth() === lastMonth.getMonth() && date.getFullYear() === lastMonth.getFullYear();
-                }
-                if (appliedFilters.timePeriod === 'Last 6 Months') {
-                    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
-                    return date >= sixMonthsAgo && date <= now;
-                }
-                if (appliedFilters.timePeriod === 'This Year') {
-                    return date.getFullYear() === now.getFullYear();
-                }
-                if (appliedFilters.timePeriod === 'Last Year') {
-                    return date.getFullYear() === now.getFullYear() - 1;
-                }
-                if (appliedFilters.timePeriod === 'Custom Range') {
-                    if (appliedFilters.startDate && appliedFilters.endDate) {
-                        const start = new Date(appliedFilters.startDate);
-                        const end = new Date(appliedFilters.endDate);
-                        end.setHours(23, 59, 59, 999);
-                        return date >= start && date <= end;
-                    }
-                    return true;
-                }
-                return true;
+                const tzDate = t.txnDate ? new Date(t.txnDate).getTime() : 0;
+                return tzDate >= start && tzDate <= end;
+            });
+        }
+        
+        // Branch Context filtering
+        if (selectedBranch?.id || (Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0)) {
+            const allowed = Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0
+                ? selectedBranchIds.map(String)
+                : [String(selectedBranch?.id)];
+
+            result = result.filter(t => {
+                if (!t.branchId) return true;
+                return allowed.includes(String(t.branchId));
             });
         }
 
-        // 3. Sorting Logic
-        if (sortConfig.key) {
-            result.sort((a, b) => {
-                let aValue = a[sortConfig.key];
-                let bValue = b[sortConfig.key];
-
-                if (sortConfig.key === 'account') { aValue = a.account?.name || ''; bValue = b.account?.name || ''; }
-                if (sortConfig.key === 'category') { aValue = a.category?.name || ''; bValue = b.category?.name || ''; }
-                if (sortConfig.key === 'payee') { aValue = a.contact || a.payee || a.counterpartyName || ''; bValue = b.contact || b.payee || b.counterpartyName || ''; }
-                if (sortConfig.key === 'type') { aValue = a.transactionType?.name || a.txnType || ''; bValue = b.transactionType?.name || b.txnType || ''; }
-                if (sortConfig.key === 'branch') { aValue = (a.branchNames || []).join(', '); bValue = (b.branchNames || []).join(', '); }
-                if (sortConfig.key === 'name') { aValue = a.name || ''; bValue = b.name || ''; }
-                if (sortConfig.key === 'notes') { aValue = a.notes || ''; bValue = b.notes || ''; }
-                if (sortConfig.key === 'status') { aValue = a.status || ''; bValue = b.status || ''; }
-                if (sortConfig.key === 'amountBase') {
-                    aValue = Number(a.amountBaseCurrency ?? a.finalAmountLocal ?? a.amountBase ?? 0);
-                    bValue = Number(b.amountBaseCurrency ?? b.finalAmountLocal ?? b.amountBase ?? 0);
-                }
-
-                // Handle string comparison case-insensitively
-                if (typeof aValue === 'string') aValue = aValue.toLowerCase();
-                if (typeof bValue === 'string') bValue = bValue.toLowerCase();
-
-                if (aValue < bValue) {
-                    return sortConfig.direction === 'asc' ? -1 : 1;
-                }
-                if (aValue > bValue) {
-                    return sortConfig.direction === 'asc' ? 1 : -1;
-                }
-                return 0;
+        // Party Filter
+        if (appliedFilters.party !== 'all') {
+            result = result.filter(txn => {
+                const p = (txn.contact || txn.payee || txn.counterpartyName || txn.party || '').trim();
+                return p === appliedFilters.party;
             });
         }
 
         return result;
 
-    }, [groupedTransactions, searchTerm, appliedFilters, sortConfig]);
+    }, [groupedTransactions, searchTerm, appliedFilters]);
 
-    // Pagination
-    const totalPages = Math.ceil(filteredTransactions.length / pageSize);
+    const insightsData = useMemo(() => {
+        const trendMap = {}; 
+        const categoryMap = {};
+        let totalIncome = 0;
+        let totalExpense = 0;
 
-    const paginatedTransactions = useMemo(() => {
-        const startIndex = (currentPage - 1) * pageSize;
-        return filteredTransactions.slice(startIndex, startIndex + pageSize);
-    }, [filteredTransactions, currentPage, pageSize]);
+        filteredTransactions.forEach(t => {
+            const dateStr = t.txnDate || 'Unknown';
+            const amount = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
+            const type = (t.transactionType?.name || t.txnType || '').toLowerCase();
 
-    useEffect(() => {
-        if (currentPage > totalPages && totalPages > 0) {
-            setCurrentPage(1);
-        }
-    }, [currentPage, totalPages]);
+            if (!trendMap[dateStr]) trendMap[dateStr] = { date: dateStr, income: 0, expense: 0 };
 
+            if (type === 'income') {
+                trendMap[dateStr].income += amount;
+                totalIncome += amount;
+            } else if (type === 'expense') {
+                trendMap[dateStr].expense += amount;
+                totalExpense += amount;
+                
+                const catName = t.category?.name || 'Uncategorized';
+                if (!categoryMap[catName]) categoryMap[catName] = 0;
+                categoryMap[catName] += amount;
+            }
+        });
 
-    const handleFilterApply = () => {
-        setAppliedFilters(tempFilters);
-        setIsFilterOpen(false);
-        setCurrentPage(1);
-    };
+        const trendData = Object.values(trendMap)
+            .sort((a,b) => new Date(a.date) - new Date(b.date))
+            .map(d => ({
+                ...d,
+                displayDate: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }));
+            
+        const categoryData = Object.entries(categoryMap)
+            .map(([name, value]) => ({ name, value }))
+            .sort((a, b) => b.value - a.value)
+            .slice(0, 5); 
+
+        return { trendData, categoryData, totalIncome, totalExpense, netFlow: totalIncome - totalExpense };
+    }, [filteredTransactions]);
+
+    const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+
 
     const handleFilterReset = () => {
-        const defaults = {
-            moneyFlow: 'All',
-            scope: 'All Transactions',
-            timePeriod: 'All Time',
-            startDate: '',
-            endDate: '',
-            payee: 'All'
-        };
-        setTempFilters(defaults);
-        setAppliedFilters(defaults);
-        setIsFilterOpen(false);
-        setCurrentPage(1);
+        setAppliedFilters({
+            type: 'all',
+            dateRange: null,
+            currency: preferences?.currency || 'INR',
+            party: 'all'
+        });
     };
+
+    const availableParties = useMemo(() => {
+        const uniqueSet = new Set();
+        transactions.forEach(txn => {
+            const p = (txn.contact || txn.payee || txn.counterpartyName || txn.party || '').trim();
+            if (p) uniqueSet.add(p);
+        });
+        const arr = Array.from(uniqueSet).sort((a,b) => a.localeCompare(b));
+        return [{ label: "All Parties", value: "all" }, ...arr.map(p => ({ label: p, value: p }))];
+    }, [transactions]);
 
     const buildExportPayload = (format) => ({
         branchId: 'all',
         financialYearId: selectedYear?.id,
         searchTerm,
         format,
-        appliedFilters,
-        sortConfig
+        appliedFilters
     });
 
     const downloadExportFile = (bytes, fileName, mimeType) => {
@@ -1180,8 +945,10 @@ const Transactions = () => {
             siblingMap[Number(txn.branchId)] = txn.id;
         }
 
-        navigate(`/transactions/edit/${txn.id}`, {
-            state: {
+        setDrawerState({
+            open: true,
+            transaction: {
+                ...txn,
                 originalBranchIds: Object.keys(siblingMap).map(Number),
                 siblingMap: siblingMap
             }
@@ -1236,157 +1003,10 @@ const Transactions = () => {
     }, [filteredTransactions]);
 
     const hasBranchColumn = selectedBranch?.id === 'all' || selectedBranch?.id === 'multi';
-    const desktopColumns = useMemo(() => ([
-        {
-            key: 'id',
-            label: 'Id',
-            sortKey: 'id',
-            headerClassName: 'sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
-            cellClassName: 'px-4 py-1.5 text-xs text-gray-500 font-mono',
-            render: (_txn, { rowIndex }) => (
-                isPrinting ? rowIndex + 1 : (currentPage - 1) * pageSize + rowIndex + 1
-            )
-        },
-        {
-            key: 'party',
-            label: 'Party',
-            sortKey: 'payee',
-            headerClassName: 'sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border max-w-[150px] truncate',
-            cellClassName: 'px-2 py-1.5 whitespace-nowrap overflow-visible',
-            render: (txn) => <PartyTooltip partyName={txn.contact || txn.payee || txn.counterpartyName} />
-        },
-        {
-            key: 'date',
-            label: 'Date',
-            sortKey: 'txnDate',
-            headerClassName: 'sticky top-0 z-10 px-2 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border min-w-[90px]',
-            cellClassName: 'px-2 py-1.5 text-xs font-medium text-gray-700 whitespace-nowrap',
-            render: (txn) => formatDate(txn.txnDate)
-        },
-        {
-            key: 'type',
-            label: 'Type',
-            sortKey: 'type',
-            headerClassName: 'sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border min-w-[80px]',
-            cellClassName: 'px-4 py-1.5 border-none',
-            render: (txn) => (
-                <span className={cn(
-                    "text-[10px] font-bold uppercase tracking-wide",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'income' && "text-emerald-600",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'expense' && "text-rose-600",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'transfer' && "text-blue-600",
-                    !['income', 'expense', 'transfer'].includes((txn.transactionType?.name || txn.txnType)?.toLowerCase()) && "text-gray-700"
-                )}>
-                    {txn.transactionType?.name || txn.txnType}
-                </span>
-            )
-        },
-        {
-            key: 'branch',
-            label: 'Branch',
-            sortKey: 'branch',
-            isAvailable: hasBranchColumn,
-            headerClassName: 'sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
-            cellClassName: 'px-4 py-1.5 whitespace-nowrap overflow-visible',
-            render: (txn) => <BranchTooltip branchNames={txn.branchNames} />
-        },
-        {
-            key: 'account',
-            label: 'Account',
-            sortKey: 'account',
-            headerClassName: 'sticky top-0 z-10 px-2 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
-            cellClassName: 'px-2 py-1.5 text-xs font-medium text-gray-600 whitespace-nowrap',
-            render: (txn) => {
-                const accountName = txn.accountName ||
-                    (typeof txn.account === 'object' && txn.account !== null ? txn.account.name : txn.account) ||
-                    txn.method ||
-                    '-';
-                return (
-                    <AccountNameTooltip 
-                        name={accountName}
-                        textClassName="text-xs font-medium text-gray-600"
-                    />
-                );
-            }
-        },
-        {
-            key: 'category',
-            label: 'Category',
-            sortKey: 'category',
-            headerClassName: 'sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
-            cellClassName: 'px-4 py-1.5',
-            render: (txn) => (
-                <div className="text-xs font-semibold text-gray-700">
-                    {txn.categoryName || txn.category?.name || '-'}
-                    {(txn.subCategoryName || txn.subCategory?.name) && (
-                        <div className="text-[10px] font-medium text-gray-400 mt-0.5">
-                            {txn.subCategoryName || txn.subCategory?.name}
-                        </div>
-                    )}
-                </div>
-            )
-        },
-        {
-            key: 'notes',
-            label: 'Notes',
-            sortKey: 'notes',
-            headerClassName: 'sticky top-0 z-10 px-2 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border',
-            cellClassName: 'px-2 py-1.5',
-            render: (txn) => (
-                <div className="max-w-[180px]">
-                    <DescriptionTooltip description={txn.notes || txn.description} />
-                </div>
-            )
-        },
-        {
-            key: 'amount',
-            label: 'Amount',
-            sortKey: 'amountBase',
-            headerContentClassName: 'justify-end',
-            headerClassName: 'txn-amount-header-col sticky top-0 z-10 px-4 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border text-right',
-            cellClassName: 'txn-amount-value-cell py-1.5 text-xs font-bold whitespace-nowrap text-right pl-2 pr-4',
-            render: (txn) => (
-                <span className={cn(
-                    "txn-amount-value-pill inline-flex items-center gap-1.5 px-1.5 py-0.5 rounded-md",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'income' && "text-emerald-600",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'expense' && "text-rose-600",
-                    (txn.transactionType?.name || txn.txnType)?.toLowerCase() === 'transfer' && "text-blue-600",
-                    !['income', 'expense', 'transfer'].includes((txn.transactionType?.name || txn.txnType)?.toLowerCase()) && "text-gray-700"
-                )}>
-                    {formatCurrency(txn.amountBaseCurrency || txn.finalAmountLocal || txn.amountBase, txn.baseCurrency)}
-                </span>
-            )
-        },
-        {
-            key: 'createdBy',
-            label: 'Created By',
-            sortKey: 'createdByName',
-            headerClassName: cn(
-                'sticky top-0 z-10 py-2 text-[11px] font-bold text-gray-700 uppercase tracking-wider whitespace-nowrap cursor-pointer hover:bg-gray-100/50 bg-gray-50/95 backdrop-blur-sm group print:bg-transparent print:border-black print:border min-w-[88px] px-2',
-                !hasBranchColumn && 'pl-6'
-            ),
-            cellClassName: cn(
-                'py-1.5 text-xs font-medium text-gray-500 whitespace-nowrap min-w-[88px]',
-                !hasBranchColumn ? 'px-2 pl-6' : 'px-2'
-            ),
-            render: (txn) => txn.createdByName || '-'
-        }
-    ]), [currentPage, formatCurrency, formatDate, hasBranchColumn, isPrinting, pageSize]);
-
-    const visibleDesktopColumns = useMemo(
-        () => desktopColumns.filter((column) => (column.isAvailable ?? true) && visibleColumns[column.key]),
-        [desktopColumns, visibleColumns]
-    );
-    const desktopTableColSpan = visibleDesktopColumns.length + 1;
-    const totalsAmountColumnIndex = visibleDesktopColumns.findIndex((column) => column.key === 'amount');
-
+    
 
     return (
-        <div
-            ref={pageViewportRef}
-            className="flex flex-col h-full min-h-0 overflow-hidden"
-            style={desktopViewportHeight ? { height: `${desktopViewportHeight}px` } : undefined}
-        >
+        <div className="flex flex-col h-full min-h-0 overflow-hidden">
 
             <style>{`
                 @media print {
@@ -1473,13 +1093,11 @@ const Transactions = () => {
                     * { -ms-overflow-style: none !important; scrollbar-width: none !important; }
                 }
             `}</style>
-            {/* Backdrop for dropdowns */}
-            {(activeDropdown || isFilterOpen || activeAttachmentTxnId) && (
+            {/* Backdrop for explicit modals */}
+            {activeAttachmentTxnId && (
                 <div
                     className="fixed inset-0 z-40 bg-black/5 lg:bg-transparent"
                     onClick={() => {
-                        setActiveDropdown(null);
-                        setIsFilterOpen(false);
                         setActiveAttachmentTxnId(null);
                     }}
                 />
@@ -1492,595 +1110,315 @@ const Transactions = () => {
                         breadcrumbs={['Transactions', 'List']}
                     />
                 )}
+                contentClassName="p-0 lg:p-0"
+                cardClassName="border-none shadow-none rounded-none overflow-visible bg-transparent"
             >
-                <div className="flex flex-col min-h-0">
+                <div className="flex flex-col h-full min-h-0">
 
                 {/* Print Only Header */}
                 <div className="hidden print:block text-center py-6 mb-4">
                     <h1 className="text-2xl font-bold text-gray-900 uppercase tracking-widest">Transactions List</h1>
                 </div>
 
-                {/* Toolbar */}
-                <div ref={toolbarRef} className="p-4 flex flex-wrap items-center justify-between gap-3 border-b border-gray-50 relative z-40 print:hidden min-h-[74px]">
-                    {isMobileSearchOpen ? (
-                        <div className="flex items-center w-full gap-3 animate-in fade-in slide-in-from-right-4 duration-200">
-                            <Search size={18} className="text-gray-400 shrink-0" />
-                            <input
-                                autoFocus
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => {
-                                    setSearchTerm(e.target.value);
-                                    setCurrentPage(1);
-                                }}
-                                placeholder="Search transactions..."
-                                className="flex-1 bg-transparent border-none outline-none text-sm font-medium placeholder:text-gray-400 h-10"
-                            />
+                {/* Global Filters Row */}
+                <div className="px-5 pt-3 pb-1.5 flex flex-wrap items-center gap-3 print:hidden relative z-20 w-full bg-transparent">
+                    <DateRangePicker 
+                        startDate={appliedFilters.dateRange?.startDate}
+                        endDate={appliedFilters.dateRange?.endDate}
+                        selectedPreset={appliedFilters.dateRange?.preset}
+                        presetOptions={datePresets}
+                        onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
+                        className="h-[32px]"
+                    />
+                    
+                    <BranchSelector />
+
+                    <CurrencySelector 
+                        value={appliedFilters.currency}
+                        onChange={(val) => {
+                            setAppliedFilters(prev => ({ ...prev, currency: val }));
+                            updatePreferences({ currency: val });
+                        }}
+                    />
+
+                    <FilterDropdown
+                        value={appliedFilters.party}
+                        onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
+                        placeholder="Party"
+                        options={availableParties}
+                    />
+                </div>
+
+                {/* Always-Visible KPI Strip & Conditionally Visible Charts */}
+                <div className="px-5 pt-4 pb-2 w-full animate-in fade-in duration-300">
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                        <div className="flex flex-wrap items-center gap-8">
+                            <div className="flex items-center gap-3 min-w-fit">
+                                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                                    <ArrowDownLeft size={18} className="text-emerald-600" />
+                                </div>
+                                <div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Inflow</div>
+                                    <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 min-w-fit">
+                                <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                                    <ArrowUpRight size={18} className="text-rose-600" />
+                                </div>
+                                <div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Outflow</div>
+                                    <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3 min-w-fit pl-6 border-l border-gray-100">
+                                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
+                                    <Activity size={18} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
+                                </div>
+                                <div>
+                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Net Flow</div>
+                                    <div className={cn("text-[16px] font-extrabold whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                        {formatCurrency(insightsData.netFlow)}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div className="shrink-0 flex items-center justify-end">
                             <button
-                                onClick={() => {
-                                    setIsMobileSearchOpen(false);
-                                    if (!searchTerm) setSearchTerm('');
-                                }}
-                                className="p-2 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
+                                onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
+                                className="h-[32px] px-3.5 flex items-center gap-2 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-primary/20"
                             >
-                                <X size={18} />
+                                <TrendingUp size={14} className={isInsightsExpanded ? "text-primary" : "text-gray-500"} />
+                                <span className={isInsightsExpanded ? "text-primary" : "hidden sm:inline"}>{isInsightsExpanded ? 'Hide Charts' : 'Show Charts'}</span>
                             </button>
                         </div>
-                    ) : (
-                        <>
-                            {/* Left: Search Bar */}
-                            <div className="hidden md:block relative group w-full max-w-sm lg:w-64 lg:max-w-none">
-                                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => {
-                                        setSearchTerm(e.target.value);
-                                        setCurrentPage(1);
-                                    }}
-                                    placeholder="Search..."
-                                    className="pl-10 pr-4 py-2.5 bg-[#f1f3f9] border border-transparent rounded-xl text-xs font-medium placeholder:text-gray-400 w-full focus:bg-white focus:ring-2 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all"
-                                />
-                            </div>
+                    </div>
 
-                                {/* Mobile: Search Icon Only */}
-                                <button
-                                    onClick={() => setIsMobileSearchOpen(true)}
-                                    className="md:hidden w-10 h-10 flex items-center justify-center rounded-xl border bg-white border-gray-100 text-gray-400 hover:bg-gray-50 transition-all active:scale-95"
-                                    title="Search"
-                                >
-                                    <Search size={18} />
-                                </button>
-
-                                {/* Right: Actions */}
-                                <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-end ml-auto">
-                                    {/* Add New Button */}
-                                    <button
-                                        onClick={() => {
-                                            navigate('/transactions/create');
-                                        }}
-                                        className="w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-200"
-                                        title="Add New Transaction"
-                                    >
-                                        <Plus size={18} strokeWidth={2.5} />
-                                    </button>
-
-                                    {/* Import Excel Button */}
-                                    <button
-                                        onClick={() => {
-                                            setIsImportModalOpen(true);
-                                        }}
-                                        className="w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700"
-                                        title="Import Excel"
-                                    >
-                                        <FileSpreadsheet size={18} />
-                                    </button>
-
-                                    {/* Import PDF Button - Temporarily Hidden
-                                    <button
-                                        onClick={() => {
-                                            // This button is now always disabled as PDF import is not supported for 'all' branches
-                                            return;
-                                        }}
-                                        disabled={true} // Always disabled
-                                        className={cn(
-                                            "w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm",
-                                            "bg-gray-50 border-gray-100 text-gray-300 cursor-not-allowed" // Always styled as disabled
-                                        )}
-                                        title="PDF import is not available when viewing all branches"
-                                    >
-                                        <FileText size={18} />
-                                    </button>
-                                    */}
-
-
-                                    {/* Export Dropdown */}
-                                    <div className="relative" onClick={(e) => e.stopPropagation()}>
-                                        {activeDropdown === 'export' && (
-                                            <div className="fixed inset-0 z-40 bg-transparent" onClick={() => setActiveDropdown(null)} />
-                                        )}
-                                        <button
-                                            onClick={() => setActiveDropdown(activeDropdown === 'export' ? null : 'export')}
-                                            className={cn(
-                                                "w-10 h-10 flex items-center justify-center rounded-xl border transition-all relative z-50",
-                                                activeDropdown === 'export'
-                                                    ? "bg-gray-100 text-gray-700 border-gray-200"
-                                                    : "bg-white border-gray-100 text-gray-500 hover:bg-gray-50 hover:text-gray-700 hover:border-gray-200"
-                                            )}
-                                            title="Export"
-                                        >
-                                            <Download size={18} />
-                                        </button>
-                                        {activeDropdown === 'export' && (
-                                            <div className="absolute top-12 right-0 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-50 py-2 animate-in slide-in-from-top-2 duration-200">
-                                                <button onClick={handleExportExcel} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                                                    <FileSpreadsheet size={14} className="text-emerald-500" />
-                                                    <span>Export to Excel</span>
-                                                </button>
-                                                <button onClick={handleExportPDF} className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                                                    <FileText size={14} className="text-rose-500" />
-                                                    <span>Download as PDF</span>
-                                                </button>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Filter Button */}
-                                    <div ref={filterBoxRef} className="relative" onClick={(e) => e.stopPropagation()} onMouseDown={(e) => e.stopPropagation()} onMouseUp={(e) => e.stopPropagation()}>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setIsFilterOpen(!isFilterOpen);
-                                                setActiveDropdown(null);
-                                            }}
-                                            className={cn(
-                                                "w-10 h-10 flex items-center justify-center rounded-xl border transition-all relative z-50",
-                                                isFilterOpen
-                                                    ? "bg-gray-100 text-gray-700 border-gray-200"
-                                                    : "bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-600 hover:border-gray-200"
-                                            )}
-                                            title="Filters"
-                                        >
-                                            <Filter size={18} strokeWidth={2.5} />
-                                        </button>
-                                        <TransactionFilters
-                                            isOpen={isFilterOpen}
-                                            onClose={() => setIsFilterOpen(false)}
-                                            filters={tempFilters}
-                                            setFilters={setTempFilters}
-                                            uniquePayees={availablePayees}
-                                            onApply={handleFilterApply}
-                                            onReset={handleFilterReset}
-                                            anchorRef={filterBoxRef}
-                                        />
-                                    </div>
-
-                                    <TransactionColumnSettings
-                                        value={visibleColumns}
-                                        onApplySelection={(nextValue) => setVisibleColumns(normalizeTxnColumns(nextValue))}
-                                        onBeforeOpen={() => {
-                                            setActiveDropdown(null);
-                                            setIsFilterOpen(false);
-                                        }}
-                                        externalCloseSignal={activeDropdown || (isFilterOpen ? 'filter' : '')}
-                                    />
+                    {/* Charts Area */}
+                    {isInsightsExpanded && (
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
+                            <div className="lg:col-span-2">
+                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                    <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
+                                </h3>
+                                <div className="h-[220px] w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                            <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
+                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} 
+                                                tickFormatter={(val) => {
+                                                    if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                                    if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                    return val;
+                                                }}
+                                            />
+                                            <Tooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                content={({ active, payload, label }) => {
+                                                    if (active && payload && payload.length) {
+                                                        return (
+                                                            <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
+                                                                <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
+                                                                {payload.map((entry, index) => (
+                                                                    <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
+                                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                        <span className="text-gray-600 w-16">{entry.name}:</span>
+                                                                        <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
+                                                                            {formatCurrency(entry.value)}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }}
+                                            />
+                                            <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                            <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                                 </div>
-                        </>
+                            </div>
+                            
+                            <div>
+                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                    <PieChartIcon size={14} className="text-primary" /> Top Expense Categories
+                                </h3>
+                                <div className="h-[220px] w-full flex items-center justify-center relative">
+                                    {insightsData.categoryData.length > 0 ? (
+                                        <React.Fragment>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <PieChart>
+                                                    <Pie
+                                                        data={insightsData.categoryData}
+                                                        cx="50%"
+                                                        cy="50%"
+                                                        innerRadius={60}
+                                                        outerRadius={80}
+                                                        paddingAngle={5}
+                                                        dataKey="value"
+                                                        stroke="none"
+                                                    >
+                                                        {insightsData.categoryData.map((entry, index) => (
+                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                                        ))}
+                                                    </Pie>
+                                                    <Tooltip 
+                                                        content={({ active, payload }) => {
+                                                            if (active && payload && payload.length) {
+                                                                return (
+                                                                    <div className="bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-xl shadow-gray-200/50">
+                                                                        <div className="text-[11px] font-bold text-gray-500 mb-1">{payload[0].name}</div>
+                                                                        <div className="text-[13px] font-bold text-rose-600">{formatCurrency(payload[0].value)}</div>
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        }}
+                                                    />
+                                                </PieChart>
+                                            </ResponsiveContainer>
+                                            
+                                            {/* Custom Legend / Summary */}
+                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
+                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Top 5</div>
+                                                <div className="text-[14px] font-extrabold text-gray-900 leading-tight">
+                                                    {formatCurrency(insightsData.categoryData.reduce((acc, curr) => acc + curr.value, 0))}
+                                                </div>
+                                            </div>
+                                        </React.Fragment>
+                                    ) : (
+                                        <div className="text-[12px] font-medium text-gray-400 text-center flex flex-col items-center gap-2">
+                                            <PieChartIcon size={24} className="text-gray-200" />
+                                            <span>No expenses logged for this view</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
                     )}
                 </div>
 
-                    {/* Mobile Card View */}
-                    <div className="relative lg:hidden flex-1 p-4 space-y-4 print:hidden overflow-y-auto min-h-0 no-scrollbar" aria-busy={loading}>
-                        {showInitialLoader ? (
-                            <div className="py-12 flex items-center justify-center">
-                                <Loader2 size={26} className="text-gray-500 animate-spin" />
-                            </div>
-                        ) : paginatedTransactions.length > 0 ? (
-                            paginatedTransactions.map((txn, index) => {
-                                const descriptionText = String(txn.notes || txn.description || '').trim();
-                                const accountText = String(
-                                    txn.accountName ||
-                                    (typeof txn.account === 'object' && txn.account !== null ? txn.account.name : txn.account) ||
-                                    ''
-                                ).trim();
-                                const categoryText = String(
-                                    txn.categoryName ||
-                                    (typeof txn.category === 'object' && txn.category !== null ? txn.category.name : txn.category) ||
-                                    ''
-                                ).trim();
-                                const partyText = String(txn.contact || txn.payee || txn.counterpartyName || '').trim();
-                                const branchText = String((txn.branchNames || []).join(', ') || '').trim();
-                                const hasDescription = Boolean(descriptionText);
-                                const hasAccount = Boolean(accountText);
-                                const hasCategory = Boolean(categoryText);
-                                const hasParty = Boolean(partyText);
-                                const hasBranch = Boolean(branchText);
-                                return (
-                                    <div key={txn.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3">
-                                        <div className="flex justify-between items-start gap-3 mb-1">
-                                            <div className="min-w-0 flex items-baseline gap-2">
-                                                <div className="shrink-0 text-xs font-semibold text-gray-500 font-mono">
-                                                    {((currentPage - 1) * pageSize + index + 1)}
-                                                </div>
-                                                {hasParty && (
-                                                    <h3 className="min-w-0 text-sm font-bold text-gray-800 truncate">{partyText}</h3>
-                                                )}
-                                            </div>
-                                            <span className="text-[10px] font-bold capitalize text-gray-700 text-right shrink-0">
-                                                {txn.transactionType?.name || txn.txnType}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-start border-b border-gray-50 pb-2">
-                                            <div>
-                                                <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Date</div>
-                                                <div className="font-semibold text-gray-800 text-xs">{formatDate(txn.txnDate)}</div>
-                                            </div>
-                                            <div className="text-right">
-                                                <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Amount</div>
-                                                <div className={cn(
-                                                    "font-bold text-sm tabular-nums",
-                                                    txn.txnType === 'income' ? "text-emerald-600" :
-                                                        txn.txnType === 'expense' ? "text-gray-900" :
-                                                            "text-blue-600"
-                                                )}>
-                                                    {formatCurrency(txn.amountBaseCurrency || txn.finalAmountLocal || txn.amountBase)}
-                                                </div>
-                                            </div>
-                                        </div>
+                {/* Custom List Header (Table Actions) */}
+                <div className="px-5 pb-4 pt-1.5 flex flex-col xl:flex-row xl:items-center justify-between print:hidden gap-4 relative z-10 w-full">
+                    {/* LEFT SIDE: Core Table Actions */}
+                    <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={() => setDrawerState({ open: true, transaction: null })}
+                                className="h-[32px] px-3.5 flex items-center gap-1.5 justify-center rounded-md bg-[#4A8AF4] text-white hover:bg-[#3b7ee1] transition-colors font-medium text-[13px] focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                            >
+                                <Plus size={15} strokeWidth={2.5} />
+                                <span className="hidden sm:inline">Add Transaction</span>
+                            </button>
 
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                            {hasDescription && (
-                                                <div className="col-span-2">
-                                                    <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Description</div>
-                                                    <div className="font-medium text-gray-700 text-xs break-words">{descriptionText}</div>
-                                                </div>
-                                            )}
-                                            {hasAccount && (
-                                                <div>
-                                                    <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Account</div>
-                                                    <div className="font-medium text-gray-600 text-xs truncate">{accountText}</div>
-                                                </div>
-                                            )}
-                                            {hasCategory && (
-                                                <div className="sm:text-right">
-                                                    <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Category</div>
-                                                    <div className="font-medium text-gray-600 text-xs truncate">{categoryText}</div>
-                                                </div>
-                                            )}
-                                            {hasBranch && (
-                                                <div>
-                                                    <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Branch</div>
-                                                    <div className="font-medium text-primary text-xs truncate">{branchText}</div>
-                                                </div>
-                                            )}
-                                            {hasParty && (
-                                                <div className="sm:text-right">
-                                                    <div className="text-[9px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Party</div>
-                                                    <div className="font-medium text-gray-600 text-xs truncate">{partyText}</div>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex justify-end gap-1 pt-2 border-t border-gray-50 mt-2">
-                                            <div className="relative">
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        if (txn.attachmentPath) {
-                                                            setFullScreenAttachment({ isOpen: true, path: txn.attachmentPath });
-                                                        }
-                                                    }}
-                                                    className={cn(
-                                                        "p-1.5 rounded-lg transition-all",
-                                                        txn.attachmentPath
-                                                            ? "text-gray-400 hover:text-primary hover:bg-primary/5 active:scale-95"
-                                                            : "text-gray-200 cursor-not-allowed"
-                                                    )}
-                                                    title={txn.attachmentPath ? "View Attachment" : "No Attachment"}
-                                                    disabled={!txn.attachmentPath}
-                                                >
-                                                    <Paperclip size={14} strokeWidth={2.5} />
-                                                </button>
-                                            </div>
-                                            <button
-                                                onClick={() => handleEdit(txn)}
-                                                disabled={!canEditTxn(txn)}
-                                                className={cn(
-                                                    "p-1.5 rounded-lg transition-colors",
-                                                    canEditTxn(txn) ? "text-gray-400 hover:text-blue-600 hover:bg-blue-50" : "text-gray-200 cursor-not-allowed"
-                                                )}
-                                                title={canEditTxn(txn) ? "Edit" : "You do not have access to edit this transaction"}
-                                            >
-                                                <Edit size={14} />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => handleDelete(e, txn)}
-                                                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                                title="Delete"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        </div>
-                                    </div>
-                                )
-                            })
-                        ) : hasFetchedOnce ? (
-                            <div className="py-12 text-center text-gray-400 font-medium text-sm">
-                                No transactions found.
-                            </div>
-                        ) : null}
-                        {showOverlayLoader && <LoadingOverlay label="Loading transactions..." />}
+                            <button
+                                onClick={() => fetchTransactions()}
+                                className="w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                title="Refresh table data"
+                            >
+                                <RefreshCcw
+                                    size={14}
+                                    strokeWidth={2}
+                                    className={cn(loading && "animate-spin text-primary")}
+                                />
+                            </button>
+                            
+                            <div className="h-4 w-px bg-gray-200 mx-1"></div>
+
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                            >
+                                <FileSpreadsheet size={14} className="text-emerald-600" />
+                                <span className="hidden sm:inline">Import</span>
+                            </button>
+                            
+                            <button
+                                onClick={() => handleExport('excel')}
+                                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                            >
+                                <Download size={14} className="text-gray-500" />
+                                <span className="hidden sm:inline">Export</span>
+                            </button>
+                        </div>
                     </div>
 
-                    {/* Table (Desktop Only) */}
-                    <div
-                        ref={desktopTableRef}
-                        className="txn-print-surface relative hidden lg:block print:block min-h-0 overflow-x-auto overflow-y-auto no-scrollbar txn-laptop-list-table-scroll"
-                        style={{
-                            scrollbarWidth: 'none',
-                            msOverflowStyle: 'none',
-                            ...(desktopTableHeight ? { maxHeight: `${desktopTableHeight}px` } : {})
-                        }}
-                        aria-busy={loading}
-                    >
-                        <table className="w-full text-left border-collapse txn-laptop-list-table">
-                            <thead className="sticky top-0 z-10 bg-white">
-                                <tr className="bg-gray-50/50 border-y border-gray-200">
-                                    {visibleDesktopColumns.map((column) => (
-                                        <th
-                                            key={column.key}
-                                            className={column.headerClassName}
-                                            onClick={() => handleSort(column.sortKey || column.key)}
-                                        >
-                                            <div className={cn("flex items-center gap-1", column.headerContentClassName)}>
-                                                <span>{column.label}</span>
-                                                <ArrowUpDown
-                                                    size={10}
-                                                    className={cn(
-                                                        "print:hidden text-gray-400 group-hover:text-gray-600 transition-opacity",
-                                                        sortConfig.key === (column.sortKey || column.key) ? "opacity-100" : "opacity-50 group-hover:opacity-100"
-                                                    )}
-                                                />
-                                            </div>
-                                        </th>
-                                    ))}
-                                    <th className="px-2 py-2 bg-gray-50/95 backdrop-blur-sm print:hidden min-w-[88px] w-[88px] sticky top-0 right-0 z-20 shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.1)] txn-laptop-action-col"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                                {showInitialLoader ? (
-                                    <tr>
-                                        <td colSpan={desktopTableColSpan} className="px-6 py-8">
-                                            <div className="flex items-center justify-center">
-                                                <Loader2 size={24} className="text-gray-500 animate-spin" />
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ) : hasFetchedOnce && (isPrinting ? filteredTransactions : paginatedTransactions).length === 0 ? (
-                                    <tr><td colSpan={desktopTableColSpan} className="px-6 py-8 text-center text-sm text-gray-500">No transactions found.</td></tr>
-                                ) : (
-                                    (isPrinting ? filteredTransactions : paginatedTransactions).map((txn, rowIndex) => {
-                                        return (
-                                            <tr key={txn.id} className="group hover:bg-gray-50/50">
-                                                {visibleDesktopColumns.map((column) => (
-                                                    <td key={column.key} className={column.cellClassName}>
-                                                        {column.render(txn, { rowIndex })}
-                                                    </td>
-                                                ))}
-                                                <td className="px-2 py-1.5 text-center print:hidden sticky right-0 bg-white z-10 shadow-[-5px_0_10px_-5px_rgba(0,0,0,0.05)] group-hover:bg-gray-50/50 txn-laptop-action-col">
-                                                    <div className="flex items-center justify-center gap-0">
-                                                        <div className="relative static">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (txn.attachmentPath) {
-                                                                        const rect = e.currentTarget.getBoundingClientRect();
-                                                                        setAttachmentViewer({
-                                                                            isOpen: attachmentViewer.txnId !== txn.id || !attachmentViewer.isOpen,
-                                                                            txnId: txn.id,
-                                                                            path: txn.attachmentPath,
-                                                                            position: {
-                                                                                top: rect.bottom + 5,
-                                                                                right: window.innerWidth - rect.right
-                                                                            }
-                                                                        });
-                                                                    }
-                                                                }}
-                                                                className={cn(
-                                                                    "p-1.5 rounded-lg transition-all",
-                                                                    txn.attachmentPath
-                                                                        ? (attachmentViewer.txnId === txn.id && attachmentViewer.isOpen ? "bg-primary text-white" : "text-gray-400 hover:text-primary hover:bg-primary/5 active:scale-95")
-                                                                        : "text-gray-200 cursor-not-allowed"
-                                                                )}
-                                                                title={txn.attachmentPath ? "View Attachment" : "No Attachment"}
-                                                                disabled={!txn.attachmentPath}
-                                                            >
-                                                                <Paperclip size={14} strokeWidth={2.5} />
-                                                            </button>
-                                                        </div>
-                                                        <button
-                                                            onClick={() => handleEdit(txn)}
-                                                            disabled={!canEditTxn(txn)}
-                                                            className={cn(
-                                                                "p-1.5 rounded-lg transition-all",
-                                                                canEditTxn(txn) ? "text-gray-400 hover:text-indigo-600 hover:bg-indigo-50" : "text-gray-200 cursor-not-allowed"
-                                                            )}
-                                                            title={canEditTxn(txn) ? "Edit" : "You do not have access to edit this transaction"}
-                                                        >
-                                                            <Edit size={14} />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(e) => handleDelete(e, txn)}
-                                                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                                                            title="Delete"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })
-                                )}
-                            </tbody>
-                            <tfoot className="bg-gray-50/50 border-t border-gray-100">
-                                <tr>
-                                    {totalsAmountColumnIndex === -1 ? (
-                                        <td colSpan={desktopTableColSpan} className="px-4 py-3 text-right text-[12px] font-black text-gray-900 print:border-none">
-                                            <span className="mr-3 text-[10px] font-bold tracking-widest">TOTALS:</span>
-                                            {Object.entries(currencyTotals).map(([currency, total], index) => (
-                                                <span key={currency} className={index > 0 ? 'ml-3' : ''}>
-                                                    {formatCurrency(total, currency)}
-                                                </span>
-                                            ))}
-                                        </td>
-                                    ) : (
-                                        <>
-                                            {totalsAmountColumnIndex > 0 && (
-                                                <td colSpan={totalsAmountColumnIndex} className="px-4 py-3 text-right text-[10px] font-bold print:border-none print:py-4 tracking-widest text-gray-900 border-none">
-                                                    TOTALS:
-                                                </td>
-                                            )}
-                                            <td className="txn-amount-total-cell px-2 py-3 text-right text-[12px] font-black text-gray-900 print:border-none">
-                                                {totalsAmountColumnIndex === 0 && (
-                                                    <span className="mr-3 text-[10px] font-bold tracking-widest">TOTALS:</span>
-                                                )}
-                                                {Object.entries(currencyTotals).map(([currency, total], index) => (
-                                                    <div key={currency} className={index > 0 ? 'mt-1' : ''}>
-                                                        {formatCurrency(total, currency)}
-                                                    </div>
-                                                ))}
-                                            </td>
-                                            {visibleDesktopColumns.length - totalsAmountColumnIndex - 1 > 0 && (
-                                                <td colSpan={visibleDesktopColumns.length - totalsAmountColumnIndex - 1} className="print:hidden"></td>
-                                            )}
-                                            <td className="print:hidden"></td>
-                                        </>
-                                    )}
-                                </tr>
-                            </tfoot>
-                        </table>
-                        {showOverlayLoader && <LoadingOverlay label="Loading transactions..." />}
-                    </div>
-
-                    {/* Mobile Pagination */}
-                    <div className="lg:hidden border-t border-gray-100 p-2 print:hidden">
-                        <MobilePagination
-                            currentPage={currentPage}
-                            totalPages={totalPages}
-                            onPageChange={setCurrentPage}
+                    {/* RIGHT SIDE: Table View Controls & Insights */}
+                    <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2 w-full xl:w-auto">
+                        
+                        <FilterDropdown
+                            value={appliedFilters.type}
+                            onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
+                            placeholder="Type"
+                            options={[
+                                { label: "All Types", value: "all" },
+                                { label: "Income", value: "income" },
+                                { label: "Expense", value: "expense" },
+                                { label: "Transfer", value: "transfer" },
+                                { label: "Investment", value: "investment" },
+                            ]}
                         />
-                    </div>
+                        
+                        <ColumnVisibilityDropdown 
+                            columns={TXN_TABLE_COLUMNS}
+                            visibleColumns={visibleColumns}
+                            setVisibleColumns={setVisibleColumns}
+                        />
 
-                    {/* Global Attachment Preview */}
-                    {attachmentViewer.isOpen && attachmentViewer.path && (
-                        <div
-                            className="fixed z-[100] animate-in fade-in zoom-in-95 duration-200"
-                            style={{
-                                top: attachmentViewer.position.top,
-                                right: attachmentViewer.position.right
-                            }}
-                            onClick={(e) => e.stopPropagation()}
-                        >
-                            <AttachmentPreview
-                                attachmentPath={attachmentViewer.path}
-                                isOpen={true}
-                                onClose={() => setAttachmentViewer(prev => ({ ...prev, isOpen: false }))}
-                                onViewFullScreen={(path) => setFullScreenAttachment({ isOpen: true, path })}
-                                className="static shadow-2xl border border-gray-100"
+                        <div className="h-4 w-px bg-gray-200 mx-1 hidden md:block"></div>
+
+                        <div className="relative group w-full xl:w-[240px] max-w-[300px]">
+                            <Search
+                                size={14}
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors"
+                            />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search transactions..."
+                                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                             />
                         </div>
-                    )}
-
-                    {/* Full Screen Attachment Viewer */}
-                    {fullScreenAttachment.isOpen && fullScreenAttachment.path && (
-                        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}>
-                            <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                                <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white">
-                                    <h3 className="text-sm font-bold text-gray-800">Attachment Preview</h3>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                if (!fullScreenAttachment.path) return;
-                                                void downloadAttachmentFile(fullScreenAttachment.path).catch((error) => {
-                                                    console.error('Failed to download attachment:', error);
-                                                    alert('Failed to download attachment');
-                                                });
-                                            }}
-                                            className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center justify-center gap-2 px-3 bg-gray-50 hover:text-gray-900 border border-gray-100"
-                                            title="Download Attachment"
-                                        >
-                                            <Download size={14} />
-                                            <span className="text-xs font-bold uppercase tracking-wider">Download</span>
-                                        </button>
-                                        <button
-                                            onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                                            className="p-1.5 hover:bg-rose-50 rounded-lg text-gray-400 hover:text-rose-600 transition-colors"
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                    </div>
-                                </div>
-                                <div className="flex-1 overflow-auto p-4 bg-gray-50 flex items-center justify-center min-h-[50vh]">
-                                    {(() => {
-                                        const p = fullScreenAttachment.path;
-                                        const fullUrl = buildAttachmentUrl(p);
-                                        const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                        if (isImage) {
-                                            return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-sm" />;
-                                        } else {
-                                            return <iframe src={fullUrl} className="w-full h-[75vh] border-0 rounded-lg shadow-sm bg-white" title="Attachment Preview" />;
-                                        }
-                                    })()}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                {/* Desktop Pagination */}
-                <div ref={desktopPaginationRef} className="hidden lg:flex items-center justify-between px-4 py-2 border-t border-gray-100 flex-none bg-white gap-3 sm:gap-0 print:hidden relative z-20 rounded-b-2xl">
-                    <div className="text-[11px] text-gray-500 font-medium">
-                        Showing <span className="font-bold text-gray-700">{filteredTransactions.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-gray-700">{Math.min(currentPage * pageSize, filteredTransactions.length)}</span> of <span className="font-bold text-gray-700">{filteredTransactions.length}</span> results
-                    </div>
-                    <div className="flex items-center space-x-1">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Previous
-                        </button>
-
-                        <div className="hidden sm:flex items-center space-x-1">
-                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                                <button
-                                    key={page}
-                                    onClick={() => setCurrentPage(page)}
-                                    className={cn(
-                                        "w-6 h-6 flex items-center justify-center rounded-md text-[11px] font-bold transition-all",
-                                        page === currentPage
-                                            ? "bg-gray-100 border border-gray-200 text-gray-900"
-                                            : "text-gray-500 hover:bg-gray-100"
-                                    )}
-                                >
-                                    {page}
-                                </button>
-                            ))}
-                        </div>
-
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages || totalPages === 0}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Next
-                        </button>
                     </div>
                 </div>
+
+                <div className="w-full px-5 pb-1 relative flex-1 min-h-[500px] flex flex-col" aria-busy={loading}>
+                    <div className="flex-1 w-full overflow-hidden relative">
+                        <div className="absolute inset-0">
+                            <AgGridReact
+                                theme={themeQuartz}
+                                rowData={filteredTransactions}
+                                columnDefs={colDefs}
+                                defaultColDef={defaultColDef}
+                                rowSelection="multiple"
+                                rowHeight={42}
+                                headerHeight={44}
+                                animateRows={true}
+                                pagination={true}
+                                paginationPageSize={50}
+                                paginationPageSizeSelector={[25, 50, 100, 200]}
+                                context={{
+                                    handleEdit,
+                                    handleDelete,
+                                    canEditTxn,
+                                    setFullScreenAttachment,
+                                    formatCurrency,
+                                    formatDate
+                                }}
+                                overlayNoRowsTemplate={
+                                    loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'
+                                }
+                            />
+                        </div>
+                    </div>
                 </div>
-            </PageContentShell>
+            </div>
+        </PageContentShell>
 
 
             <ConfirmDialog
@@ -2116,6 +1454,66 @@ const Transactions = () => {
                 }}
             />
             */}
+            
+            <CreateTransaction 
+                isOpen={drawerState.open}
+                onClose={() => setDrawerState({ open: false, transaction: null })}
+                transactionToEdit={drawerState.transaction}
+                onSuccess={() => {
+                    setDrawerState({ open: false, transaction: null });
+                    notifyTransactionDataChanged();
+                    fetchTransactions();
+                }}
+            />
+
+            {/* Full Screen Attachment Viewer */}
+            {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(
+                <div 
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" 
+                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
+                >
+                    <div 
+                        className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white">
+                            <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">Attachment</h3>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (!fullScreenAttachment.path) return;
+                                        void downloadAttachmentFile(fullScreenAttachment.path);
+                                    }}
+                                    className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-md text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1.5 shadow-sm"
+                                >
+                                    <Download size={14} strokeWidth={2.5} />
+                                    <span className="text-[11px] font-extrabold uppercase tracking-widest">Download</span>
+                                </button>
+                                <button
+                                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                                >
+                                    <X size={16} strokeWidth={2.5} />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 overflow-auto bg-slate-50/50 p-6 flex items-center justify-center">
+                            {(() => {
+                                const p = fullScreenAttachment.path;
+                                const fullUrl = buildAttachmentUrl(p);
+                                const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+                                if (isImage) {
+                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg border border-slate-200 shadow-sm bg-white" />;
+                                } else {
+                                    return <iframe src={fullUrl} className="w-full h-[75vh] bg-white rounded-lg border border-slate-200 shadow-sm" />;
+                                }
+                            })()}
+                        </div>
+                    </div>
+                </div>,
+                document.body
+            )}
         </div>
     );
 };

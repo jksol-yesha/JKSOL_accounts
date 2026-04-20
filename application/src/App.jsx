@@ -8,7 +8,7 @@ import Category from "./modules/category/Category";
 import Parties from "./modules/parties/Parties";
 import CreateParty from "./modules/parties/components/CreateParty";
 import Transactions from "./modules/transactions/Transactions";
-import CreateTransaction from "./modules/transactions/components/CreateTransaction";
+
 import Reports from "./modules/reports/Reports";
 import Profile from "./modules/profile/Profile";
 import Organizations from "./modules/organizations/Organizations";
@@ -125,14 +125,7 @@ function App() {
                               path="/transactions"
                               element={<Transactions />}
                             />
-                            <Route
-                              path="/transactions/create"
-                              element={<CreateTransaction />}
-                            />
-                            <Route
-                              path="/transactions/edit/:id"
-                              element={<CreateTransaction />}
-                            />
+
                             <Route path="/reports" element={<Reports />} />
                             <Route
                               path="/settings"

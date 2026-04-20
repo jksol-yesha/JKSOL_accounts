@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Check, AlertCircle, X, ChevronDown, Download } from 'lucide-react';
+import { ArrowLeft, Save, Check, AlertCircle, X, ChevronDown, Download, ArrowRightLeft } from 'lucide-react';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
@@ -62,9 +63,9 @@ const isBranchInactive = (branch) => {
     return false;
 };
 
-const CreateTransaction = () => {
+const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) => {
     const navigate = useNavigate();
-    const { id } = useParams();
+    const id = transactionToEdit?.id;
     const location = useLocation();
     const isEditMode = !!id;
     const { selectedBranch, branches } = useBranch();
@@ -75,9 +76,8 @@ const CreateTransaction = () => {
         return '18';
     };
 
-    // Branch IDs passed from the list page (siblings detected by name+date match)
-    const stateOriginalBranchIds = (location.state?.originalBranchIds || []).map(Number).filter(Boolean);
-    const stateSiblingMap = location.state?.siblingMap || {};
+    const stateOriginalBranchIds = (transactionToEdit?.originalBranchIds || []).map(Number).filter(Boolean);
+    const stateSiblingMap = transactionToEdit?.siblingMap || {};
     const editingBranchIdFromState = Object.entries(stateSiblingMap).find(([, txnId]) => Number(txnId) === Number(id))?.[0];
     const activeBranches = branches.filter(branch => !isBranchInactive(branch));
     const activeBranchIds = activeBranches.map(branch => Number(branch.id));
@@ -125,134 +125,16 @@ const CreateTransaction = () => {
         : activeBranches;
 
     const formRef = useRef(null);
-    const [needsWholePageScroll, setNeedsWholePageScroll] = useState(false);
-    const pageHeaderRef = useRef(null);
-    const shellRef = useRef(null);
-    const formFrameRef = useRef(null);
     const scrollAreaRef = useRef(null);
-    const scrollContentRef = useRef(null);
-    const mainStyleSnapshotRef = useRef(null);
-    const needsWholePageScrollRef = useRef(false);
 
     useEffect(() => {
-        needsWholePageScrollRef.current = needsWholePageScroll;
-    }, [needsWholePageScroll]);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-
-        let frameId = null;
-        const main = document.querySelector('main');
-        const pageHeader = pageHeaderRef.current;
-        const shell = shellRef.current;
-        const formFrame = formFrameRef.current;
-        const scrollArea = scrollAreaRef.current;
-        const scrollContent = scrollContentRef.current;
-        if (!main || !pageHeader || !shell || !formFrame || !scrollArea || !scrollContent) return undefined;
-
-        const scheduleMeasurement = () => {
-            if (frameId !== null) {
-                window.cancelAnimationFrame(frameId);
-            }
-
-            frameId = window.requestAnimationFrame(() => {
-                frameId = null;
-                const shellStyles = window.getComputedStyle(shell);
-                const shellPaddingY = (parseFloat(shellStyles.paddingTop) || 0) + (parseFloat(shellStyles.paddingBottom) || 0);
-                const frameExtraHeight = Math.max(0, formFrame.offsetHeight - scrollArea.clientHeight);
-                const requiredHeight = pageHeader.getBoundingClientRect().height + shellPaddingY + frameExtraHeight + scrollContent.scrollHeight;
-                const footer = main.parentElement?.querySelector('footer');
-                const footerHeightInsideMain = footer && main.contains(footer)
-                    ? footer.getBoundingClientRect().height
-                    : 0;
-                const fixedModeAvailableHeight = main.clientHeight - footerHeightInsideMain;
-                const currentMode = needsWholePageScrollRef.current;
-                const threshold = currentMode
-                    ? fixedModeAvailableHeight - 12
-                    : fixedModeAvailableHeight + 1;
-                const shouldUseWholePageScroll = window.innerWidth < 1280 || requiredHeight > threshold;
-
-                if (currentMode === shouldUseWholePageScroll) return;
-
-                needsWholePageScrollRef.current = shouldUseWholePageScroll;
-                setNeedsWholePageScroll(shouldUseWholePageScroll);
-                window.dispatchEvent(new CustomEvent(TRANSACTIONS_CREATE_SCROLL_MODE_EVENT, {
-                    detail: { shouldUseWholePageScroll }
-                }));
-            });
-        };
-
-        scheduleMeasurement();
-
-        const resizeObserver = typeof ResizeObserver !== 'undefined'
-            ? new ResizeObserver(() => scheduleMeasurement())
-            : null;
-
-        resizeObserver?.observe(main);
-        resizeObserver?.observe(pageHeader);
-        resizeObserver?.observe(shell);
-        resizeObserver?.observe(formFrame);
-        resizeObserver?.observe(scrollArea);
-        resizeObserver?.observe(scrollContent);
-
-        window.addEventListener('resize', scheduleMeasurement);
-
-        return () => {
-            window.removeEventListener('resize', scheduleMeasurement);
-            if (frameId !== null) {
-                window.cancelAnimationFrame(frameId);
-            }
-            resizeObserver?.disconnect();
-            window.dispatchEvent(new CustomEvent(TRANSACTIONS_CREATE_SCROLL_MODE_EVENT, {
-                detail: { shouldUseWholePageScroll: false }
-            }));
-        };
-    }, []);
-
-    useEffect(() => {
-        if (typeof window === 'undefined') return undefined;
-
-        const main = document.querySelector('main');
-        if (!main) return undefined;
-
-        if (!mainStyleSnapshotRef.current) {
-            mainStyleSnapshotRef.current = {
-                overflow: main.style.overflow,
-                overflowX: main.style.overflowX,
-                overflowY: main.style.overflowY,
-                overscrollBehavior: main.style.overscrollBehavior,
+        if (isOpen) {
+            document.body.style.overflow = "hidden";
+            return () => {
+                document.body.style.overflow = "unset";
             };
         }
-
-        const previousStyles = mainStyleSnapshotRef.current;
-        const syncScrollLock = () => {
-            const shouldLockScroll = window.innerWidth >= 1280 && !needsWholePageScroll;
-
-            if (shouldLockScroll) {
-                main.style.overflow = 'hidden';
-                main.style.overflowX = 'hidden';
-                main.style.overflowY = 'hidden';
-                main.style.overscrollBehavior = 'none';
-                return;
-            }
-
-            main.style.overflow = previousStyles.overflow;
-            main.style.overflowX = previousStyles.overflowX;
-            main.style.overflowY = previousStyles.overflowY;
-            main.style.overscrollBehavior = previousStyles.overscrollBehavior;
-        };
-
-        syncScrollLock();
-        window.addEventListener('resize', syncScrollLock);
-
-        return () => {
-            window.removeEventListener('resize', syncScrollLock);
-            main.style.overflow = previousStyles.overflow;
-            main.style.overflowX = previousStyles.overflowX;
-            main.style.overflowY = previousStyles.overflowY;
-            main.style.overscrollBehavior = previousStyles.overscrollBehavior;
-        };
-    }, [needsWholePageScroll]);
+    }, [isOpen]);
 
     useEffect(() => {
         if (isEditMode) return;
@@ -939,8 +821,9 @@ const CreateTransaction = () => {
             notifyTransactionDataChanged();
             setShowSuccess(true);
             setTimeout(() => {
-                navigate('/transactions');
-            }, 1500);
+                if (onSuccess) onSuccess();
+                if (onClose) onClose();
+            }, 1000);
 
         } catch (error) {
             console.error("Failed to save transaction:", error);
@@ -1085,58 +968,57 @@ const CreateTransaction = () => {
         }
     };
 
-    return (
-        <div className={cn(
-            "transactions-create-page flex flex-col min-h-full relative bg-white",
-            needsWholePageScroll && "transactions-create-page-scroll"
-        )}>
-            <div ref={pageHeaderRef}>
-                <PageHeader
-                    title={isEditMode ? "Edit Transaction" : "Create Transaction"}
-                    breadcrumbs={['Transactions', isEditMode ? 'Edit Transaction' : 'Create New']}
-                    className="shrink-0"
-                />
-            </div>
+    if (!isOpen) return null;
 
+    return (
+        <>
+            {/* Backdrop */}
             <div
-                ref={shellRef}
-                className={cn(
-                    "transactions-create-shell p-4 lg:p-6 max-w-3xl mx-auto w-full flex-1 min-h-0 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500",
-                    needsWholePageScroll && "transactions-create-shell-scroll"
-                )}
-            >
-                <form ref={formRef} noValidate onSubmit={handleSubmit} onKeyDown={handleFormKeyNavigation} className="transactions-create-form flex flex-col min-h-0 txn-desktop-form txn-laptop-form txn-mobile-form">
-                    <Card className="flex flex-col min-h-0 max-h-[calc(100dvh-130px)] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border-none p-0 overflow-hidden txn-desktop-card txn-laptop-card txn-mobile-card">
-                        <div ref={formFrameRef} className="flex flex-col min-h-0 p-4 lg:p-6">
-                            <div ref={scrollAreaRef} className="flex-1 min-h-0 overflow-y-auto pr-2 pb-4 no-scrollbar txn-desktop-form-scroll txn-laptop-form-scroll txn-mobile-form-scroll">
-                                <div ref={scrollContentRef} className="flex flex-col gap-5">
-                                <div className="flex items-center space-x-4 border-b border-gray-50 pb-4 shrink-0">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate('/transactions')}
-                                        className="p-2 hover:bg-gray-50 rounded-full transition-colors text-gray-500"
-                                    >
-                                        <ArrowLeft size={20} />
-                                    </button>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-gray-800">{isEditMode ? "Edit Transaction" : "New Transaction"}</h2>
-                                        {isEditMode && (
-                                            <p className="text-sm text-gray-500">Update transaction details</p>
-                                        )}
-                                    </div>
-                                </div>
+                className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[110] transition-opacity"
+                onClick={onClose}
+            />
+
+            {/* Drawer Container */}
+            <div className="fixed inset-y-0 right-0 z-[120] w-[480px] max-w-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+                {/* Header */}
+                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                    <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 text-slate-600 shadow-sm shadow-[#4A8AF4]/5">
+                            <ArrowRightLeft size={14} strokeWidth={2.5} />
+                        </div>
+                        <div>
+                            <h2 className="text-[14px] font-bold text-slate-800 leading-tight">
+                                {isEditMode ? "Edit Transaction" : "New Transaction"}
+                            </h2>
+                            <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wide">
+                                {isEditMode ? "Update the details of your transaction" : "Create a new accounting entry"}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        className="p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+
+                <form ref={formRef} noValidate onSubmit={handleSubmit} onKeyDown={handleFormKeyNavigation} className="flex-1 flex flex-col min-h-0">
+                    <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-5 py-5 no-scrollbar bg-white">
+                        <div className="flex flex-col gap-3">
 
 
                                 {/* Branch selector */}
                                 {visibleBranches.length > 1 && (
-                                    <div className="space-y-1.5 w-full">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                    <div className="space-y-1 w-full">
+                                        <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                             Branch <span className="text-rose-500">*</span>
                                         </label>
                                         <CustomSelect
                                             value={targetBranchIds[0] ?? ''}
                                             onChange={(e) => handleTargetBranchChange(e.target.value)}
-                                            className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.targetBranchIds ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                            className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.targetBranchIds ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                         >
                                             {visibleBranches.map(b => (
                                                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -1147,15 +1029,15 @@ const CreateTransaction = () => {
                                 )}
 
                                 {/* Row 1: Type & Party */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div className="space-y-1.5 w-full">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                    <div className="space-y-1 w-full">
+                                        <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                             Transaction Type <span className="text-rose-500">*</span>
                                         </label>
                                         <CustomSelect
                                             value={formData.txnTypeId ?? ""}
                                             onChange={(e) => handleTypeChange(Number(e.target.value))}
-                                            className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all capitalize", errors.txnTypeId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                            className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all capitalize", errors.txnTypeId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                         >
                                             {txnTypes.length > 0 ? (
                                                 txnTypes.map(t => (
@@ -1171,8 +1053,8 @@ const CreateTransaction = () => {
                                     </div>
 
                                     {Number(formData.txnTypeId) !== 4 && (
-                                        <div className="space-y-1.5 w-full">
-                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Party</label>
+                                        <div className="space-y-1 w-full">
+                                            <label className="text-[11px] font-bold text-slate-600 block capitalize">Party</label>
                                             <CustomSelect
                                                 value={formData.contactId ?? ""}
                                                 onChange={(e) => {
@@ -1184,7 +1066,7 @@ const CreateTransaction = () => {
                                                         contact: party ? party.companyName : ''
                                                     });
                                                 }}
-                                                className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.contact ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.contact ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                             >
                                                 <option value="">Select Party</option>
                                                 {/* If current contact label exists but ID is missing (fallback), show it */}
@@ -1209,9 +1091,9 @@ const CreateTransaction = () => {
                                 {Number(formData.txnTypeId) === 4 ? (
                                     // Transfer
                                     <>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
                                                 <input
@@ -1220,19 +1102,19 @@ const CreateTransaction = () => {
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Amount <span className="text-rose-500">*</span>
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <CustomSelect
                                                         value={formData.currencyCode ?? ""}
                                                         onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                        className="w-24 px-2 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                        className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                     >
                                                         {transactionCurrencyOptions.map(c => (
                                                             <option key={c} value={c}>{c}</option>
@@ -1245,7 +1127,7 @@ const CreateTransaction = () => {
                                                         required
                                                         value={formData.amountLocal}
                                                         onChange={handleAmountLocalChange}
-                                                        className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                        className="flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
@@ -1254,16 +1136,16 @@ const CreateTransaction = () => {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                                            <div className="space-y-1.5 relative z-[60]">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1 relative z-[60]">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
                                                     required
                                                     value={formData.fromAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, fromAccountId: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-white border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.fromAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.fromAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     <option value="">Select Account</option>
                                                     {transferAccounts.filter(a => a.id !== Number(formData.toAccountId)).map(a => {
@@ -1277,15 +1159,15 @@ const CreateTransaction = () => {
                                                 </CustomSelect>
                                                 {errors.fromAccountId && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.fromAccountId}</p>}
                                             </div>
-                                            <div className="space-y-1.5 relative z-[50]">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1 relative z-[50]">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     To Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
                                                     required
                                                     value={formData.toAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-white border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.toAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.toAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     <option value="">Select Account</option>
                                                     {transferAccounts.filter(a => a.id !== Number(formData.fromAccountId)).map(a => {
@@ -1304,9 +1186,9 @@ const CreateTransaction = () => {
                                 ) : isInvestmentSelected ? (
                                     // Investment
                                     <>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
                                                 <input
@@ -1315,19 +1197,19 @@ const CreateTransaction = () => {
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
                                                     required
                                                     value={formData.accountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.accountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.accountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     <option value="">Select Account</option>
                                                     {assetAccounts.map(a => {
@@ -1342,16 +1224,16 @@ const CreateTransaction = () => {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Investment Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
                                                     required
                                                     value={formData.toAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.toAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.toAccountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     <option value="">Select Account</option>
                                                     {investmentAccounts.map(a => {
@@ -1365,8 +1247,8 @@ const CreateTransaction = () => {
                                                 </CustomSelect>
                                             </div>
 
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Investment Category <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
@@ -1381,7 +1263,7 @@ const CreateTransaction = () => {
                                                             subCategoryId: getDefaultSubCategoryId(selectedCategory)
                                                         });
                                                     }}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     {investmentCategories.length === 0 && <option value="">Select Category</option>}
                                                     {investmentCategories.map(c => {
@@ -1396,16 +1278,16 @@ const CreateTransaction = () => {
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Amount <span className="text-rose-500">*</span>
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <CustomSelect
                                                         value={formData.currencyCode ?? ""}
                                                         onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                        className="w-24 px-2 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                        className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                     >
                                                         {transactionCurrencyOptions.map(c => (
                                                             <option key={c} value={c}>{c}</option>
@@ -1418,7 +1300,7 @@ const CreateTransaction = () => {
                                                         required
                                                         value={formData.amountLocal}
                                                         onChange={handleAmountLocalChange}
-                                                        className={cn("flex-1 px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                        className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                         placeholder="0.00"
                                                     />
                                                 </div>
@@ -1431,9 +1313,9 @@ const CreateTransaction = () => {
                                     // Income / Expense
                                     <>
                                         {/* Row 2: Date & Account */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
                                                 <input
@@ -1442,21 +1324,21 @@ const CreateTransaction = () => {
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
 
                                             {/* Payment Wrapper */}
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     {Number(formData.txnTypeId) === 1 ? 'Deposit To' : 'Paid From'} <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
                                                     required
                                                     value={formData.accountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.accountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.accountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
                                                     <option value="">Account</option>
                                                     {Number(formData.txnTypeId) === 1 ? (
@@ -1484,10 +1366,10 @@ const CreateTransaction = () => {
                                         </div>
 
                                         {/* Dynamic Rows based on Sub-Category existence */}
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                                             {/* Always show Category First */}
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     {Number(formData.txnTypeId) === 1 ? 'Income Category' : 'Expense Category'} <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
@@ -1502,7 +1384,7 @@ const CreateTransaction = () => {
                                                             subCategoryId: getDefaultSubCategoryId(selectedCategory)
                                                         });
                                                     }}
-                                                    className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                     required
                                                 >
                                                     {(Number(formData.txnTypeId) === 1 ? incomeCategories : expenseCategories).length === 0 && <option value="">Select Category</option>}
@@ -1531,8 +1413,8 @@ const CreateTransaction = () => {
 
                                             {/* If Subcategories exist, show Sub-Category. Else, show Amount on right side. */}
                                             {currentSubcategories.length > 0 ? (
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Sub-Category
                                                     </label>
                                                     <CustomSelect
@@ -1552,15 +1434,15 @@ const CreateTransaction = () => {
                                                     </CustomSelect>
                                                 </div>
                                             ) : (
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
                                                     <div className="flex gap-2">
                                                             <CustomSelect
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-24 px-2 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1573,7 +1455,7 @@ const CreateTransaction = () => {
                                                             required
                                                             value={formData.amountLocal}
                                                             onChange={handleAmountLocalChange}
-                                                            className={cn("flex-1 px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1584,16 +1466,16 @@ const CreateTransaction = () => {
 
                                         {/* If Sub-category exists, place Amount below */}
                                         {currentSubcategories.length > 0 && (
-                                            <div className="mt-5">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                                            <div className="">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
                                                     <div className="flex gap-2">
                                                             <CustomSelect
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-24 px-2 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1606,7 +1488,7 @@ const CreateTransaction = () => {
                                                             required
                                                             value={formData.amountLocal}
                                                             onChange={handleAmountLocalChange}
-                                                            className={cn("flex-1 px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1638,16 +1520,16 @@ const CreateTransaction = () => {
                                         {/* GST Fields — only when Taxable */}
                                         {formData.isTaxable && (
                                             <>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                                                     {/* GST Type */}
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                                             GST Type <span className="text-rose-500">*</span>
                                                         </label>
                                                         <CustomSelect
                                                             value={formData.gstType ?? ""}
                                                             onChange={(e) => setFormData({ ...formData, gstType: e.target.value })}
-                                                            className={cn("w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all", errors.gstType ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.gstType ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                         >
                                                             <option value={1}>Intra-State (CGST + SGST)</option>
                                                             <option value={0}>Inter-State (IGST)</option>
@@ -1656,8 +1538,8 @@ const CreateTransaction = () => {
                                                     </div>
 
                                                     {/* GST Rate */}
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider pl-1">
+                                                    <div className="space-y-1">
+                                                        <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                                             GST Rate (%) <span className="text-rose-500">*</span>
                                                         </label>
                                                         <GstRateDropdown
@@ -1736,8 +1618,8 @@ const CreateTransaction = () => {
 
 
 
-                                <div className="space-y-1.5">
-                                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Notes</label>
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">Notes</label>
                                     <textarea
                                         rows="2"
                                         data-nav-field="true"
@@ -1748,9 +1630,9 @@ const CreateTransaction = () => {
                                     />
                                 </div>
 
-                                <div className="space-y-1.5">
+                                <div className="space-y-1">
                                     <div className="flex items-center justify-between gap-3">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider">Attachment (Invoice/Receipt)</label>
+                                        <label className="text-[11px] font-bold text-slate-600 block capitalize">Attachment (Invoice/Receipt)</label>
                                     </div>
                                     <div className={cn(
                                         "flex flex-col sm:flex-row sm:items-center gap-2"
@@ -1820,93 +1702,94 @@ const CreateTransaction = () => {
                                         <span>{errorMsg}</span>
                                     </div>
                                 )}
-                            <div className="pt-4 border-t border-gray-100 flex flex-col-reverse sm:flex-row items-center justify-end gap-3 sm:space-x-4">
-                                <button
-                                    type="button"
-                                    onClick={() => navigate('/transactions')}
-                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-bold text-gray-500 hover:bg-gray-50 transition-all"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={loading}
-                                    className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-black hover:bg-black/90 transition-all shadow-lg active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-70"
-                                >
-                                    <Save size={18} />
-                                    <span>{loading ? 'Saving...' : (isEditMode ? 'Update' : 'Save')}</span>
-                                </button>
-                            </div>
-                                </div>
                             </div>
                         </div>
-                    </Card>
+                
+                    {/* Drawer Footer */}
+                    <div className="px-5 py-3 border-t border-slate-100 bg-white flex items-center justify-end gap-3 shrink-0">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="px-4 py-2 rounded-lg text-[13px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[13px] font-bold px-5 py-2 rounded-lg shadow-sm active:scale-95 flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
+                        >
+                            <Save size={16} strokeWidth={2.5} />
+                            <span>{loading ? 'Saving...' : (isEditMode ? 'Update' : 'Save')}</span>
+                        </button>
+                    </div>
                 </form>
             </div>
 
+            {/* Success Popup */}
+            {showSuccess && (
+                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
+                    <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
+                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600">
+                            <Check size={32} strokeWidth={3} />
+                        </div>
+                        <h3 className="text-xl font-bold text-gray-900 mb-2">
+                            {isEditMode ? "Transaction Updated" : "Transaction Created"}
+                        </h3>
+                        <p className="text-gray-500 text-center text-sm">Closing...</p>
+                    </div>
+                </div>
+            )}
+
             {/* Full Screen Attachment Viewer */}
-            {fullScreenAttachment.isOpen && fullScreenAttachment.path && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}>
-                    <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white">
-                            <h3 className="text-sm font-bold text-gray-800">Attachment Preview</h3>
+            {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(
+                <div 
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" 
+                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
+                >
+                    <div 
+                        className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white">
+                            <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">Attachment</h3>
                             <div className="flex items-center gap-2">
                                 <button
                                     type="button"
                                     onClick={() => {
                                         if (!fullScreenAttachment.path) return;
-                                        void downloadAttachmentFile(fullScreenAttachment.path).catch((error) => {
-                                            console.error('Failed to download attachment:', error);
-                                            alert('Failed to download attachment');
-                                        });
+                                        void downloadAttachmentFile(fullScreenAttachment.path);
                                     }}
-                                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center justify-center gap-2 px-3 bg-gray-50 hover:text-gray-900 border border-gray-100"
-                                    title="Download Attachment"
+                                    className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-md text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1.5 shadow-sm"
                                 >
-                                    <Download size={14} />
-                                    <span className="text-xs font-bold uppercase tracking-wider">Download</span>
+                                    <Download size={14} strokeWidth={2.5} />
+                                    <span className="text-[11px] font-extrabold uppercase tracking-widest">Download</span>
                                 </button>
                                 <button
                                     onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                                    className="p-1.5 hover:bg-rose-50 rounded-lg text-gray-400 hover:text-rose-600 transition-colors"
+                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
                                 >
-                                    <X size={20} />
+                                    <X size={16} strokeWidth={2.5} />
                                 </button>
                             </div>
                         </div>
-                        <div className="flex-1 overflow-auto p-4 bg-gray-50 flex items-center justify-center min-h-[50vh]">
+                        <div className="flex-1 overflow-auto bg-slate-50/50 p-6 flex items-center justify-center">
                             {(() => {
                                 const p = fullScreenAttachment.path;
                                 const fullUrl = buildAttachmentUrl(p);
                                 const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
                                 if (isImage) {
-                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-sm" />;
+                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg border border-slate-200 shadow-sm bg-white" />;
                                 } else {
-                                    return <iframe src={fullUrl} className="w-full h-[75vh] border-0 rounded-lg shadow-sm bg-white" title="Attachment Preview" />;
+                                    return <iframe src={fullUrl} className="w-full h-[75vh] bg-white rounded-lg border border-slate-200 shadow-sm" />;
                                 }
                             })()}
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
-
-            {/* Success Popup Overlay */}
-            {
-                showSuccess && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-300">
-                        <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
-                            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600 animate-[bounce_1s_infinite]">
-                                <Check size={32} strokeWidth={3} />
-                            </div>
-                            <h3 className="text-xl font-bold text-gray-900 mb-2">{isEditMode ? "Transaction Updated!" : "Transaction Saved!"}</h3>
-                            <p className="text-gray-500 text-center text-sm">
-                                Your transaction has been successfully {isEditMode ? "updated" : "recorded"}. Redirecting...
-                            </p>
-                        </div>
-                    </div>
-                )
-            }
-        </div >
+        </>
     );
 };
 

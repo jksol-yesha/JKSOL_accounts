@@ -192,7 +192,7 @@ const CurrencySelector = React.forwardRef(({
                 }}
                 onKeyDown={handleInternalKeyDown}
                 className={cn(
-                    "group relative flex h-[38px] items-center justify-center rounded-lg border border-slate-200 bg-white px-2.5 shadow-sm transition-colors focus:outline-none",
+                    "group relative flex items-center justify-center px-2.5 h-[32px] rounded-md border border-slate-200 bg-white transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none",
                     disabled
                         ? "cursor-not-allowed opacity-70"
                         : "hover:bg-slate-50",

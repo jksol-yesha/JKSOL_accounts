@@ -36,7 +36,7 @@ export class PDFParserService {
         let inTable = false;
 
         for (let i = 0; i < lines.length; i++) {
-            const line = lines[i].trim();
+            const line = lines[i]?.trim() || '';
 
             // Detect table header
             if (line.includes('Txn Date') && line.includes('Description')) {
@@ -56,7 +56,7 @@ export class PDFParserService {
             if (!datePattern.test(line)) continue;
 
             const dateMatch = line.match(datePattern);
-            if (!dateMatch) continue;
+            if (!dateMatch || !dateMatch[1]) continue;
 
             const txnDate = dateMatch[1];
 
@@ -67,14 +67,18 @@ export class PDFParserService {
             if (!amounts || amounts.length < 1) continue;
 
             // Last number is always the balance
-            const balance = parseFloat(amounts[amounts.length - 1].replace(/,/g, ''));
+            const balanceStr = amounts[amounts.length - 1];
+            if (!balanceStr) continue;
+            const balance = parseFloat(balanceStr.replace(/,/g, ''));
 
             // Transaction amount is typically second-to-last
             let debit: number | undefined;
             let credit: number | undefined;
 
             if (amounts.length >= 2) {
-                const txnAmount = parseFloat(amounts[amounts.length - 2].replace(/,/g, ''));
+                const txnAmountStr = amounts[amounts.length - 2];
+                if (!txnAmountStr) continue;
+                const txnAmount = parseFloat(txnAmountStr.replace(/,/g, ''));
 
                 // Simple classification based on common keywords
                 const lineLower = line.toLowerCase();
@@ -153,12 +157,20 @@ export class PDFParserService {
                 'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
             };
 
-            const day = dateParts[0].padStart(2, '0');
-            const month = monthMap[dateParts[1]];
-            const year = dateParts[2];
+            const part0 = dateParts[0];
+            const part1 = dateParts[1];
+            const part2 = dateParts[2];
+            
+            if (!part0 || !part1 || !part2) {
+                throw new Error(`Invalid date format: ${txn.date}`);
+            }
+
+            const day = part0.padStart(2, '0');
+            const month = monthMap[part1];
+            const year = part2;
 
             if (!month) {
-                throw new Error(`Invalid month: ${dateParts[1]}`);
+                throw new Error(`Invalid month: ${part1}`);
             }
 
             const formattedDate = `${year}-${month}-${day}`;

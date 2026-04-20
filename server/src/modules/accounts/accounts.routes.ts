@@ -7,8 +7,8 @@ export const accountsRoutes = new Elysia({ prefix: '/accounts' })
     .post('/account-list', AccountsController.getAccounts, {
         validateAccess: 'org',
         body: t.Object({
-            status: t.Optional(t.Union([t.Literal(1), t.Literal(2)])),
-            financialYearId: t.Optional(t.Numeric())
+            status: t.Optional(t.Union([t.Literal(1), t.Literal(2), t.Null()])),
+            financialYearId: t.Optional(t.Union([t.Numeric(), t.Null()]))
         })
     })
     .post('/', AccountsController.createAccount, {

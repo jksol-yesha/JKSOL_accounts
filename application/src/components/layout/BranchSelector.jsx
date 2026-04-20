@@ -114,7 +114,7 @@ const BranchSelector = () => {
                 <button
                     ref={buttonRef}
                     onClick={() => setIsOpen(!isOpen)}
-                    className="group relative flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm"
+                    className="group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                 >
                     <Building2 size={16} className="text-gray-400 group-hover:text-primary transition-colors" />
                     {isAllBranchesApplied ? (

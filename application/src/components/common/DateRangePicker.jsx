@@ -291,7 +291,7 @@ const DateRangePicker = forwardRef(({
                 ref={inputRef}
                 tabIndex={0}
                 onKeyDown={handleKeyDownInternal}
-                className="group relative flex items-center gap-2 px-3 w-full h-[38px] rounded-lg border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="group relative flex items-center gap-2 px-3 w-full h-[32px] rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-primary/20"
                 onClick={() => {
                     if (!isOpen) updatePosition();
                     setIsOpen(!isOpen);

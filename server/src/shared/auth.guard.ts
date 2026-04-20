@@ -1,6 +1,9 @@
 import { Elysia } from 'elysia';
+import { jwtConfig } from './jwt.config';
 
-export const authGuard = new Elysia().derive(
+export const authGuard = new Elysia()
+  .use(jwtConfig)
+  .derive(
   async ({ jwt, headers }) => {
     const auth = headers.authorization;
 
