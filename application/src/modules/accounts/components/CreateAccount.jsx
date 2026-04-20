@@ -433,6 +433,13 @@ const CreateAccount = ({
           void submitFormRef.current?.();
         }
 
+        if (e.key === "Escape") {
+          e.preventDefault();
+          e.stopPropagation();
+          handleClose();
+          return;
+        }
+
         if (e.key === "Tab") {
           // Allow natural tab behavior within the sidebar
           return;

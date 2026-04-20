@@ -139,16 +139,21 @@ const applyAccountBranchFilter = (whereClause: any[], branchId: number | number[
 
 
 
-const getAccountBalancePeriodSql = (interval: 'day' | 'month') => {
+const getAccountBalancePeriodSql = (interval: 'day' | 'week' | 'month') => {
     if (interval === 'day') {
         return sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m-%d')`;
+    }
+
+    if (interval === 'week') {
+        return sql<string>`DATE_FORMAT(${transactions.txnDate}, '%x-W%v')`;
     }
 
     return sql<string>`DATE_FORMAT(${transactions.txnDate}, '%Y-%m')`;
 };
 
-const getAccountBalancePeriodKey = (dateStr: string, interval: 'day' | 'month') => {
+const getAccountBalancePeriodKey = (dateStr: string, interval: 'day' | 'week' | 'month') => {
     if (interval === 'day') return dateStr;
+    if (interval === 'week') return getWeekKey(parseDateStringAsUtc(dateStr));
     return String(dateStr || '').slice(0, 7);
 };
 
@@ -171,6 +176,165 @@ const resolveTxnCurrency = (currencyCode?: string | null, fallbackCurrency = 'IN
 };
 
 const roundBalanceValue = (value: number) => Math.round((Number(value) || 0) * 100) / 100;
+
+const getInvestmentBalanceSeries = async ({
+    orgId,
+    branchId,
+    user,
+    orgBaseCurrency,
+    displayCurrency,
+    movementStartDate,
+    endDate,
+    interval,
+    seriesItems
+}: {
+    orgId: number;
+    branchId: number | number[] | null;
+    user?: any;
+    orgBaseCurrency: string;
+    displayCurrency: string;
+    movementStartDate: string;
+    endDate: string;
+    interval: 'day' | 'week' | 'month';
+    seriesItems: Array<{ key: string; label: string }>;
+}) => {
+    const investmentAccounts = await db.select({
+        id: accounts.id,
+        openingBalance: accounts.openingBalance,
+        openingBalanceDate: accounts.openingBalanceDate,
+        currencyCode: currencies.code
+    })
+        .from(accounts)
+        .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
+        .where(and(
+            eq(accounts.orgId, orgId),
+            isNotDeleted(accounts),
+            inArray(accounts.status, [1, 2]),
+            eq(accounts.accountType, 1),
+            eq(accounts.subtype, 14)
+        ));
+
+    if (investmentAccounts.length === 0) {
+        return seriesItems.map(() => 0);
+    }
+
+    const investmentAccountIds = investmentAccounts.map((account) => Number(account.id)).filter(Boolean);
+    const periodKeySql = getAccountBalancePeriodSql(interval);
+
+    const movementWhere = [
+        eq(transactions.orgId, orgId),
+        isNotDeleted(transactions),
+        eq(transactions.status, 1),
+        gte(transactions.txnDate, movementStartDate),
+        lte(transactions.txnDate, endDate),
+        inArray(transactionEntries.accountId, investmentAccountIds)
+    ];
+    applyTxnBranchFilter(movementWhere, branchId, user);
+
+    const movements = await db.select({
+        accountId: transactionEntries.accountId,
+        periodKey: periodKeySql,
+        currencyCode: currencies.code,
+        netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
+    })
+        .from(transactionEntries)
+        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+        .where(and(...movementWhere))
+        .groupBy(transactionEntries.accountId, periodKeySql, currencies.code);
+
+    const movementMap = new Map<number, Map<string, number>>();
+    for (const movement of movements) {
+        const convertedNet = await convertAmount(
+            Number(movement.netAmount || 0),
+            resolveTxnCurrency(movement.currencyCode, orgBaseCurrency),
+            displayCurrency,
+            orgId
+        );
+
+        if (!movementMap.has(movement.accountId)) movementMap.set(movement.accountId, new Map());
+        const periodMap = movementMap.get(movement.accountId)!;
+        periodMap.set(movement.periodKey, (periodMap.get(movement.periodKey) || 0) + convertedNet);
+    }
+
+    const beforeRangeWhere = [
+        eq(transactions.orgId, orgId),
+        isNotDeleted(transactions),
+        eq(transactions.status, 1),
+        lt(transactions.txnDate, movementStartDate),
+        inArray(transactionEntries.accountId, investmentAccountIds)
+    ];
+    applyTxnBranchFilter(beforeRangeWhere, branchId, user);
+
+    const beforeRangeMovements = await db.select({
+        accountId: transactionEntries.accountId,
+        currencyCode: currencies.code,
+        netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
+    })
+        .from(transactionEntries)
+        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+        .where(and(...beforeRangeWhere))
+        .groupBy(transactionEntries.accountId, currencies.code);
+
+    const beforeMap = new Map<number, number>();
+    for (const movement of beforeRangeMovements) {
+        const convertedNet = await convertAmount(
+            Number(movement.netAmount || 0),
+            resolveTxnCurrency(movement.currencyCode, orgBaseCurrency),
+            displayCurrency,
+            orgId
+        );
+        beforeMap.set(movement.accountId, (beforeMap.get(movement.accountId) || 0) + convertedNet);
+    }
+
+    const accountStates = await Promise.all(investmentAccounts.map(async (account) => {
+        const openingBalance = Number(account.openingBalance || 0);
+        const convertedOpening = await ExchangeRateService.convert(
+            openingBalance,
+            account.currencyCode || 'USD',
+            displayCurrency,
+            orgId
+        );
+        const openingBalanceDate = account.openingBalanceDate || null;
+        const openingPeriodKey = openingBalanceDate ? getAccountBalancePeriodKey(openingBalanceDate, interval) : null;
+        const isOpeningAppliedAtRangeStart = !openingBalanceDate || openingBalanceDate <= movementStartDate;
+        const beforeMove = beforeMap.get(account.id) || 0;
+
+        return {
+            id: Number(account.id),
+            currentBalance: isOpeningAppliedAtRangeStart ? convertedOpening + beforeMove : 0,
+            openingBalance: convertedOpening,
+            openingApplied: isOpeningAppliedAtRangeStart,
+            openingPeriodKey,
+            movements: movementMap.get(account.id) || new Map<string, number>()
+        };
+    }));
+
+    return seriesItems.map((item) => {
+        let total = 0;
+
+        for (const state of accountStates) {
+            if (!state.openingApplied && state.openingPeriodKey && item.key < state.openingPeriodKey) {
+                continue;
+            }
+
+            if (!state.openingApplied && state.openingPeriodKey === item.key) {
+                state.currentBalance += state.openingBalance;
+                state.openingApplied = true;
+            }
+
+            const movement = state.movements.get(item.key) || 0;
+            if (movement !== 0) {
+                state.currentBalance += movement;
+            }
+
+            total += state.currentBalance;
+        }
+
+        return roundBalanceValue(total);
+    });
+};
 
 export const DashboardService = {
     getSummary: async (orgId: number, branchId: number | number[] | null, financialYearId: number, targetCurrency?: string, user?: any, customStartDate?: string, customEndDate?: string) => {
@@ -365,6 +529,17 @@ export const DashboardService = {
         const totalInvestment = totalInvestmentByAccount > 0
             ? totalInvestmentByAccount
             : totalInvestmentByType;
+        const [investmentBalance = 0] = await getInvestmentBalanceSeries({
+            orgId,
+            branchId,
+            user,
+            orgBaseCurrency,
+            displayCurrency,
+            movementStartDate: endDate,
+            endDate,
+            interval: 'day',
+            seriesItems: [{ key: endDate, label: endDate }]
+        });
 
         // 4. Closing Balance (Opening + Net Flow - Investment Outflow)
         const closingBalance = openingBalance + (totalIncome - totalExpense - totalInvestment);
@@ -377,6 +552,7 @@ export const DashboardService = {
             totalIncome,
             totalExpense,
             totalInvestment,
+            investmentBalance,
             closingBalance
         };
     },
@@ -549,6 +725,17 @@ export const DashboardService = {
             }
 
             const investment = investmentByAccount.map((value, index) => value > 0 ? value : investmentByType[index]);
+            const investmentBalance = await getInvestmentBalanceSeries({
+                orgId,
+                branchId,
+                user,
+                orgBaseCurrency,
+                displayCurrency,
+                movementStartDate: start,
+                endDate: end,
+                interval,
+                seriesItems: items
+            });
             const netProfit = income.map((value, index) => value - expense[index]);
 
             return {
@@ -559,7 +746,8 @@ export const DashboardService = {
                     netProfit,
                     totalIncome: income,
                     totalExpense: expense,
-                    totalInvestment: investment
+                    totalInvestment: investment,
+                    investmentBalance
                 }
             };
         };

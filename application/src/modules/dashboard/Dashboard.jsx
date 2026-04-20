@@ -22,6 +22,7 @@ const EMPTY_STATS = {
     totalIncome: 0,
     totalExpense: 0,
     totalInvestment: 0,
+    investmentBalance: 0,
     closingBalance: 0
 };
 
@@ -32,7 +33,8 @@ const EMPTY_TRENDS = {
             netProfit: [],
             totalIncome: [],
             totalExpense: [],
-            totalInvestment: []
+            totalInvestment: [],
+            investmentBalance: []
         }
     },
     previous: {
@@ -40,7 +42,8 @@ const EMPTY_TRENDS = {
             netProfit: [],
             totalIncome: [],
             totalExpense: [],
-            totalInvestment: []
+            totalInvestment: [],
+            investmentBalance: []
         }
     }
 };
@@ -93,6 +96,7 @@ const getMetricSnapshot = (summary = EMPTY_STATS) => {
     const income = Number(summary.totalIncome || 0);
     const expense = Number(summary.totalExpense || 0);
     const investment = Number(summary.totalInvestment || 0);
+    const investmentBalance = Number((summary.investmentBalance ?? summary.totalInvestment) || 0);
 
     return {
         openingBalance: opening,
@@ -100,7 +104,8 @@ const getMetricSnapshot = (summary = EMPTY_STATS) => {
         netProfit: income - expense,
         totalIncome: income,
         totalExpense: expense,
-        totalInvestment: investment
+        totalInvestment: investment,
+        investmentBalance
     };
 };
 
@@ -397,7 +402,7 @@ const Dashboard = () => {
     const incomeChange = formatPercentageIndicator(currentMetrics.totalIncome, previousMetrics.totalIncome);
     const expenseChange = formatPercentageIndicator(currentMetrics.totalExpense, previousMetrics.totalExpense);
     const netProfitChange = formatPercentageIndicator(currentMetrics.netProfit, previousMetrics.netProfit);
-    const investmentChange = formatPercentageIndicator(currentMetrics.totalInvestment, previousMetrics.totalInvestment);
+    const investmentChange = formatPercentageIndicator(currentMetrics.investmentBalance, previousMetrics.investmentBalance);
     
     const allStats = [
         {
@@ -405,8 +410,8 @@ const Dashboard = () => {
             amount: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.netProfit || [],
             comparisonLabels,
-            chartColor: '#f59e0b',
-            chartFillColor: '#f59e0b',
+            chartColor: '#3b82f6',
+            chartFillColor: '#3b82f6',
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.netProfit >= previousMetrics.netProfit ? 'up' : 'down',
@@ -418,8 +423,8 @@ const Dashboard = () => {
             amount: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalIncome || [],
             comparisonLabels,
-            chartColor: '#10b981',
-            chartFillColor: '#10b981',
+            chartColor: '#3b82f6',
+            chartFillColor: '#3b82f6',
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalIncome >= previousMetrics.totalIncome ? 'up' : 'down',
@@ -431,8 +436,8 @@ const Dashboard = () => {
             amount: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalExpense || [],
             comparisonLabels,
-            chartColor: '#f43f5e',
-            chartFillColor: '#f43f5e',
+            chartColor: '#3b82f6',
+            chartFillColor: '#3b82f6',
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalExpense <= previousMetrics.totalExpense ? 'up' : 'down',
@@ -440,15 +445,15 @@ const Dashboard = () => {
             tertiaryTone: expenseChange.tone
         },
         {
-            title: 'Total Investment',
-            amount: formatCurrency(currentMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency),
-            currentSeries: metricSeries.totalInvestment || [],
+            title: 'Investment Balance',
+            amount: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
+            currentSeries: metricSeries.investmentBalance || metricSeries.totalInvestment || [],
             comparisonLabels,
-            chartColor: '#6366f1',
-            chartFillColor: '#6366f1',
+            chartColor: '#3b82f6',
+            chartFillColor: '#3b82f6',
             currentSeriesLabel,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
-            trendType: currentMetrics.totalInvestment >= previousMetrics.totalInvestment ? 'up' : 'down',
+            trendType: currentMetrics.investmentBalance >= previousMetrics.investmentBalance ? 'up' : 'down',
             tertiaryText: investmentChange.text,
             tertiaryTone: investmentChange.tone
         }

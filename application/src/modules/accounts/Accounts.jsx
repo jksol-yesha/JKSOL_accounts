@@ -90,210 +90,211 @@ const FilterDropdown = React.forwardRef(
     },
     ref,
   ) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const dropdownRef = useRef(null);
-  const buttonRef = useRef(null);
-  const dropdownMenuRef = useRef(null);
-  const optionRefs = useRef([]);
-  const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
+    const optionRefs = useRef([]);
+    const [dropdownPosition, setDropdownPosition] = useState(null);
 
-  useLayoutEffect(() => {
-    if (!isOpen) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDropdownPosition(null);
-      return;
-    }
-    const updatePosition = () => {
-      if (!buttonRef.current) return;
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + 8,
-        left: rect.left,
-        minWidth: Math.max(110, rect.width),
-      });
+    useLayoutEffect(() => {
+      if (!isOpen) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setDropdownPosition(null);
+        return;
+      }
+      const updatePosition = () => {
+        if (!buttonRef.current) return;
+        const rect = buttonRef.current.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          left: rect.left,
+          minWidth: Math.max(110, rect.width),
+        });
+      };
+      updatePosition();
+      window.addEventListener("resize", updatePosition);
+      window.addEventListener("scroll", updatePosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePosition);
+        window.removeEventListener("scroll", updatePosition, true);
+      };
+    }, [isOpen]);
+
+    useEffect(() => {
+      const handleClickOutside = (event) => {
+        if (
+          !dropdownRef.current?.contains(event.target) &&
+          !dropdownMenuRef.current?.contains(event.target)
+        )
+          setIsOpen(false);
+      };
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedOption = options.find((opt) => opt.value === value) || {
+      label: placeholder || options[0]?.label,
     };
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
+    const isTitleVar = variant === "title";
+    const openDropdown = () => {
+      const selectedIndex = options.findIndex((option) => option.value === value);
+      setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      setIsOpen(true);
     };
-  }, [isOpen]);
 
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (
-        !dropdownRef.current?.contains(event.target) &&
-        !dropdownMenuRef.current?.contains(event.target)
-      )
-        setIsOpen(false);
+    const closeDropdown = () => {
+      setIsOpen(false);
+      setHighlightedIndex(-1);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
 
-  const selectedOption = options.find((opt) => opt.value === value) || {
-    label: placeholder || options[0]?.label,
-  };
-  const isTitleVar = variant === "title";
-  const openDropdown = () => {
-    const selectedIndex = options.findIndex((option) => option.value === value);
-    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
-    setIsOpen(true);
-  };
+    const handleSelect = (nextValue, shouldFocusNext = false) => {
+      onChange(nextValue);
+      closeDropdown();
+      if (shouldFocusNext) {
+        setTimeout(() => {
+          onFocusNext?.();
+        }, 0);
+      }
+    };
 
-  const closeDropdown = () => {
-    setIsOpen(false);
-    setHighlightedIndex(-1);
-  };
+    const handleInternalKeyDown = (event) => {
+      if (!isOpen) {
+        if (
+          event.key === "Enter" ||
+          event.key === " " ||
+          event.key === "ArrowDown" ||
+          event.key === "ArrowUp"
+        ) {
+          event.preventDefault();
+          openDropdown();
+          return;
+        }
 
-  const handleSelect = (nextValue, shouldFocusNext = false) => {
-    onChange(nextValue);
-    closeDropdown();
-    if (shouldFocusNext) {
-      setTimeout(() => {
-        onFocusNext?.();
-      }, 0);
-    }
-  };
-
-  const handleInternalKeyDown = (event) => {
-    if (!isOpen) {
-      if (
-        event.key === "Enter" ||
-        event.key === " " ||
-        event.key === "ArrowDown" ||
-        event.key === "ArrowUp"
-      ) {
-        event.preventDefault();
-        openDropdown();
+        onKeyDown?.(event);
         return;
       }
 
-      onKeyDown?.(event);
-      return;
-    }
-
-    switch (event.key) {
-      case "ArrowDown":
-        event.preventDefault();
-        setHighlightedIndex((current) => (current + 1) % options.length);
-        break;
-      case "ArrowUp":
-        event.preventDefault();
-        setHighlightedIndex((current) =>
-          (current - 1 + options.length) % options.length,
-        );
-        break;
-      case "Enter":
-        event.preventDefault();
-        if (highlightedIndex >= 0 && options[highlightedIndex]) {
-          handleSelect(options[highlightedIndex].value, true);
-        } else {
-          closeDropdown();
-        }
-        break;
-      case "Escape":
-        event.preventDefault();
-        closeDropdown();
-        buttonRef.current?.focus();
-        break;
-      default:
-        break;
-    }
-  };
-
-  useEffect(() => {
-    if (!isOpen || highlightedIndex < 0) return;
-    optionRefs.current[highlightedIndex]?.scrollIntoView?.({
-      block: "nearest",
-    });
-  }, [highlightedIndex, isOpen]);
-
-  React.useImperativeHandle(ref, () => buttonRef.current);
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        ref={buttonRef}
-        type="button"
-        onClick={() => {
-          if (isOpen) {
+      switch (event.key) {
+        case "ArrowDown":
+          event.preventDefault();
+          setHighlightedIndex((current) => (current + 1) % options.length);
+          break;
+        case "ArrowUp":
+          event.preventDefault();
+          setHighlightedIndex((current) =>
+            (current - 1 + options.length) % options.length,
+          );
+          break;
+        case "Enter":
+          event.preventDefault();
+          if (highlightedIndex >= 0 && options[highlightedIndex]) {
+            handleSelect(options[highlightedIndex].value, true);
+          } else {
             closeDropdown();
-            return;
           }
-          openDropdown();
-        }}
-        onKeyDown={handleInternalKeyDown}
-        className={cn(
-          "group relative flex items-center justify-between gap-1 transition-colors outline-none",
-          isTitleVar
-            ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary"
-            : "h-[32px] px-2 bg-white text-gray-600 border border-gray-200 text-[13px] font-medium rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
-          !isOpen && !isTitleVar && "hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-slate-700 focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD]"
-        )}
-      >
-        <div
-          className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
-        >
-          <span className="group-hover:text-blue-500 transition-colors uppercase text-[11px] tracking-tight">{label && `${label}: `}</span>
-          <span className="group-hover:text-blue-600 font-bold transition-colors">{selectedOption?.label}</span>
-        </div>
-        {!hideIcon && (
-          <ChevronDown
-            size={isTitleVar ? 16 : 14}
-            className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-blue-500" : "text-gray-400 group-hover:text-blue-500 group-focus:text-blue-500"}`}
-          />
-        )}
-      </button>
+          break;
+        case "Escape":
+          event.preventDefault();
+          event.stopPropagation();
+          closeDropdown();
+          buttonRef.current?.focus();
+          break;
+        default:
+          break;
+      }
+    };
 
-      {isOpen &&
-        dropdownPosition &&
-        typeof document !== "undefined" &&
-        createPortal(
+    useEffect(() => {
+      if (!isOpen || highlightedIndex < 0) return;
+      optionRefs.current[highlightedIndex]?.scrollIntoView?.({
+        block: "nearest",
+      });
+    }, [highlightedIndex, isOpen]);
+
+    React.useImperativeHandle(ref, () => buttonRef.current);
+
+    return (
+      <div className="relative" ref={dropdownRef}>
+        <button
+          ref={buttonRef}
+          type="button"
+          onClick={() => {
+            if (isOpen) {
+              closeDropdown();
+              return;
+            }
+            openDropdown();
+          }}
+          onKeyDown={handleInternalKeyDown}
+          className={cn(
+            "group relative flex items-center justify-between gap-1 transition-colors outline-none",
+            isTitleVar
+              ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary"
+              : "h-[32px] px-2 bg-white text-gray-600 border border-gray-200 text-[13px] font-medium rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+            !isOpen && !isTitleVar && "hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-slate-700 focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD]"
+          )}
+        >
           <div
-            ref={dropdownMenuRef}
-            className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
-            style={{
-              top: dropdownPosition.top,
-              left: dropdownPosition.left,
-              minWidth: dropdownPosition.minWidth,
-            }}
+            className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
           >
-            {options.map((option, index) => (
-              <button
-                key={option.value}
-                ref={(node) => {
-                  optionRefs.current[index] = node;
-                }}
-                type="button"
-                onMouseEnter={() => setHighlightedIndex(index)}
-                onClick={() => handleSelect(option.value)}
-                className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value || highlightedIndex === index ? "bg-[#F0F9FF]" : "hover:bg-[#F0F9FF]"}`}
-              >
-                <span
-                  className={`text-[13px] w-full flex items-center gap-2 ${value === option.value || highlightedIndex === index ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+            <span className="group-hover:text-blue-500 transition-colors uppercase text-[11px] tracking-tight">{label && `${label}: `}</span>
+            <span className="group-hover:text-blue-600 font-bold transition-colors">{selectedOption?.label}</span>
+          </div>
+          {!hideIcon && (
+            <ChevronDown
+              size={isTitleVar ? 16 : 14}
+              className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-blue-500" : "text-gray-400 group-hover:text-blue-500 group-focus:text-blue-500"}`}
+            />
+          )}
+        </button>
+
+        {isOpen &&
+          dropdownPosition &&
+          typeof document !== "undefined" &&
+          createPortal(
+            <div
+              ref={dropdownMenuRef}
+              className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
+              style={{
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                minWidth: dropdownPosition.minWidth,
+              }}
+            >
+              {options.map((option, index) => (
+                <button
+                  key={option.value}
+                  ref={(node) => {
+                    optionRefs.current[index] = node;
+                  }}
+                  type="button"
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  onClick={() => handleSelect(option.value)}
+                  className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value || highlightedIndex === index ? "bg-[#F0F9FF]" : "hover:bg-[#F0F9FF]"}`}
                 >
-                  <div className="w-4 flex justify-center shrink-0">
-                    {value === option.value && (
-                      <Check
-                        size={14}
-                        className="text-[#4A8AF4]"
-                        strokeWidth={2.5}
-                      />
-                    )}
-                  </div>
-                  {option.label}
-                </span>
-              </button>
-            ))}
-          </div>,
-          document.body,
-        )}
-    </div>
-  );
+                  <span
+                    className={`text-[13px] w-full flex items-center gap-2 ${value === option.value || highlightedIndex === index ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                  >
+                    <div className="w-4 flex justify-center shrink-0">
+                      {value === option.value && (
+                        <Check
+                          size={14}
+                          className="text-[#4A8AF4]"
+                          strokeWidth={2.5}
+                        />
+                      )}
+                    </div>
+                    {option.label}
+                  </span>
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )}
+      </div>
+    );
   },
 );
 
@@ -431,13 +432,13 @@ const normalizeAccount = (account) => ({
   typeLabel:
     account.typeLabel ||
     ACCOUNT_TYPE_LABELS[
-      Number(account.accountType ?? account.account_type ?? account.type)
+    Number(account.accountType ?? account.account_type ?? account.type)
     ] ||
     "",
   subtypeLabel:
     account.subtypeLabel ||
     ACCOUNT_SUBTYPE_LABELS[
-      Number(account.subtype ?? account.subType ?? account.sub_type)
+    Number(account.subtype ?? account.subType ?? account.sub_type)
     ] ||
     "",
   creatorName: account.creator?.fullName || "-",
@@ -560,26 +561,26 @@ const buildAccountSearchText = (account) => {
       : "inactive";
 
   const searchValues = [
-      account?.name,
-      account?.accountName,
-      account?.account_name,
-      account?.bankName,
-      account?.accountHolderName,
-      account?.accountNumber,
-      account?.ifsc,
-      account?.swiftCode,
-      account?.bankBranchName,
-      account?.description,
-      account?.createdByDisplayName,
-      account?.creatorName,
-      account?.currencyCode,
-      account?.baseCurrency,
-      typeLabel,
-      subtypeLabel,
-      branchText,
-      statusLabel,
-      account?.totalTransactions,
-    ];
+    account?.name,
+    account?.accountName,
+    account?.account_name,
+    account?.bankName,
+    account?.accountHolderName,
+    account?.accountNumber,
+    account?.ifsc,
+    account?.swiftCode,
+    account?.bankBranchName,
+    account?.description,
+    account?.createdByDisplayName,
+    account?.creatorName,
+    account?.currencyCode,
+    account?.baseCurrency,
+    typeLabel,
+    subtypeLabel,
+    branchText,
+    statusLabel,
+    account?.totalTransactions,
+  ];
 
   collectSearchValues(account, searchValues);
 
@@ -589,8 +590,8 @@ const buildAccountSearchText = (account) => {
 // Stable AG Grid pure functions (Hoist completely out to prevent structural Redraw loops)
 const genericIsFullWidthRow = (params) =>
   params.rowNode.data && params.rowNode.data.isGroupHeader;
-const genericGetRowHeight = (params) => 42;
-const GenericFullWidthGroupCellRenderer = (params) => {
+const genericGetRowHeight = () => 42;
+const GenericFullWidthGroupCellRenderer = () => {
   // Completely removing the category header "total row" as requested
   return null;
 };
@@ -997,6 +998,27 @@ const Accounts = () => {
     handleCreateAccount();
   };
 
+  const focusAccountsSidebarItem = () => {
+    if (typeof document === "undefined") return false;
+
+    const activeSidebarItem =
+      document.querySelector(
+        'aside [data-sidebar-focusable="true"][aria-current="page"]',
+      ) ||
+      document.querySelector('aside [data-sidebar-focusable="true"]');
+
+    if (
+      activeSidebarItem &&
+      activeSidebarItem instanceof HTMLElement &&
+      typeof activeSidebarItem.focus === "function"
+    ) {
+      activeSidebarItem.focus({ preventScroll: true });
+      return true;
+    }
+
+    return false;
+  };
+
   // Click-away listener for popovers
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1007,9 +1029,41 @@ const Accounts = () => {
         setActiveRowPopover(null);
       }
     };
+
+    const handleGlobalKeyDown = (event) => {
+      if (event.defaultPrevented || event.key !== "Escape") return;
+
+      if (event.key === "Escape") {
+        // 1. If an inner popover is open, close it first
+        if (activeRowPopover) {
+          event.preventDefault();
+          setActiveRowPopover(null);
+          return;
+        }
+
+        // 2. If the trend chart is open, close it
+        if (chartVisible) {
+          event.preventDefault();
+          setChartVisible(false);
+          syncChartEnterStep(false);
+          return;
+        }
+
+        // 3. If no other interactive component is open, move focus back to the sidebar
+        if (!drawerState.open && !deleteDialog.open) {
+          event.preventDefault();
+          focusAccountsSidebarItem();
+        }
+      }
+    };
+
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [drawerState.open, activeRowPopover, deleteDialog.open]);
 
   const chartData = useMemo(() => {
     if (trendData && trendData.length > 0) return trendData;

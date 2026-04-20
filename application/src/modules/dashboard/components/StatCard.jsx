@@ -276,9 +276,14 @@ const StatCard = ({
                 border border-slate-200
                 shadow-sm
                 transition-all duration-300
+                hover:bg-blue-50/30
+                hover:border-blue-200
+                hover:shadow-md
+                hover:shadow-blue-100/50
                 flex flex-col
                 self-start
                 dashboard-laptop-metric-card
+                cursor-pointer
             "
             style={compact ? { paddingTop: '0.625rem', paddingBottom: '0.625rem' } : undefined}
         >

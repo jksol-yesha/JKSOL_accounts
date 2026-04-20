@@ -5,8 +5,13 @@ import { eq, and, desc } from 'drizzle-orm';
 
 // In-memory cache for rates
 const rateCache: Record<string, { rate: number; timestamp: number }> = {};
-const CACHE_TTL_MS = 1000 * 60 * 60; // 1 Hour
+const CACHE_TTL_MS = 1000 * 60 * 5; // 5 Minutes for more 'live' updates during testing
 const DEFAULT_TIME_ZONE = 'Asia/Kolkata';
+
+// Request deduplication map
+const pendingRequests: Map<string, Promise<number>> = new Map();
+// Global API lock to prevent concurrent requests
+let apiLock: Promise<any> = Promise.resolve();
 
 const persistRate = async (
     orgId: number | undefined,
@@ -69,6 +74,73 @@ const fetchOpenErApiRate = async (fromCurrency: string, toCurrency: string): Pro
     return Number.isFinite(rate) && rate > 0 ? rate : null;
 };
 
+const fetchExchangeRatesIoRate = async (fromCurrency: string, toCurrency: string, dateStr: string | 'latest' = 'latest'): Promise<number | null> => {
+    // Sequential execution: wait for previous API call to finish + small buffer
+    const currentLock = apiLock;
+    let resolveLock: (val?: any) => void;
+    apiLock = new Promise(resolve => { resolveLock = resolve; });
+
+    await currentLock;
+    // Buffer delay to respect rate limits
+    await new Promise(resolve => setTimeout(resolve, 200));
+
+    try {
+        const apiKey = process.env.EXCHANGE_RATES_API_KEY;
+        const baseUrl = process.env.EXCHANGE_RATES_API_BASE || 'http://api.exchangeratesapi.io/v1/';
+        
+        if (!apiKey) {
+            resolveLock!();
+            return null;
+        }
+
+        const endpoint = dateStr === 'latest' ? 'latest' : dateStr;
+        const url = `${baseUrl}${endpoint}?access_key=${apiKey}&symbols=${fromCurrency},${toCurrency}`;
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            console.warn(`[ExchangeRateService] exchangeratesapi.io fetch failed: ${response.status}`);
+            resolveLock!();
+            return null;
+        }
+
+        const data: any = await response.json();
+        console.log(`[ExchangeRateService] exchangeratesapi.io raw response for ${fromCurrency},${toCurrency}:`, JSON.stringify(data));
+        
+        if (!data?.success) {
+            console.warn(`[ExchangeRateService] exchangeratesapi.io error: ${data?.error?.info || 'Unknown error code: ' + (data?.error?.code || 'null')}`);
+            resolveLock!();
+            return null;
+        }
+
+        const rates = data?.rates;
+        if (!rates) {
+            resolveLock!();
+            return null;
+        }
+
+        // If fromCurrency is the base (usually EUR), return toCurrency rate directly
+        if (fromCurrency === data.base) {
+            resolveLock!();
+            return Number(rates[toCurrency]) || null;
+        }
+
+        // Cross-rate calculation: (EUR -> to) / (EUR -> from)
+        const rateFrom = Number(rates[fromCurrency]);
+        const rateTo = Number(rates[toCurrency]);
+
+        resolveLock!();
+        if (rateFrom && rateTo) {
+            return rateTo / rateFrom;
+        }
+        
+        return null;
+    } catch (e: any) {
+        console.error(`[ExchangeRateService] exchangeratesapi.io unexpected error:`, e.message);
+        resolveLock!();
+        return null;
+    }
+};
+
 const getDateInTimeZone = (timeZone: string) => {
     const formatter = new Intl.DateTimeFormat('en-CA', {
         timeZone,
@@ -121,87 +193,106 @@ export const ExchangeRateService = {
             }
         }
 
-        // 2. Fetch from Local Database for TODAY
-        try {
-            const [dbRate] = await db.select()
-                .from(exchangeRates)
-                .where(and(
-                    eq(exchangeRates.fromCurrency, normalizedFromCurrency),
-                    eq(exchangeRates.toCurrency, normalizedToCurrency),
-                    eq(exchangeRates.rateDate, todayStr)
-                ))
-                .limit(1);
-
-            if (dbRate) {
-                const rate = Number(dbRate.rate);
-                console.log(`[ExchangeRateService] Found rate in DB: ${rate}`);
-                rateCache[cacheKey] = { rate, timestamp: now };
-                return rate;
-            }
-        } catch (dbError) {
-            console.error("[ExchangeRateService] DB Fetch Error:", dbError);
+        // 2. Check for Pending Requests (Deduplication)
+        if (pendingRequests.has(cacheKey)) {
+            console.log(`[ExchangeRateService] Waiting for existing in-flight request: ${cacheKey}`);
+            return pendingRequests.get(cacheKey)!;
         }
 
-        // 3. Fetch from External API
-        try {
-            console.log(`[ExchangeRateService] Rate not found in local cache. Fetching from external APIs...`);
-            const providers = [
-                () => fetchFrankfurterRate(normalizedFromCurrency, normalizedToCurrency),
-                () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency)
-            ];
+        // 3. Define the Fetch Logic as a single unit
+        const fetchAndStore = async (): Promise<number> => {
+            try {
+                // PRIMARY: Fetch from YOUR Exchange Rate API
+                console.log(`[ExchangeRateService] Attempting PRIMARY fetch from exchangeratesapi.io...`);
+                const rate = await fetchExchangeRatesIoRate(normalizedFromCurrency, normalizedToCurrency, 'latest');
+                
+                if (rate) {
+                    console.log(`[ExchangeRateService] SUCCESS: Fetched LIVE rate from PRIMARY API: ${rate}`);
+                    await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
+                    rateCache[cacheKey] = { rate, timestamp: Date.now() };
+                    return rate;
+                }
+                console.warn(`[ExchangeRateService] PRIMARY API failed to provide a rate.`);
+            } catch (apiError: any) {
+                console.error("[ExchangeRateService] PRIMARY API Error:", apiError.message);
+            }
 
-            for (const fetchRate of providers) {
-                const rate = await fetchRate();
-                if (!rate) continue;
+            // SECONDARY: Fallback to other Public APIs only if Primary fails
+            try {
+                console.log(`[ExchangeRateService] Attempting SECONDARY fetch from Fallback APIs (Frankfurter/OpenER)...`);
+                const secondaryProviders = [
+                    () => fetchFrankfurterRate(normalizedFromCurrency, normalizedToCurrency),
+                    () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency)
+                ];
 
-                console.log(`[ExchangeRateService] Successfully fetched rate from API: ${rate}`);
-                await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
-                rateCache[cacheKey] = { rate, timestamp: now };
+                for (const fetchRate of secondaryProviders) {
+                    const rate = await fetchRate();
+                    if (!rate) continue;
+
+                    console.log(`[ExchangeRateService] CAUTION: Using SECONDARY fallback rate: ${rate}`);
+                    await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
+                    rateCache[cacheKey] = { rate, timestamp: Date.now() };
+                    return rate;
+                }
+            } catch (secondaryError) {
+                console.error("[ExchangeRateService] Secondary API Error:", secondaryError);
+            }
+
+            // LAST RESORT: Fetch from Local Database (Any available date)
+            try {
+                const [latestRate] = await db.select()
+                    .from(exchangeRates)
+                    .where(and(
+                        eq(exchangeRates.fromCurrency, normalizedFromCurrency),
+                        eq(exchangeRates.toCurrency, normalizedToCurrency)
+                    ))
+                    .orderBy(desc(exchangeRates.rateDate))
+                    .limit(1);
+
+                if (latestRate) {
+                    console.warn(`[ExchangeRateService] SUCCESS: Using historical fallback rate from ${latestRate.rateDate}: ${latestRate.rate}`);
+                    return Number(latestRate.rate);
+                }
+            } catch (e) {
+                console.error("[ExchangeRateService] Historical Fallback Error:", e);
+            }
+
+            // FINAL FALLBACK: Hardcoded common rates (Approximate)
+            const commonRates: Record<string, number> = {
+                'USD_INR': 83.3,
+                'INR_USD': 0.012,
+                'EUR_USD': 1.08,
+                'USD_EUR': 0.92,
+                'GBP_USD': 1.26,
+                'USD_GBP': 0.79,
+                'AED_INR': 22.7,
+                'INR_AED': 0.044,
+                'AED_USD': 0.27,
+                'USD_AED': 3.67
+            };
+            const fallbackKey = `${normalizedFromCurrency}_${normalizedToCurrency}`;
+            if (commonRates[fallbackKey]) {
+                const rate = commonRates[fallbackKey];
+                console.warn(`[ExchangeRateService] SUCCESS: Using hardcoded fallback rate for ${fallbackKey}: ${rate}`);
                 return rate;
             }
-        } catch (apiError) {
-            console.error("[ExchangeRateService] API Error:", apiError);
-        }
 
-        // 4. Fallback: Use latest available rate from DB
-        try {
-            const [latestRate] = await db.select()
-                .from(exchangeRates)
-                .where(and(
-                    eq(exchangeRates.fromCurrency, normalizedFromCurrency),
-                    eq(exchangeRates.toCurrency, normalizedToCurrency)
-                ))
-                .orderBy(desc(exchangeRates.rateDate))
-                .limit(1);
-
-            if (latestRate) {
-                console.warn(`[ExchangeRateService] Using fallback rate from ${latestRate.rateDate}: ${latestRate.rate}`);
-                return Number(latestRate.rate);
-            }
-        } catch (e) { }
-
-        // 5. Final Fallback: Hardcoded common rates (Approximate)
-        const commonRates: Record<string, number> = {
-            'USD_INR': 83.3,
-            'INR_USD': 0.012,
-            'EUR_USD': 1.08,
-            'USD_EUR': 0.92,
-            'GBP_USD': 1.26,
-            'USD_GBP': 0.79,
-            'AED_INR': 22.7,
-            'INR_AED': 0.044,
-            'AED_USD': 0.27,
-            'USD_AED': 3.67
+            console.warn(`[ExchangeRateService] CRITICAL FAILURE: No rate found for ${normalizedFromCurrency} -> ${normalizedToCurrency}. Using default 1.`);
+            return 1;
         };
-        const fallbackKey = `${normalizedFromCurrency}_${normalizedToCurrency}`;
-        if (commonRates[fallbackKey]) {
-            const rate = commonRates[fallbackKey];
-            console.warn(`[ExchangeRateService] Using hardcoded fallback rate for ${fallbackKey}: ${rate}`);
-            return rate;
-        }
 
-        console.warn(`[ExchangeRateService] CRITICAL FAILURE: No rate found for ${normalizedFromCurrency} -> ${normalizedToCurrency}. Using default 1.`);
-        return 1;
+        // 4. Execute with Deduplication
+        // We set the promise BEFORE calling the function to prevent race conditions
+        const requestPromise = (async () => {
+             // Add a tiny random delay to further stagger simultaneous requests for different currency pairs
+             await new Promise(resolve => setTimeout(resolve, Math.random() * 50));
+             return fetchAndStore();
+        })().finally(() => {
+            pendingRequests.delete(cacheKey);
+        });
+
+        pendingRequests.set(cacheKey, requestPromise);
+        return requestPromise;
     },
 
     /**

@@ -94,6 +94,15 @@ const getCurrentBalance = (account) => {
     return Number.isFinite(Number(value)) ? Number(value) : 0;
 };
 
+const isInvestmentAccount = (account) => {
+    const subtype = Number(account?.subtype ?? account?.subType);
+    if (subtype === 14) return true;
+
+    return String(account?.subtypeLabel ?? account?.subTypeLabel ?? '')
+        .trim()
+        .toLowerCase() === 'investment';
+};
+
 // --- CUSTOM CARD SHELL MATCHING REFERENCE IMAGE ---
 const CardShell = ({ title, headerRight, children, className, headerClassName }) => (
     <div className={cn("bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden", className)}>
@@ -326,18 +335,29 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
 // -------------------------------------------------------------
 // COLUMN 3: Investment Performance
 // -------------------------------------------------------------
-const InvestmentCardList = ({ categories, initialLoading, overlayLoading, hasFetchedOnce }) => {
+const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoading, hasFetchedOnce }) => {
     const { formatCurrency } = usePreferences();
-    
-    const investments = categories
-        .filter(c => String(c.type).toLowerCase() === 'investment')
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 3);
 
-    const getMockReturn = (id) => {
-        const hash = String(id).split('').reduce((a,b) => a + b.charCodeAt(0), 0);
-        return ((hash % 40) - 5) + (hash % 10) / 10;
-    };
+    const investmentAccounts = (accounts || [])
+        .filter(isInvestmentAccount)
+        .map((account, index) => ({
+            id: account?.id || `investment_account_${index}`,
+            name: account?.name || account?.accountName || account?.bankName || 'Investment Account',
+            amount: getCurrentBalance(account)
+        }))
+        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
+    const investmentCategories = categories
+        .filter((category) => String(category.type).toLowerCase() === 'investment')
+        .map((category, index) => ({
+            id: category?.id || `investment_category_${index}`,
+            name: category?.name || 'Investment',
+            amount: Number(category?.amount || 0)
+        }))
+        .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
+
+    const investments = (investmentAccounts.length > 0 ? investmentAccounts : investmentCategories)
+        .slice(0, 3);
 
     return (
         <CardShell
@@ -352,25 +372,12 @@ const InvestmentCardList = ({ categories, initialLoading, overlayLoading, hasFet
                 ) : investments.length > 0 ? (
                     <div className="divide-y divide-slate-100">
                         {investments.map((cat, i) => {
-                            const mockReturn = getMockReturn(cat.id || cat.name);
-                            const isPositive = mockReturn >= 0;
                             return (
                                 <div key={i} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
-                                    <div className="flex flex-col min-w-0 pr-2">
-                                        <span className="text-[13px] font-medium text-slate-800 truncate">{cat.name}</span>
-                                        <span className="text-[10px] font-medium text-slate-400 uppercase tracking-widest mt-0.5">Investment Asset</span>
-                                    </div>
-                                    <div className="flex flex-col items-end shrink-0">
-                                        <span className={cn(
-                                            "text-[13px] font-medium tracking-tight",
-                                            isPositive ? "text-emerald-600" : "text-rose-600"
-                                        )}>
-                                            {isPositive ? '+' : ''}{mockReturn.toFixed(1)}%
-                                        </span>
-                                        <span className="text-[11px] font-medium text-slate-800 mt-0.5">
-                                            {formatCurrency(cat.amount)}
-                                        </span>
-                                    </div>
+                                    <span className="text-[13px] font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
+                                    <span className="text-[13px] font-medium text-slate-800 mt-0.5 shrink-0">
+                                        {formatCurrency(cat.amount)}
+                                    </span>
                                 </div>
                             );
                         })}
@@ -512,7 +519,7 @@ const CategoryRankings = ({ dashboardFilters }) => {
         <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 h-full min-h-[300px] auto-rows-fr items-stretch">
             <AccountBalanceList accounts={accounts} initialLoading={showInitialAccountsLoader} overlayLoading={showAccountsOverlayLoader} hasFetchedOnce={hasFetchedAccounts} />
             <PnLBreakdownList categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings} />
-            <InvestmentCardList categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings} />
+            <InvestmentCardList accounts={accounts} categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings || hasFetchedAccounts} />
         </div>
     );
 };

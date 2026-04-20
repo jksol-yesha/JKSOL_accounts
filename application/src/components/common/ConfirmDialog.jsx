@@ -11,6 +11,19 @@ const ConfirmDialog = ({
     onCancel,
     onConfirm
 }) => {
+    React.useEffect(() => {
+        if (!open) return;
+        const handleKeyDown = (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                onCancel();
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [open, onCancel]);
+
     if (!open) return null;
 
     return (

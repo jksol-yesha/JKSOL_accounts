@@ -139,6 +139,32 @@
   animation: slide-in-right 0.3s ease-out;
 }
 
+/* Premium Dashboard Styling */
+.chart-card-shadow {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.04), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+}
+
+.floating-legend-card {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(8px);
+}
+
+.floating-legend-card:hover {
+  transform: scale(1.04) translateY(-2px);
+  box-shadow: 0 12px 20px -8px rgba(0, 0, 0, 0.12);
+  z-index: 50;
+}
+
+@keyframes rotate-refresh {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-rotate-hover:hover svg {
+  animation: rotate-refresh 0.6s ease-in-out;
+}
+
 .accounts-laptop-currency-trigger {
   display: none;
 }
