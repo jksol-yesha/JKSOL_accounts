@@ -2,15 +2,19 @@ import React, { useState, useEffect } from 'react';
 import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
-import { NewCategoryCard, NewSubCategoryCard } from './components/CategoryCard';
 import CategoryRegistry from './components/CategoryRegistry';
-import QuickAddSubModal from './components/QuickAddSubModal';
-import EditCategoryModal from './components/EditCategoryModal';
-import EditSubCategoryModal from './components/EditSubCategoryModal';
+import CategoryDetailsDrawer from './components/CategoryDetailsDrawer';
 import apiService from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { useToast } from '../../context/ToastContext';
+import { ListMinus, ShoppingBag, Users } from 'lucide-react';
+
+const transactionTabs = [
+    { label: 'Transactions', key: 'transactions', path: '/transactions', icon: ListMinus },
+    { label: 'Categories', key: 'categories', path: '/category', icon: ShoppingBag },
+    { label: 'Parties', key: 'parties', path: '/parties', icon: Users }
+];
 
 const createInitialDeleteDialog = () => ({
     open: false,
@@ -34,11 +38,12 @@ const Category = () => {
     const [subCategories, setSubCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
-    const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
-    const [isEditOpen, setIsEditOpen] = useState(false);
-    const [isEditSubOpen, setIsEditSubOpen] = useState(false);
-    const [selectedCategory, setSelectedCategory] = useState(null);
-    const [selectedSubCategory, setSelectedSubCategory] = useState(null);
+    
+    // Drawer state
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [categoryToEdit, setCategoryToEdit] = useState(null);
+    const [parentCategoryForSub, setParentCategoryForSub] = useState(null);
+
     const [pageSize, setPageSize] = useState(20);
     const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
     const cacheKey = `categories:registry:v6:${selectedBranch?.id || 'all'}`;
@@ -304,18 +309,44 @@ const Category = () => {
     };
 
     const handleOpenQuickAdd = (parent) => {
-        setSelectedCategory(parent);
-        setIsQuickAddOpen(true);
+        setCategoryToEdit(null);
+        setParentCategoryForSub(parent);
+        setIsDrawerOpen(true);
     };
 
     const handleOpenEdit = (category) => {
-        setSelectedCategory(category);
-        setIsEditOpen(true);
+        setCategoryToEdit(category);
+        setParentCategoryForSub(null);
+        setIsDrawerOpen(true);
     };
 
     const handleOpenEditSub = (sub) => {
-        setSelectedSubCategory(sub);
-        setIsEditSubOpen(true);
+        setCategoryToEdit(sub);
+        const parent = categories.find(c => String(c.id) === String(sub.parentId));
+        setParentCategoryForSub(parent || null);
+        setIsDrawerOpen(true);
+    };
+
+    const handleOpenCreateCategory = () => {
+        setCategoryToEdit(null);
+        setParentCategoryForSub(null);
+        setIsDrawerOpen(true);
+    };
+
+    const handleSaveFromDrawer = async (id, payload, isSubCategory) => {
+        if (isSubCategory) {
+            if (id) {
+                await handleUpdateSubCategory(id, payload);
+            } else {
+                await handleCreateSubCategory(payload);
+            }
+        } else {
+            if (id) {
+                await handleUpdateCategory(id, payload);
+            } else {
+                await handleCreateCategory(payload);
+            }
+        }
     };
 
     const deleteTargetLabel = deleteDialog.type === 'subcategory' ? 'Sub-Category' : 'Category';
@@ -330,6 +361,8 @@ const Category = () => {
                 <PageHeader
                     title="Category Management"
                     breadcrumbs={['Apps', 'Categories']}
+                    tabs={transactionTabs}
+                    activeTab="categories"
                 />
             )}
             className="category-laptop-page-shell"
@@ -343,27 +376,10 @@ const Category = () => {
                     .print\\:hidden { display: none !important; }
                     .print\\:w-full { width: 100% !important; }
                     .print\\:block { display: block !important; }
-                    /* Reset Grid for Print to allow full width */
-                    .grid { display: block !important; }
-                    .lg\\:col-span-8 { width: 100% !important; max-width: none !important; }
                 }
             `}</style>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 flex-1 min-h-0 items-start category-laptop-page-grid">
-                {/* Left Panel: Creation Forms */}
-                <div className="lg:col-span-4 flex flex-col space-y-6 lg:sticky lg:top-8 print:hidden category-laptop-left-panel">
-                    <NewCategoryCard
-                        onCategoryCreate={handleCreateCategory}
-                    />
-                    <div className="">
-                        <NewSubCategoryCard
-                            categories={categories}
-                            onSubCategoryCreate={handleCreateSubCategory}
-                        />
-                    </div>
-                </div>
-
-                {/* Right Panel: Registry Table */}
-                <div className="lg:col-span-8 lg:min-h-0 min-h-[400px] self-start print:w-full category-laptop-right-panel">
+            <div className="flex-1 min-h-0 flex flex-col items-stretch pt-2">
+                <div className="w-full h-full min-h-[400px] print:w-full category-laptop-right-panel flex flex-col">
                     <CategoryRegistry
                         categories={categories}
                         subCategories={subCategories}
@@ -375,6 +391,7 @@ const Category = () => {
                         onQuickAddSub={handleOpenQuickAdd}
                         onEditCategory={handleOpenEdit}
                         onEditSubCategory={handleOpenEditSub}
+                        onCreateCategory={handleOpenCreateCategory}
                         pageSize={pageSize}
                         setPageSize={setPageSize}
                         loading={loading}
@@ -383,28 +400,12 @@ const Category = () => {
                 </div>
             </div>
 
-            {/* Modals */}
-            <QuickAddSubModal
-                isOpen={isQuickAddOpen}
-                onClose={() => setIsQuickAddOpen(false)}
-                parentCategory={selectedCategory}
-                onSave={async (subData) => {
-                    await handleCreateSubCategory({ parentId: selectedCategory.id, ...subData });
-                }}
-            />
-
-            <EditCategoryModal
-                isOpen={isEditOpen}
-                onClose={() => setIsEditOpen(false)}
-                category={selectedCategory}
-                onSave={handleUpdateCategory}
-            />
-
-            <EditSubCategoryModal
-                isOpen={isEditSubOpen}
-                onClose={() => setIsEditSubOpen(false)}
-                subCategory={selectedSubCategory}
-                onSave={handleUpdateSubCategory}
+            <CategoryDetailsDrawer
+                isOpen={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                categoryToEdit={categoryToEdit}
+                parentCategory={parentCategoryForSub}
+                onSave={handleSaveFromDrawer}
             />
 
             <ConfirmDialog

@@ -10,6 +10,7 @@ import CreateParty from "./modules/parties/components/CreateParty";
 import Transactions from "./modules/transactions/Transactions";
 
 import Reports from "./modules/reports/Reports";
+import ReportsHub from "./modules/reports/ReportsHub";
 import Profile from "./modules/profile/Profile";
 import Organizations from "./modules/organizations/Organizations";
 import CreateOrganization from "./modules/organizations/CreateOrganization";
@@ -126,7 +127,8 @@ function App() {
                               element={<Transactions />}
                             />
 
-                            <Route path="/reports" element={<Reports />} />
+                            <Route path="/reports" element={<ReportsHub />} />
+                            <Route path="/reports/view/:reportId" element={<Reports />} />
                             <Route
                               path="/settings"
                               element={<Navigate to="/profile" replace />}

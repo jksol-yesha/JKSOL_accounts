@@ -3,15 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, Plus } from 'lucide-react';
 import { cn } from '../../utils/cn';
 
-const PageHeader = ({ title, breadcrumbs, actionLabel, onAction, actionIcon = Plus, rightContent, mobileSticky = true }) => {
+const PageHeader = ({ title, breadcrumbs, actionLabel, onAction, actionIcon = Plus, rightContent, mobileSticky = true, tabs, activeTab }) => {
     const navigate = useNavigate();
     const ActionIcon = actionIcon;
 
     return (
         <div className={cn(
-            "bg-white px-4 md:px-5 xl:px-6 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4 z-20 shadow-sm",
+            "bg-white w-full flex flex-col z-20 shadow-[0_4px_20px_-10px_rgba(0,0,0,0.05)]",
             mobileSticky ? "sticky top-0" : "md:sticky md:top-0"
         )}>
+            <div className="px-4 md:px-5 xl:px-6 py-2 flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
             <div className="flex flex-col">
                 <h2 className="text-[13px] font-extrabold text-slate-700 uppercase tracking-widest leading-none py-2">
                     {title}
@@ -87,6 +88,33 @@ const PageHeader = ({ title, breadcrumbs, actionLabel, onAction, actionIcon = Pl
                     </button>
                 )}
             </div>
+            </div>
+            
+            {tabs && tabs.length > 0 && (
+                <div className="px-4 md:px-5 xl:px-6 border-t border-slate-100/60 flex items-center gap-6 overflow-x-auto no-scrollbar">
+                    {tabs.map((tab, idx) => {
+                        const isActive = activeTab === tab.key;
+                        return (
+                            <button
+                                key={idx}
+                                onClick={() => {
+                                    if (tab.path) navigate(tab.path);
+                                    if (tab.onClick) tab.onClick();
+                                }}
+                                className={cn(
+                                    "flex items-center gap-2 px-1 py-3 text-[13px] font-bold whitespace-nowrap border-b-[3px] transition-colors relative top-[1px]",
+                                    isActive 
+                                        ? "border-primary text-primary" 
+                                        : "border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300"
+                                )}
+                            >
+                                {tab.icon && <tab.icon size={16} />}
+                                {tab.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
         </div>
     );
 };

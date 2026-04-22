@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import {
     Filter,
     ArrowUpCircle,
@@ -22,31 +24,78 @@ import StatCard from '../dashboard/components/StatCard';
 import ReportTableScreen from './components/ReportTableScreen';
 import ReportTablePrint from './components/ReportTablePrint';
 import DateRangePicker from '../../components/common/DateRangePicker';
+import BranchSelector from '../../components/layout/BranchSelector';
 import { usePreferences } from '../../context/PreferenceContext';
 import { useFormNavigation } from '../../hooks/useFormNavigation';
 import apiService from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
+import { useYear } from '../../context/YearContext';
+import { generateDatePresets } from '../../utils/constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 
 const Reports = () => {
     const { formatCurrency, preferences } = usePreferences();
-    const { branches, selectedBranch } = useBranch();
+    const { branches, selectedBranch, getBranchFilterValue } = useBranch();
     const { selectedOrg, loading: orgLoading } = useOrganization();
     const { user } = useAuth();
+    const { selectedYear, financialYears } = useYear();
+    
+    const { reportId } = useParams();
+    
+    // Convert URL slug to backend report type
+    const reportTypeMapping = useMemo(() => ({
+        'summary': 'Summary',
+        'detailed': 'Detailed',
+        'category': 'Category-wise',
+        'account': 'Account-wise',
+        'party': 'Party-wise',
+        'debit_credit': 'Debit/Credit',
+        'pl': 'P/L'
+    }), []);
+    
+    const initialReportType = reportTypeMapping[reportId] || 'Summary';
+
+    const sortedFinancialYears = useMemo(() => {
+        return [...(financialYears || [])].sort((a, b) => {
+            const aDate = new Date(a.startDate || a.createdAt || 0).getTime();
+            const bDate = new Date(b.startDate || b.createdAt || 0).getTime();
+            return aDate - bDate;
+        });
+    }, [financialYears]);
+
+    const previousYear = useMemo(() => {
+        const selectedYearIndex = sortedFinancialYears.findIndex((year) => Number(year.id) === Number(selectedYear?.id));
+        return selectedYearIndex > 0 ? sortedFinancialYears[selectedYearIndex - 1] : null;
+    }, [sortedFinancialYears, selectedYear?.id]);
+
+    const datePresets = useMemo(() => generateDatePresets(selectedYear, previousYear), [selectedYear, previousYear]);
+
     // State for filters
     const [filters, setFilters] = useState({
         startDate: '',
         endDate: '',
-        datePreset: 'today',
+        datePreset: 'current',
         type: 'All Types',
         category: 'All Categories',
         account: 'All Accounts',
         party: 'All Parties',
         branch: 'All Branches',
-        reportType: 'Summary'
+        reportType: initialReportType
     });
+
+    useEffect(() => {
+        if (reportId) {
+            const rt = reportTypeMapping[reportId];
+            if (rt) {
+                setFilters(f => ({ ...f, reportType: rt }));
+                // Auto reset generation state on report type switch
+                setReportData(null);
+                setIsGenerated(false);
+            }
+        }
+    }, [reportId, reportTypeMapping]);
 
     // Refs for keyboard navigation
     const dateRangeRef = useRef(null);
@@ -72,6 +121,7 @@ const Reports = () => {
     const reportsContextReady = Boolean(
         !orgLoading &&
         selectedOrg?.id &&
+        selectedYear?.id &&
         (
             user?.role === 'member' ||
             user?.role === 'owner' ||
@@ -98,122 +148,24 @@ const Reports = () => {
         };
     };
 
-    const getPresetDateRange = (preset) => {
-        const today = new Date();
-        const end = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-
-        if (preset === 'yesterday') {
-            const yesterday = new Date(end);
-            yesterday.setDate(yesterday.getDate() - 1);
-            return {
-                startDate: formatDateForInput(yesterday),
-                endDate: formatDateForInput(yesterday)
-            };
-        }
-
-        if (preset === 'last30days') {
-            const start = new Date(end);
-            start.setDate(start.getDate() - 29);
-            return {
-                startDate: formatDateForInput(start),
-                endDate: formatDateForInput(end)
-            };
-        }
-
-        if (preset === 'last90days') {
-            const start = new Date(end);
-            start.setDate(start.getDate() - 89);
-            return {
-                startDate: formatDateForInput(start),
-                endDate: formatDateForInput(end)
-            };
-        }
-
-        if (preset === 'last7days') {
-            const start = new Date(end);
-            start.setDate(start.getDate() - 6);
-            return {
-                startDate: formatDateForInput(start),
-                endDate: formatDateForInput(end)
-            };
-        }
-
-        if (preset === 'lastfinancialyear') {
-            const currentYear = end.getFullYear();
-            const currentMonth = end.getMonth();
-            const currentFyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-            const lastFyStart = new Date(currentFyStartYear - 1, 3, 1);
-            const lastFyEnd = new Date(currentFyStartYear, 2, 31);
-            return {
-                startDate: formatDateForInput(lastFyStart),
-                endDate: formatDateForInput(lastFyEnd)
-            };
-        }
-
-        if (preset === 'currentfinancialyear') {
-            const currentYear = end.getFullYear();
-            const currentMonth = end.getMonth();
-            const fyStartYear = currentMonth >= 3 ? currentYear : currentYear - 1;
-            const fyStart = new Date(fyStartYear, 3, 1);
-            return {
-                startDate: formatDateForInput(fyStart),
-                endDate: formatDateForInput(end)
-            };
-        }
-
-        if (preset === 'thismonth') {
-            const start = new Date(today.getFullYear(), today.getMonth(), 1);
-            return {
-                startDate: formatDateForInput(start),
-                endDate: formatDateForInput(end)
-            };
-        }
-
-        if (preset === 'lastmonth') {
-            const start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-            const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
-            return {
-                startDate: formatDateForInput(start),
-                endDate: formatDateForInput(lastMonthEnd)
-            };
-        }
-
-        return {
-            startDate: formatDateForInput(end),
-            endDate: formatDateForInput(end)
-        };
-    };
-
-    const getDefaultDateRange = () => {
-        const date = new Date();
-        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
-        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
-        return { firstDay, lastDay };
-    };
-
     // Set default filters (Date and Branch sync)
     useEffect(() => {
-        const { startDate, endDate } = getPresetDateRange('today');
-        setFilters(prev => ({
-            ...prev,
-            startDate,
-            endDate,
-            datePreset: 'today',
-            // Sync with global selectedBranch on mount if it exists
-            branch: selectedBranch?.name || prev.branch
-        }));
-    }, [selectedBranch?.id]);
+        if (selectedYear?.startDate && !filters.startDate) {
+            setFilters(prev => ({
+                ...prev,
+                startDate: selectedYear.startDate,
+                endDate: selectedYear.endDate || new Date().toISOString().split('T')[0],
+                datePreset: 'current'
+            }));
+        }
+    }, [selectedYear]);
 
     // Load initial filter data when branch context changes
     useEffect(() => {
         // Avoid fetching before org context is ready; otherwise we can cache empty results.
         if (orgLoading || !selectedOrg?.id) return;
 
-        let branchFilter = 'all';
-        if (filters.branch && filters.branch !== 'All Branches') {
-            const match = branches.find(b => b.name === filters.branch);
-            if (match) branchFilter = match.id;
-        }
+        const branchFilter = getBranchFilterValue() || 'all';
 
         const controller = new AbortController();
 
@@ -259,7 +211,7 @@ const Reports = () => {
 
         fetchInitialData();
         return () => controller.abort();
-    }, [selectedOrg?.id, orgLoading]);
+    }, [selectedOrg?.id, orgLoading, getBranchFilterValue()]);
 
     // Filter Categories and Accounts based on Type
     const filteredCategories = useMemo(() => {
@@ -302,7 +254,7 @@ const Reports = () => {
     }, [filters.type]);
 
 
-    // Reset UI
+    // Reset UI and Trigger Auto-fetch
     useEffect(() => {
         setReportData(null);
         setIsGenerated(false);
@@ -311,12 +263,24 @@ const Reports = () => {
     }, [filters.reportType]);
 
 
-    // Auto-refresh when currency preference changes
+    // Auto-refresh when any filter changes
     useEffect(() => {
-        if (isGenerated && reportsContextReady) {
+        if (reportsContextReady) {
             handleGenerateReport();
         }
-    }, [preferences.currency, reportsContextReady]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        preferences.currency,
+        reportsContextReady,
+        filters.reportType,
+        filters.startDate,
+        filters.endDate,
+        getBranchFilterValue(),
+        filters.type,
+        filters.category,
+        filters.account,
+        filters.party
+    ]);
 
     // Print Handler Effect
     useEffect(() => {
@@ -333,23 +297,25 @@ const Reports = () => {
         if (!reportsContextReady) {
             return;
         }
-        let branchFilter = 'all';
-        if (filters.branch && filters.branch !== 'All Branches') {
-            const match = branches.find(b => b.name === filters.branch);
-            if (match) branchFilter = match.id;
-        }
+        const branchFilter = getBranchFilterValue() || 'all';
 
-        const { firstDay, lastDay } = getDefaultDateRange();
+        const fallbackStartDate = selectedYear?.startDate || '';
+        const fallbackEndDate = selectedYear?.endDate || new Date().toISOString().split('T')[0];
+
         const { startDate, endDate } = normalizeSingleDateRange(
             { startDate: filters.startDate, endDate: filters.endDate },
-            { startDate: firstDay, endDate: lastDay }
+            { startDate: fallbackStartDate, endDate: fallbackEndDate }
         );
+
+        if (!startDate || !endDate) return;
+
         const selectedReportType = filters.reportType || 'Summary';
         const reportType = selectedReportType === 'P/L' ? 'Profit/Loss' : selectedReportType;
         const nextAppliedFilters = {
             ...filters,
             startDate,
             endDate,
+            branchFilter,
             reportType: selectedReportType
         };
 
@@ -463,15 +429,13 @@ const Reports = () => {
 
     const buildExportPayload = (format) => {
         const exportFilters = appliedFilters || filters;
-        let branchFilter = 'all';
-        if (exportFilters.branch && exportFilters.branch !== 'All Branches') {
-            const match = branches.find(b => b.name === exportFilters.branch);
-            if (match) branchFilter = match.id;
-        }
-        const { firstDay, lastDay } = getDefaultDateRange();
+        const branchFilter = exportFilters.branchFilter || getBranchFilterValue() || 'all';
+        const fallbackStartDate = selectedYear?.startDate || '';
+        const fallbackEndDate = selectedYear?.endDate || new Date().toISOString().split('T')[0];
+
         const { startDate, endDate } = normalizeSingleDateRange(
             { startDate: exportFilters.startDate, endDate: exportFilters.endDate },
-            { startDate: firstDay, endDate: lastDay }
+            { startDate: fallbackStartDate, endDate: fallbackEndDate }
         );
         const selectedReportType = exportFilters.reportType || 'Summary';
         const reportType = selectedReportType === 'P/L' ? 'Profit/Loss' : selectedReportType;
@@ -585,31 +549,20 @@ const Reports = () => {
         }));
     };
 
-    const reportDatePresetOptions = [
-        { value: 'custom', label: 'Custom Filter' },
-        { value: 'today', label: 'Today', range: getPresetDateRange('today') },
-        { value: 'yesterday', label: 'Yesterday', range: getPresetDateRange('yesterday') },
-        { value: 'last7days', label: 'Last 7 Days', range: getPresetDateRange('last7days') },
-        { value: 'thismonth', label: 'This Month', range: getPresetDateRange('thismonth') },
-        { value: 'last30days', label: 'Last 30 Days', range: getPresetDateRange('last30days') },
-        { value: 'lastmonth', label: 'Last Month', range: getPresetDateRange('lastmonth') },
-        { value: 'last90days', label: 'Last 90 Days', range: getPresetDateRange('last90days') },
-        { value: 'currentfinancialyear', label: 'Current', range: getPresetDateRange('currentfinancialyear') },
-        { value: 'lastfinancialyear', label: 'Last FY', range: getPresetDateRange('lastfinancialyear') }
-    ];
-
     const handleKeyDown = useFormNavigation([dateRangeRef, typeRef, categoryRef, accountRef, partyRef, reportTypeRef], handleGenerateReport);
 
     const handleResetFilters = () => {
-        setFilters({
-            ...getPresetDateRange('today'),
-            datePreset: 'today',
+        setFilters(prev => ({
+            ...prev,
+            startDate: selectedYear?.startDate || '',
+            endDate: selectedYear?.endDate || new Date().toISOString().split('T')[0],
+            datePreset: 'current',
             type: 'All Types',
             category: 'All Categories',
             account: 'All Accounts',
             party: 'All Parties',
-            reportType: 'Summary'
-        });
+            reportType: initialReportType
+        }));
         setReportData(null);
         setIsGenerated(false);
         setAppliedFilters(null);
@@ -848,158 +801,108 @@ const Reports = () => {
                 <>
                     <div className="no-print page-header flex-none">
                         <PageHeader
-                            title="Financial Reports"
-                            breadcrumbs={['Portal', 'Reports']}
+                            title={`${filters.reportType} Report`}
+                            breadcrumbs={['Portal', 'Reports Hub', filters.reportType]}
                         />
                     </div>
 
-                    <div className="reports-tablet-page flex-1 p-4 xl:p-8 space-y-6 animate-in fade-in duration-500 print:hidden">
+                    <div className="reports-tablet-page flex-1 p-4 md:p-4 xl:px-6 xl:pt-2 xl:pb-4 space-y-4 animate-in fade-in duration-500 print:hidden">
                         {/* Filters Section */}
-                        <Card noPadding className="reports-tablet-filters-card border-none shadow-[0_8px_30px_rgb(0,0,0,0.04)] p-4 xl:p-6 no-print report-filters overflow-visible">
-                            <div className="flex items-center gap-2 mb-4 xl:mb-6">
-                                <Filter size={16} className="text-primary" />
-                                <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Report Filters</h2>
+                        <div className="no-print report-filters flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
+                            <div className="w-full sm:w-auto">
+                                <DateRangePicker
+                                    ref={dateRangeRef}
+                                    startDate={filters.startDate}
+                                    endDate={filters.endDate}
+                                    onChange={handleDateRangeChange}
+                                    selectedPreset={filters.datePreset || 'current'}
+                                    presetOptions={datePresets}
+                                    onApplyRange={({ startDate, endDate, preset }) => {
+                                        const normalizedRange = normalizeSingleDateRange({ startDate, endDate });
+                                        setFilters((prev) => ({
+                                            ...prev,
+                                            ...normalizedRange,
+                                            datePreset: preset || 'custom'
+                                        }));
+                                    }}
+                                    onKeyDown={(e) => handleKeyDown(e, 0)}
+                                    className="reports-tablet-filter-input w-full min-w-[220px]"
+                                />
                             </div>
-                            <div className="reports-tablet-filter-grid grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3 xl:gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Date Range</label>
-                                    <DateRangePicker
-                                        ref={dateRangeRef}
-                                        startDate={filters.startDate}
-                                        endDate={filters.endDate}
-                                        onChange={handleDateRangeChange}
-                                        selectedPreset={filters.datePreset || 'today'}
-                                        presetOptions={reportDatePresetOptions}
-                                        onApplyRange={({ startDate, endDate, preset }) => {
-                                            const normalizedRange = normalizeSingleDateRange({ startDate, endDate });
-                                            setFilters((prev) => ({
-                                                ...prev,
-                                                ...normalizedRange,
-                                                datePreset: preset || 'custom'
-                                            }));
-                                        }}
-                                        onKeyDown={(e) => handleKeyDown(e, 0)}
-                                        className="reports-tablet-filter-input w-full"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Branch</label>
-                                    <CustomSelect
-                                        value={filters.branch}
-                                        onChange={(e) => setFilters({ ...filters, branch: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 0)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-[#F0F9FF] focus:border-primary/50 focus:ring-4 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-blue-200 transition-all"
-                                        buttonLabelClassName="whitespace-nowrap"
-                                        optionLabelClassName="whitespace-nowrap overflow-hidden text-ellipsis break-normal"
-                                    >
-                                        <option value="All Branches">All Branches</option>
-                                        {branches?.map((b) => (
-                                            <option key={b.id} value={b.name}>{b.name}</option>
-                                        ))}
-                                    </CustomSelect>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Type</label>
-                                    <CustomSelect
-                                        ref={typeRef}
-                                        value={filters.type}
-                                        onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 1)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                    >
-                                        <option value="All Types">All Types</option>
-                                        {typeFilterOptions.map((t) => (
-                                            <option key={t} value={t}>{t}</option>
-                                        ))}
-                                    </CustomSelect>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Category</label>
-                                    <CustomSelect
-                                        ref={categoryRef}
-                                        value={filters.category}
-                                        onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 2)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                    >
-                                        <option value="All Categories">All Categories</option>
-                                        {uniqueOptions.categories.length > 0 ? (
-                                            uniqueOptions.categories.map(c => <option key={c} value={c}>{c}</option>)
-                                        ) : (
-                                            categoryDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
-                                        )}
-                                    </CustomSelect>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Account</label>
-                                    <CustomSelect
-                                        ref={accountRef}
-                                        value={filters.account}
-                                        onChange={(e) => setFilters({ ...filters, account: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 3)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                    >
-                                        <option value="All Accounts">All Accounts</option>
-                                        {uniqueOptions.accounts.length > 0 ? (
-                                            uniqueOptions.accounts.map(a => <option key={a} value={a}>{a}</option>)
-                                        ) : (
-                                            accounts.map(a => <option key={a.id} value={a.bankName || a.name}>{a.bankName || a.name}</option>)
-                                        )}
-                                    </CustomSelect>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Party</label>
-                                    <CustomSelect
-                                        ref={partyRef}
-                                        value={filters.party}
-                                        onChange={(e) => setFilters({ ...filters, party: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 4)}
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                    >
-                                        <option value="All Parties">All Parties</option>
-                                        {uniqueOptions.parties.length > 0 ? (
-                                            uniqueOptions.parties.map(p => <option key={p} value={p}>{p}</option>)
-                                        ) : (
-                                            partyDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
-                                        )}
-                                    </CustomSelect>
-                                </div>
-                                <div className="space-y-1">
-                                    <label className="text-[10px] lg:text-[11px] font-bold text-gray-500 uppercase">Report Type</label>
-                                    <CustomSelect
-                                        ref={reportTypeRef}
-                                        value={filters.reportType}
-                                        onChange={(e) => setFilters({ ...filters, reportType: e.target.value })}
-                                        onKeyDown={(e) => handleKeyDown(e, 5)}
-                                        dropdownContentClassName="max-h-none overflow-visible"
-                                        className="reports-tablet-filter-input w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                    >
-                                        <option value="Summary">Summary</option>
-                                        <option value="Detailed">Detailed</option>
-                                        <option value="Category-wise">Category-wise</option>
-                                        <option value="Account-wise">Account-wise</option>
-                                        <option value="Debit/Credit">Debit/Credit</option>
-                                        <option value="P/L">P/L</option>
-                                    </CustomSelect>
-                                </div>
+                            <div className="w-full sm:w-auto mt-1 lg:mt-0 lg:ml-1">
+                                <BranchSelector />
                             </div>
-                            <div className="reports-tablet-filter-actions mt-6 flex flex-col sm:flex-row xl:justify-end gap-3">
-                                <button
-                                    onClick={handleResetFilters}
-                                    className="w-full sm:w-[190px] h-10 flex items-center justify-center space-x-2 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 px-6 rounded-xl text-sm font-bold transition-all active:scale-95 outline-none"
+                            {filters.reportType !== 'P/L' && (
+                            <div className="w-full sm:w-auto">
+                                <CustomSelect
+                                    ref={typeRef}
+                                    value={filters.type}
+                                    onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+                                    onKeyDown={(e) => handleKeyDown(e, 1)}
+                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
                                 >
-                                    <span>Reset</span>
-                                </button>
-                                <button
-                                    onClick={handleGenerateReport}
-                                    disabled={!reportsContextReady}
-                                    className="w-full sm:w-[190px] h-10 flex items-center justify-center space-x-2 bg-black hover:bg-gray-800 focus:bg-gray-800 disabled:bg-gray-300 disabled:hover:bg-gray-300 disabled:shadow-none disabled:cursor-not-allowed text-white px-6 rounded-xl text-sm font-bold shadow-lg hover:shadow-xl focus:ring-4 focus:ring-gray-200 transition-all active:scale-95 outline-none"
-                                >
-                                    {isGenerated ? <RefreshCw size={18} /> : <BarChart3 size={18} />}
-                                    <span>Apply</span>
-                                </button>
+                                    <option value="All Types">All Types</option>
+                                    {typeFilterOptions.map((t) => (
+                                        <option key={t} value={t}>{t}</option>
+                                    ))}
+                                </CustomSelect>
                             </div>
-                        </Card>
+                            )}
+                            {filters.reportType === 'Category-wise' && (
+                            <div className="w-full sm:w-auto">
+                                <CustomSelect
+                                    ref={categoryRef}
+                                    value={filters.category}
+                                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                                    onKeyDown={(e) => handleKeyDown(e, 2)}
+                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
+                                >
+                                    <option value="All Categories">All Categories</option>
+                                    {uniqueOptions.categories.length > 0 ? (
+                                        uniqueOptions.categories.map(c => <option key={c} value={c}>{c}</option>)
+                                    ) : (
+                                        categoryDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                                    )}
+                                </CustomSelect>
+                            </div>
+                            )}
+                            {filters.reportType === 'Account-wise' && (
+                            <div className="w-full sm:w-auto">
+                                <CustomSelect
+                                    ref={accountRef}
+                                    value={filters.account}
+                                    onChange={(e) => setFilters({ ...filters, account: e.target.value })}
+                                    onKeyDown={(e) => handleKeyDown(e, 3)}
+                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
+                                >
+                                    <option value="All Accounts">All Accounts</option>
+                                    {uniqueOptions.accounts.length > 0 ? (
+                                        uniqueOptions.accounts.map(a => <option key={a} value={a}>{a}</option>)
+                                    ) : (
+                                        accounts.map(a => <option key={a.id} value={a.bankName || a.name}>{a.bankName || a.name}</option>)
+                                    )}
+                                </CustomSelect>
+                            </div>
+                            )}
+                            {filters.reportType === 'Party-wise' && (
+                            <div className="w-full sm:w-auto">
+                                <CustomSelect
+                                    ref={partyRef}
+                                    value={filters.party}
+                                    onChange={(e) => setFilters({ ...filters, party: e.target.value })}
+                                    onKeyDown={(e) => handleKeyDown(e, 4)}
+                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
+                                >
+                                    <option value="All Parties">All Parties</option>
+                                    {uniqueOptions.parties.length > 0 ? (
+                                        uniqueOptions.parties.map(p => <option key={p} value={p}>{p}</option>)
+                                    ) : (
+                                        partyDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                                    )}
+                                </CustomSelect>
+                            </div>
+                            )}
+                        </div>
 
                         {/* Report Content */}
                         {isGenerated && reportData && (

@@ -12,8 +12,14 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, ListMinus, ShoppingBag, Users
 } from 'lucide-react';
+
+const transactionTabs = [
+    { label: 'Transactions', key: 'transactions', path: '/transactions', icon: ListMinus },
+    { label: 'Categories', key: 'categories', path: '/category', icon: ShoppingBag },
+    { label: 'Parties', key: 'parties', path: '/parties', icon: Users }
+];
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
@@ -1580,6 +1586,8 @@ const Transactions = () => {
                     <PageHeader
                         title="Transactions"
                         breadcrumbs={['Transactions', 'List']}
+                        tabs={transactionTabs}
+                        activeTab="transactions"
                     />
                 )}
                 className="flex-1 flex flex-col min-h-0 lg:overflow-y-auto"

@@ -618,8 +618,6 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
         { icon: Home, label: 'Home', path: '/dashboard', permission: 'DASHBOARD_VIEW' },
         { icon: Landmark, label: 'Accounts', path: '/accounts' },
         { icon: ArrowRightLeft, label: 'Transactions', path: '/transactions', permission: 'TXN_VIEW' },
-        { icon: Users, label: 'Parties', path: '/parties' },
-        { icon: ShoppingBag, label: 'Items', path: '/category', permission: 'CATEGORY_MANAGE' },
         { icon: BarChart2, label: 'Reports', path: '/reports', permission: 'REPORT_VIEW' },
         { icon: History, label: 'Activity', path: '/audit-logs' },
     ];
