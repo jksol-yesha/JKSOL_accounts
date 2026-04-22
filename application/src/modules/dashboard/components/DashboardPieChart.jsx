@@ -129,8 +129,8 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     }, [categories, selectedType]);
 
     const getRadialPos = (angle, index) => {
-        // Reduced base radius to move boxes a little bit inside
-        const radius = 40 + (index === 0 ? 0 : (index % 2 === 0 ? 3 : -3)); 
+        // Reduced base radius to heavily pull boxes inward to overlap the chart
+        const radius = 26 + (index === 0 ? 0 : (index % 2 === 0 ? 3 : -3)); 
         const rad = (angle * Math.PI) / 180;
         const aspect = chartSize.width / chartSize.height || 1;
         
@@ -145,7 +145,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         animationEasing: 'cubicOut',
         series: [{
             type: 'pie',
-            radius: ['0%', '70%'],
+            radius: ['0%', '60%'],
             center: ['50%', '50%'],
             startAngle: 320, 
             clockwise: true,

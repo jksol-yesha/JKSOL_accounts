@@ -207,13 +207,26 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                     {/* Outgoing */}
                     <div className="flex flex-col items-end text-right">
                         <span className="text-[12px] font-medium text-rose-500 mb-1">
-                            Outgoing
+                            Outgoing (Expenses)
                         </span>
                         <div className="flex items-center gap-2">
                             <span className="text-[15px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.totalExpense || 0)}
                             </span>
                             <span className="text-[13px] font-bold text-rose-500">-</span>
+                        </div>
+                    </div>
+
+                    {/* Investments */}
+                    <div className="flex flex-col items-end text-right">
+                        <span className="text-[12px] font-medium text-purple-600 mb-1">
+                            Investments
+                        </span>
+                        <div className="flex items-center gap-2">
+                            <span className="text-[15px] font-bold text-[#111827] tracking-tight">
+                                {formatCurrency(stats.totalInvestment || 0)}
+                            </span>
+                            <span className="text-[13px] font-bold text-purple-600">-</span>
                         </div>
                     </div>
 

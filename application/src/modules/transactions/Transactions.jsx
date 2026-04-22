@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -46,22 +46,23 @@ import { notifyTransactionDataChanged } from './transactionDataSync';
 const createInitialDeleteDialog = () => ({
     open: false,
     id: null,
+    ids: [],
     label: '',
     loading: false
 });
 
-const TXN_TABLE_COLUMN_STORAGE_KEY = 'transactions:tableColumns:v1';
+const TXN_TABLE_COLUMN_STORAGE_KEY = 'transactions:tableColumns:v2';
 const TXN_TABLE_COLUMNS = [
-    { key: 'id', label: 'Id', defaultVisible: true },
+    { key: 'id', label: 'Id', defaultVisible: false },
     { key: 'party', label: 'Party', defaultVisible: true },
     { key: 'date', label: 'Date', defaultVisible: true },
-    { key: 'type', label: 'Type', defaultVisible: true },
-    { key: 'branch', label: 'Branch', defaultVisible: true },
+    { key: 'type', label: 'Type', defaultVisible: false },
+    { key: 'branch', label: 'Branch', defaultVisible: false },
     { key: 'account', label: 'Account', defaultVisible: true },
-    { key: 'category', label: 'Category', defaultVisible: true },
-    { key: 'notes', label: 'Notes', defaultVisible: true },
+    { key: 'category', label: 'Category', defaultVisible: false },
+    { key: 'notes', label: 'Notes', defaultVisible: false },
     { key: 'amount', label: 'Amount', defaultVisible: true },
-    { key: 'createdBy', label: 'Created By', defaultVisible: true }
+    { key: 'createdBy', label: 'Created By', defaultVisible: false }
 ];
 
 const DEFAULT_VISIBLE_TXN_COLUMNS = TXN_TABLE_COLUMNS.reduce((accumulator, column) => {
@@ -85,33 +86,58 @@ const normalizeTxnColumns = (value) => {
     return normalized;
 };
 
-/** Custom tooltip that shows white card with full branch list on hover */
-const BranchTooltip = ({ branchNames }) => {
+const PortalTooltip = ({ content, children, maxWidth = 120 }) => {
     const [visible, setVisible] = useState(false);
-    if (!branchNames || branchNames.length === 0) return <span className="text-gray-400 text-xs">-</span>;
-    const displayText = branchNames.join(', ');
-    const needsTooltip = branchNames.length > 1 || displayText.length > 18;
+    const [pos, setPos] = useState({ top: 0, left: 0 });
+    const ref = useRef(null);
+
+    const handleMouseEnter = () => {
+        if (!ref.current) return;
+        // Only show if the text is physically getting clipped
+        if (ref.current.scrollWidth <= ref.current.clientWidth + 1) return;
+        
+        const rect = ref.current.getBoundingClientRect();
+        let left = rect.left;
+        // Keep inside viewport if it bleeds right
+        if (left + 300 > window.innerWidth) {
+            left = window.innerWidth - 320;
+        }
+        setPos({ top: rect.bottom + 6, left });
+        setVisible(true);
+    };
+
     return (
-        <span
-            className="relative inline-block max-w-[120px]"
-            onMouseEnter={() => setVisible(true)}
+        <span 
+            ref={ref} 
+            className="block truncate cursor-default transition-colors w-full"
+            style={{ maxWidth }}
+            onMouseEnter={handleMouseEnter}
             onMouseLeave={() => setVisible(false)}
         >
-            <span className="block truncate text-xs font-bold text-primary cursor-default hover:text-primary/80 transition-colors">
-                {displayText}
-            </span>
-            {needsTooltip && visible && (
-                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[240px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
-                    <span className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Branches</span>
-                    {branchNames.map((b, i) => (
-                        <span key={i} className="flex items-center gap-1.5 py-0.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-                            <span className="text-[12px] font-semibold text-gray-700 truncate">{b}</span>
-                        </span>
-                    ))}
-                </span>
+            {children}
+            {visible && createPortal(
+                <span 
+                    style={{ top: pos.top, left: pos.left }}
+                    className="fixed z-[99999] max-w-[300px] w-max bg-slate-800 text-white text-[11px] font-medium px-3 py-2 rounded-sm shadow-md pointer-events-none whitespace-normal break-words leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150"
+                >
+                    {content}
+                </span>,
+                document.body
             )}
         </span>
+    );
+};
+
+/** Custom tooltip that shows dark card natively escaping AG Grid map */
+const BranchTooltip = ({ branchNames }) => {
+    if (!branchNames || branchNames.length === 0) return <span className="text-gray-400 text-xs">-</span>;
+    const displayText = branchNames.join(', ');
+    return (
+        <PortalTooltip content={displayText} maxWidth={120}>
+            <span className="text-xs font-bold text-primary hover:text-primary/80 transition-colors">
+                {displayText}
+            </span>
+        </PortalTooltip>
     );
 };
 
@@ -121,6 +147,8 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
     const popupRef = useRef(null);
     const [position, setPosition] = useState(null);
 
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
     useLayoutEffect(() => {
         if (!isOpen) return;
         const rect = buttonRef.current.getBoundingClientRect();
@@ -129,6 +157,7 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
         const handleClickOutside = (e) => {
             if (!buttonRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) {
                 setIsOpen(false);
+                setHighlightedIndex(-1);
             }
         };
         window.addEventListener('mousedown', handleClickOutside);
@@ -139,14 +168,57 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
         setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
+    const handleKeyDown = (e) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                e.preventDefault();
+                setIsOpen(true);
+                setHighlightedIndex(0);
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setHighlightedIndex(prev => (prev + 1) % columns.length);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setHighlightedIndex(prev => (prev - 1 + columns.length) % columns.length);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (highlightedIndex >= 0 && columns[highlightedIndex]) {
+                    toggleColumn(columns[highlightedIndex].key);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                break;
+        }
+    };
+
     return (
         <div className="relative inline-block text-left whitespace-nowrap">
             <button
                 ref={buttonRef}
-                onClick={() => setIsOpen(!isOpen)}
-                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                onClick={() => {
+                    const next = !isOpen;
+                    setIsOpen(next);
+                    setHighlightedIndex(next ? 0 : -1);
+                }}
+                onKeyDown={handleKeyDown}
+                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
             >
-                <Settings2 size={14} className="text-gray-500" />
+                <Settings2 size={14} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 <span className="hidden sm:inline">Columns</span>
             </button>
             {isOpen && createPortal(
@@ -158,18 +230,25 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
                     <div className="px-3 py-2 border-b border-gray-100 mb-1">
                         <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Toggle Columns</span>
                     </div>
-                    {columns.map(col => (
-                        <button
-                            key={col.key}
-                            onClick={() => toggleColumn(col.key)}
-                            className="w-full px-3 py-1.5 flex items-center gap-2 hover:bg-gray-50 text-[13px] font-medium text-gray-700 transition-colors"
-                        >
-                            <div className={cn("w-4 h-4 roundedborder flex items-center justify-center transition-colors border", visibleColumns[col.key] ? "bg-primary border-primary" : "border-gray-300 bg-white")}>
-                                {visibleColumns[col.key] && <Check size={12} className="text-white" strokeWidth={3} />}
-                            </div>
-                            {col.label}
-                        </button>
-                    ))}
+                    {columns.map((col, idx) => {
+                        const isHighlighted = highlightedIndex === idx;
+                        return (
+                            <button
+                                key={col.key}
+                                onClick={() => toggleColumn(col.key)}
+                                onMouseEnter={() => setHighlightedIndex(idx)}
+                                onMouseLeave={() => setHighlightedIndex(-1)}
+                                className={`w-full px-3 py-1.5 flex items-center gap-2 text-[13px] font-medium transition-colors ${
+                                    isHighlighted ? 'bg-slate-100/80 ring-1 ring-inset ring-slate-200/50 text-slate-800' : 'hover:bg-gray-50 text-gray-700'
+                                }`}
+                            >
+                                <div className={cn("w-4 h-4 rounded flex items-center justify-center transition-colors border", visibleColumns[col.key] ? "bg-primary border-primary" : "border-gray-300 bg-white")}>
+                                    {visibleColumns[col.key] && <Check size={12} className="text-white" strokeWidth={3} />}
+                                </div>
+                                {col.label}
+                            </button>
+                        );
+                    })}
                 </div>,
                 document.body
             )}
@@ -178,51 +257,24 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
 };
 
 const PartyTooltip = ({ partyName }) => {
-    const [visible, setVisible] = useState(false);
-    if (!partyName || partyName === '-') return <span className="text-xs font-bold text-gray-700">-</span>;
-    const needsTooltip = partyName.length > 15;
+    if (!partyName || partyName === '-') return <span className="text-[11px] font-medium text-gray-400">-</span>;
     return (
-        <span
-            className="relative inline-block max-w-[130px]"
-            onMouseEnter={() => setVisible(true)}
-            onMouseLeave={() => setVisible(false)}
-        >
-            <span className="block truncate text-xs font-bold text-gray-700 cursor-default hover:text-gray-900 transition-colors">
+        <PortalTooltip content={partyName} maxWidth={130}>
+            <span className="text-[12px] font-semibold text-gray-800 hover:text-gray-900 transition-colors">
                 {partyName}
             </span>
-            {needsTooltip && visible && (
-                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[240px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
-                    <span className="flex items-center gap-1.5 py-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
-                        <span className="text-[12px] font-semibold text-gray-700 whitespace-normal break-words">{partyName}</span>
-                    </span>
-                </span>
-            )}
-        </span>
+        </PortalTooltip>
     );
 };
 
 const DescriptionTooltip = ({ description }) => {
-    const [visible, setVisible] = useState(false);
-    if (!description || description === '-') return <span className="text-[13px] font-medium text-gray-400">-</span>;
-    const needsTooltip = description.length > 25;
+    if (!description || description === '-') return <span className="text-[11px] font-medium text-gray-400">-</span>;
     return (
-        <span
-            className="relative inline-block w-full max-w-[250px]"
-            onMouseEnter={() => setVisible(true)}
-            onMouseLeave={() => setVisible(false)}
-        >
-            <span className="block truncate text-[13px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
+        <PortalTooltip content={description} maxWidth={250}>
+            <span className="text-[11px] font-medium text-inherit hover:text-gray-900 transition-colors">
                 {description}
             </span>
-            {needsTooltip && visible && (
-                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[280px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
-                    <span className="flex items-center gap-1.5 py-0.5">
-                        <span className="text-[12px] font-semibold text-gray-700 whitespace-normal break-words leading-relaxed">{description}</span>
-                    </span>
-                </span>
-            )}
-        </span>
+        </PortalTooltip>
     );
 };
 
@@ -276,8 +328,14 @@ const FilterDropdown = ({
     variant = "default",
     hideIcon = false,
     placeholder = "",
+    showSelectAll = false,
+    selectAllLabel = "Select All",
+    allDisplayLabel = selectAllLabel,
+    allValue = "all",
+    darkActiveState = false,
   }) => {
     const [isOpen, setIsOpen] = useState(false);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
     const dropdownMenuRef = useRef(null);
@@ -312,34 +370,94 @@ const FilterDropdown = ({
         if (
           !dropdownRef.current?.contains(event.target) &&
           !dropdownMenuRef.current?.contains(event.target)
-        )
+        ) {
           setIsOpen(false);
+          setHighlightedIndex(-1);
+        }
       };
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
   
-    const selectedOption = options.find((opt) => opt.value === value) || {
-      label: placeholder || options[0]?.label,
-    };
+    const selectedOption =
+      options.find((opt) => opt.value === value) ||
+      (showSelectAll && value === allValue
+        ? { label: allDisplayLabel }
+        : {
+            label: placeholder || options[0]?.label,
+          });
     const isTitleVar = variant === "title";
+    const isSelectAllActive = value === allValue;
+    const internalOptions = showSelectAll ? [{ isSelectAll: true }, ...options] : options;
+
+    const handleKeyDown = (e) => {
+      if (!isOpen) {
+        if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+          e.preventDefault();
+          setIsOpen(true);
+          const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
+          setHighlightedIndex(idx >= 0 ? idx : 0);
+        }
+        return;
+      }
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev + 1) % internalOptions.length);
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setHighlightedIndex(prev => (prev - 1 + internalOptions.length) % internalOptions.length);
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (highlightedIndex >= 0 && internalOptions[highlightedIndex]) {
+            const opt = internalOptions[highlightedIndex];
+            onChange(opt.isSelectAll ? allValue : opt.value);
+          }
+          setIsOpen(false);
+          setHighlightedIndex(-1);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          setIsOpen(false);
+          setHighlightedIndex(-1);
+          buttonRef.current?.focus();
+          break;
+        case 'Tab':
+          setIsOpen(false);
+          setHighlightedIndex(-1);
+          break;
+      }
+    };
   
     return (
       <div className="relative" ref={dropdownRef}>
         <button
           ref={buttonRef}
-          onClick={() => setIsOpen(!isOpen)}
-          className={`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : "h-[32px] px-3 bg-white text-gray-600 border border-gray-200 text-[13px] font-medium rounded-md hover:bg-gray-50 focus:ring-4 focus:ring-primary/10 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"}`}
+          onClick={() => {
+              const nextIsOpen = !isOpen;
+              setIsOpen(nextIsOpen);
+              if (nextIsOpen) {
+                  const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
+                  setHighlightedIndex(idx >= 0 ? idx : 0);
+              } else {
+                  setHighlightedIndex(-1);
+              }
+          }}
+          onKeyDown={handleKeyDown}
+          className={`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : `h-[32px] px-3 text-[13px] rounded-md transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] border focus-visible:ring-2 focus-visible:ring-blue-100 ${!isSelectAllActive ? "bg-[#F0F9FF] border-[#BAE6FD] text-[#4A8AF4] font-medium hover:bg-blue-50" : darkActiveState ? "bg-white text-slate-800 font-semibold border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]" : "bg-white text-gray-600 font-medium border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"}`}`}
         >
           <div
             className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
           >
-            <span>{selectedOption?.label}</span>
+            <span className={!isTitleVar ? "transition-colors text-inherit" : ""}>{selectedOption?.label}</span>
           </div>
           {!hideIcon && (
             <ChevronDown
               size={isTitleVar ? 16 : 14}
-              className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-primary" : "text-gray-400 group-hover:text-gray-600"}`}
+              className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-primary" : "text-slate-500 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]"} ${!isSelectAllActive && !isTitleVar ? "text-[#4A8AF4]" : ""}`}
             />
           )}
         </button>
@@ -357,31 +475,58 @@ const FilterDropdown = ({
                 minWidth: dropdownPosition.minWidth,
               }}
             >
-              {options.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => {
-                    onChange(option.value);
-                    setIsOpen(false);
-                  }}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"}`}
-                >
-                  <span
-                    className={`text-[13px] w-full flex items-center gap-2 ${value === option.value ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
-                  >
-                    <div className="w-4 flex justify-center shrink-0">
-                      {value === option.value && (
-                        <Check
-                          size={14}
-                          className="text-[#4A8AF4]"
-                          strokeWidth={2.5}
-                        />
-                      )}
-                    </div>
-                    {option.label}
-                  </span>
-                </button>
-              ))}
+              {internalOptions.map((option, idx) => {
+                  const isHighlighted = idx === highlightedIndex;
+                  if (option.isSelectAll) {
+                      return (
+                        <div key="select-all" className="px-3 py-1.5 border-b border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onChange(allValue);
+                              setIsOpen(false);
+                            }}
+                            className={`group flex w-full items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isSelectAllActive ? (darkActiveState ? "text-[#2F5FC6]" : "text-[#4A8AF4]") : "text-slate-500 hover:text-slate-800"} ${isHighlighted ? 'bg-slate-200/50' : ''}`}
+                          >
+                            <div className="w-4 flex justify-center shrink-0">
+                              <Check
+                                size={14}
+                                className={`${isSelectAllActive ? "text-[#4A8AF4]" : "text-slate-200 group-hover:text-slate-300"} transition-colors`}
+                                strokeWidth={isSelectAllActive ? 3 : 2.5}
+                              />
+                            </div>
+                            {selectAllLabel}
+                          </button>
+                        </div>
+                      );
+                  }
+
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => {
+                        onChange(option.value);
+                        setIsOpen(false);
+                      }}
+                      className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value || isHighlighted ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"}`}
+                    >
+                      <span
+                        className={`text-[13px] w-full flex items-center gap-2 ${value === option.value ? (darkActiveState ? "font-bold text-[#2F5FC6]" : "font-bold text-[#4A8AF4]") : isHighlighted ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                      >
+                        <div className="w-4 flex justify-center shrink-0">
+                          {value === option.value && (
+                            <Check
+                              size={14}
+                              className="text-[#4A8AF4]"
+                              strokeWidth={2.5}
+                            />
+                          )}
+                        </div>
+                        {option.label}
+                      </span>
+                    </button>
+                  );
+              })}
             </div>,
             document.body,
           )}
@@ -393,7 +538,7 @@ const DateCellRenderer = (props) => {
     const { value, data, context } = props;
     if (!value) return null;
     return (
-        <span className="font-medium text-gray-700">
+        <span className="font-medium text-inherit">
             {context.formatDate ? context.formatDate(value) : value}
         </span>
     );
@@ -405,14 +550,43 @@ const AmountCellRenderer = (props) => {
     const isIncome = data.txnType === 'income' || data.transactionType?.name === 'income';
     const isExpense = data.txnType === 'expense' || data.transactionType?.name === 'expense';
     
+    const parseAmount = (val) => {
+        if (!val) return 0;
+        const parsed = parseFloat(String(val).replace(/,/g, ''));
+        return isNaN(parsed) ? 0 : Math.abs(parsed);
+    };
+
+    let amountVal = parseAmount(data.amountBaseCurrency ?? data.amountBase ?? data.finalAmountLocal ?? data.amountLocal);
+    
+    // Natively prioritize the backend-converted dynamic reporting currency (`amountBaseCurrency` / `amountBase`)
+    let displayAmount = amountVal;
+
+    const isOutlier = context.outliers && amountVal > 0 && 
+                      (amountVal >= context.outliers.upper || amountVal <= context.outliers.lower) && 
+                      context.outliers.upper !== Infinity;
+
+    // Detect if this specific transaction is part of a frequency anomaly or a duplicate collision
+    const isDuplicate = context.duplicateTransactions && context.duplicateTransactions.has(data.id);
+    const isFrequencyAnomaly = !isDuplicate && context.anomalousPartyDays && context.anomalousPartyDays.has(data.id);
+
+    const baseColor = isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-gray-900";
+
     return (
-        <span className={props.className || (
-            isIncome ? "text-emerald-600 font-bold shrink-0 tabular-nums" :
-                isExpense ? "text-gray-900 font-bold shrink-0 tabular-nums" :
-                    "text-blue-600 font-bold shrink-0 tabular-nums"
-        )}>
-            {context.formatCurrency ? context.formatCurrency(value) : value}
-        </span>
+        <div className={cn(props.className, "flex items-center justify-end gap-2.5 w-full h-full")}>
+            {(isOutlier || isFrequencyAnomaly || isDuplicate) && (
+                <div className="group relative flex shrink-0 items-center cursor-pointer">
+                    <Activity size={14} strokeWidth={2.5} className={isDuplicate ? "text-purple-500" : isFrequencyAnomaly ? "text-rose-500" : "text-amber-500"} />
+                    <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[50] scale-95 group-hover:scale-100">
+                        <div className="bg-slate-800 text-white text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-md shadow-md whitespace-nowrap">
+                            {isDuplicate ? "Duplicate Detected" : isFrequencyAnomaly ? "High Frequency" : (amountVal >= context.outliers?.upper ? "Highest Amount" : "Lowest Amount")}
+                        </div>
+                    </div>
+                </div>
+            )}
+            <span className={cn(baseColor, "font-semibold shrink-0 tabular-nums relative text-[12px]")}>
+                {context.formatCurrency ? context.formatCurrency(displayAmount) : displayAmount}
+            </span>
+        </div>
     );
 };
 
@@ -465,10 +639,12 @@ const ActionCellRenderer = (props) => {
 
 const Transactions = () => {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { selectedBranch, selectedBranchIds, branches } = useBranch();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
     const { preferences, formatCurrency, formatDate, updatePreferences } = usePreferences();
+    const gridRef = useRef(null);
 
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -486,17 +662,24 @@ const Transactions = () => {
     
     const colDefs = useMemo(() => {
         return [
-            { field: 'id', headerName: 'Id', hide: !visibleColumns.id, minWidth: 80, maxWidth: 100 },
-            { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
-            { field: 'date', headerName: 'Date', hide: !visibleColumns.date, valueGetter: params => params.data?.txnDate, cellRenderer: DateCellRenderer, minWidth: 120, sort: 'desc' },
-            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, cellRenderer: (params) => <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{params.value}</span> },
-            { field: 'branch', headerName: 'Branch', hide: !visibleColumns.branch, cellRenderer: (params) => <BranchTooltip branchNames={params.data?.branchNames} />, minWidth: 140 },
-            { field: 'account', headerName: 'Account', hide: !visibleColumns.account, valueGetter: params => params.data?.account?.name || '-', minWidth: 150, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
-            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
-            { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 1, minWidth: 200 },
-            { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.finalAmountLocal ?? params.data?.amountBase, cellRenderer: AmountCellRenderer, minWidth: 120, type: 'rightAligned' },
-            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByDisplayName || params.data?.creatorName || '-', minWidth: 130 },
-            { headerName: '', field: 'actions', minWidth: 100, maxWidth: 100, pinned: 'right', cellRenderer: ActionCellRenderer, sortable: false, filter: false }
+            {
+                field: 'id',
+                headerName: 'Id',
+                hide: !visibleColumns.id,
+                minWidth: 80,
+                maxWidth: 100,
+                valueGetter: params => (typeof params.node?.rowIndex === 'number' ? params.node.rowIndex + 1 : '')
+            },
+            { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1.5, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
+            { field: 'date', headerName: 'Date', hide: !visibleColumns.date, valueGetter: params => params.data?.txnDate, cellRenderer: DateCellRenderer, minWidth: 120, flex: 1, sort: 'desc' },
+            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, flex: 1, cellRenderer: (params) => <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-gray-500">{params.value}</span> },
+            { field: 'branch', headerName: 'Branch', hide: !visibleColumns.branch, cellRenderer: (params) => <BranchTooltip branchNames={params.data?.branchNames} />, minWidth: 140, flex: 1 },
+            { field: 'account', headerName: 'Account', hide: !visibleColumns.account, valueGetter: params => params.data?.account?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
+            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
+            { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 2, minWidth: 200 },
+            { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned', headerClass: 'text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB] ag-right-aligned-header' },
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', minWidth: 130, cellClass: 'text-[11px] font-medium text-gray-400 truncate' },
+            { headerName: 'Actions', field: 'actions', minWidth: 100, maxWidth: 100, cellRenderer: ActionCellRenderer, sortable: false, filter: false }
         ];
     }, [visibleColumns]);
 
@@ -505,13 +688,28 @@ const Transactions = () => {
         filter: true,
         resizable: true,
         suppressMovable: true,
-        menuTabs: []
+        menuTabs: [],
+        cellClass: "text-[11px] font-medium text-gray-600 truncate",
+        headerClass: "text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB]"
     }), []);
     
+
     // Original state:
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const importBtnRef = useRef(null);
+    const previousImportModalState = useRef(isImportModalOpen);
+
+    useEffect(() => {
+        if (previousImportModalState.current && !isImportModalOpen) {
+            // Wait slightly for the modal's unmount cycle to clear out before regaining focus
+            setTimeout(() => {
+                importBtnRef.current?.focus({ preventScroll: true });
+            }, 10);
+        }
+        previousImportModalState.current = isImportModalOpen;
+    }, [isImportModalOpen]);
     const [activeAttachmentTxnId, setActiveAttachmentTxnId] = useState(null); // Keep for legacy if needed, but we use object now
     const [attachmentViewer, setAttachmentViewer] = useState({ isOpen: false, txnId: null, path: null, position: { top: 0, right: 0 } });
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
@@ -526,7 +724,8 @@ const Transactions = () => {
         type: 'all',
         dateRange: null,
         currency: preferences?.currency || 'INR',
-        party: 'all'
+        party: 'all',
+        accountId: searchParams.get('accountId') || null
     });
     
     // Date Presets Generation
@@ -547,7 +746,7 @@ const Transactions = () => {
     }, [selectedYear, datePresets]);
 
     const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
-    const cacheKey = `transactions:list:v2:${selectedYear?.id || 'fy'}`;
+    const cacheKey = `transactions:list:v2:${selectedYear?.id || 'fy'}:${appliedFilters.currency || 'INR'}`;
     const columnSettingsKey = `${TXN_TABLE_COLUMN_STORAGE_KEY}:${user?.id || 'user'}`;
     const showInitialLoader = loading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
@@ -619,10 +818,12 @@ const Transactions = () => {
 
         setLoading(true);
         try {
-            // Bypass global branch filter: Always fetch 'all' branches
             const response = await apiService.transactions.getAll({
                 branchId: 'all',
-                financialYearId: selectedYear.id
+                financialYearId: selectedYear.id,
+                targetCurrency: appliedFilters.currency,
+                limit: -1,
+                ...(appliedFilters.accountId ? { accountId: Number(appliedFilters.accountId) } : {})
             }, { signal });
 
             // Ensure we always have an array
@@ -648,7 +849,7 @@ const Transactions = () => {
                 setHasFetchedOnce(true);
             }
         }
-    }, [cacheKey, user, selectedYear?.id]);
+    }, [appliedFilters.currency, appliedFilters.accountId, cacheKey, user, selectedYear?.id]);
 
 
     useEffect(() => {
@@ -691,38 +892,38 @@ const Transactions = () => {
         // We bypass the global filter, so it's intrinsically ALWAYS 'multi' mode in terms of grouping logic
         const raw = Array.isArray(transactions) ? transactions : [];
         const groups = [];
-        const branchOccurrenceMap = new Map();
 
         raw.forEach(txn => {
-            const date = txn.txnDate || '';
-            const amount = Number(txn.amountBaseCurrency || txn.finalAmountLocal || txn.amountBase || 0);
+            const date = txn.txnDate ? new Date(txn.txnDate).toISOString().split('T')[0] : '';
+            const amount = Number(txn.amountLocal ?? txn.amountBaseCurrency ?? txn.finalAmountLocal ?? txn.amountBase ?? 0);
             const amountKey = amount.toFixed(2);
             const party = (txn.contact || txn.payee || txn.counterpartyName || '').trim().toLowerCase();
             const type = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
             const notes = (txn.notes || txn.description || '').trim().toLowerCase();
-            const txnName = (txn.name || '').trim().toLowerCase();
-            const accountName = (txn.account?.name || '').trim().toLowerCase();
-            const categoryName = (txn.category?.name || '').trim().toLowerCase();
-            const subCategoryName = (txn.subCategory?.name || txn.subCategoryName || '').trim().toLowerCase();
-            const dataKey = `${date}|${amountKey}|${party}|${type}|${notes}|${txnName}|${accountName}|${categoryName}|${subCategoryName}`;
+            
+            const dataKey = `${date}|${amountKey}|${party}|${type}|${notes}`;
             const branchName = txn.branch?.name || (branches || []).find(b => String(b.id) === String(txn.branchId))?.name || 'Unknown';
             const branchId = Number(txn.branchId || 0);
 
-            if (!branchOccurrenceMap.has(dataKey)) branchOccurrenceMap.set(dataKey, new Map());
-            const branchCounts = branchOccurrenceMap.get(dataKey);
-            const occurrenceDelta = (branchCounts.get(branchId) || 0) + 1;
-            branchCounts.set(branchId, occurrenceDelta);
-
-            const baseKey = `${dataKey}|${occurrenceDelta}`;
-            let foundGroup = groups.find(g => g.baseKey === baseKey);
+            const baseKey = `${dataKey}`;
+            // Find a group with the same baseKey WHERE this branch hasn't already contributed a row
+            let foundGroup = groups.find(g => g.baseKey === baseKey && !(g.groupBranchIds || []).includes(branchId));
 
             if (foundGroup) {
-                foundGroup.branchNames.push(branchName);
+                if (!foundGroup.branchNames.includes(branchName)) {
+                    foundGroup.branchNames.push(branchName);
+                }
+                if (!foundGroup.originalTxnIds) foundGroup.originalTxnIds = [];
+                if (!foundGroup.groupBranchIds) foundGroup.groupBranchIds = [];
+                foundGroup.originalTxnIds.push(txn.id);
+                if (branchId) foundGroup.groupBranchIds.push(branchId);
             } else {
                 const newTxn = {
                     ...txn,
                     baseKey,
-                    branchNames: [branchName]
+                    branchNames: [branchName],
+                    originalTxnIds: [txn.id],
+                    groupBranchIds: branchId ? [branchId] : []
                 };
                 groups.push(newTxn);
             }
@@ -776,10 +977,13 @@ const Transactions = () => {
                 ? selectedBranchIds.map(String)
                 : [String(selectedBranch?.id)];
 
-            result = result.filter(t => {
-                if (!t.branchId) return true;
-                return allowed.includes(String(t.branchId));
-            });
+            if (!allowed.includes('all') && !allowed.includes('multi')) {
+                result = result.filter(t => {
+                    const groupBranchIds = t.groupBranchIds || t.originalBranchIds || (t.siblingMap ? Object.keys(t.siblingMap) : [t.branchId]);
+                    const hasAllowedBranch = groupBranchIds.some(id => allowed.includes(String(id)));
+                    return hasAllowedBranch || allowed.includes(String(t.branchId));
+                });
+            }
         }
 
         // Party Filter
@@ -790,22 +994,57 @@ const Transactions = () => {
             });
         }
 
+        // 6. Explicit Account Drill-down Filter
+        if (appliedFilters.accountId) {
+            const isolateId = String(appliedFilters.accountId);
+            result = result.filter(txn => {
+                // If it explicitly maps to the primary UI fields
+                if (String(txn.accountId) === isolateId || 
+                    (txn.account?.id && String(txn.account.id) === isolateId) ||
+                    (txn.fromAccountId && String(txn.fromAccountId) === isolateId) ||
+                    (txn.toAccountId && String(txn.toAccountId) === isolateId)) {
+                    return true;
+                }
+                
+                // Deep-check the double-entry accounting array
+                if (txn.entries && Array.isArray(txn.entries)) {
+                    return txn.entries.some(entry => String(entry.accountId) === isolateId || String(entry.account?.id) === isolateId);
+                }
+                
+                return false;
+            });
+        }
+
         return result;
 
     }, [groupedTransactions, searchTerm, appliedFilters]);
 
     const insightsData = useMemo(() => {
         const trendMap = {}; 
+        const gstTrendMap = {};
         const categoryMap = {};
         let totalIncome = 0;
         let totalExpense = 0;
+        let totalGstPaid = 0;
+        let taxableExpenseCount = 0;
+        let totalCgstPaid = 0;
+        let totalSgstPaid = 0;
+        let totalIgstPaid = 0;
 
         filteredTransactions.forEach(t => {
-            const dateStr = t.txnDate || 'Unknown';
-            const amount = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
+            const rawDate = new Date(t.txnDate || new Date());
+            const dateStr = !isNaN(rawDate) ? rawDate.toISOString().split('T')[0] : 'Unknown';
+            const baseAmountVal = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
+            const localDisplayAmount = Number(t.finalAmountLocal ?? t.amountLocal ?? t.amountBase ?? 0);
+            
+            const rowCount = Array.isArray(t.originalTxnIds) && t.originalTxnIds.length > 0 ? t.originalTxnIds.length : 1;
+            const amount = baseAmountVal * rowCount;
+            
+            const displayRate = localDisplayAmount > 0 ? baseAmountVal / localDisplayAmount : 1;
             const type = (t.transactionType?.name || t.txnType || '').toLowerCase();
 
             if (!trendMap[dateStr]) trendMap[dateStr] = { date: dateStr, income: 0, expense: 0 };
+            if (!gstTrendMap[dateStr]) gstTrendMap[dateStr] = { date: dateStr, gstPaid: 0 };
 
             if (type === 'income') {
                 trendMap[dateStr].income += amount;
@@ -817,6 +1056,22 @@ const Transactions = () => {
                 const catName = t.category?.name || 'Uncategorized';
                 if (!categoryMap[catName]) categoryMap[catName] = 0;
                 categoryMap[catName] += amount;
+
+                const safeDisplayRate = Number.isFinite(displayRate) && displayRate > 0 ? displayRate : 1;
+                const gstTotal = Number(t.gstTotal ?? 0) * safeDisplayRate * rowCount;
+                const cgstAmount = Number(t.cgstAmount ?? 0) * safeDisplayRate * rowCount;
+                const sgstAmount = Number(t.sgstAmount ?? 0) * safeDisplayRate * rowCount;
+                const igstAmount = Number(t.igstAmount ?? 0) * safeDisplayRate * rowCount;
+
+                if (gstTotal > 0 || cgstAmount > 0 || sgstAmount > 0 || igstAmount > 0) {
+                    taxableExpenseCount += 1;
+                }
+
+                gstTrendMap[dateStr].gstPaid += gstTotal;
+                totalGstPaid += gstTotal;
+                totalCgstPaid += cgstAmount;
+                totalSgstPaid += sgstAmount;
+                totalIgstPaid += igstAmount;
             }
         });
 
@@ -826,13 +1081,131 @@ const Transactions = () => {
                 ...d,
                 displayDate: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
             }));
+
+        const gstTrendData = Object.values(gstTrendMap)
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .map((d) => ({
+                ...d,
+                displayDate: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            }));
             
         const categoryData = Object.entries(categoryMap)
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value)
             .slice(0, 5); 
 
-        return { trendData, categoryData, totalIncome, totalExpense, netFlow: totalIncome - totalExpense };
+        const gstBreakdownData = [
+            { name: 'CGST', value: totalCgstPaid, color: '#4A8AF4' },
+            { name: 'SGST', value: totalSgstPaid, color: '#22C55E' },
+            { name: 'IGST', value: totalIgstPaid, color: '#F59E0B' }
+        ].filter((entry) => entry.value > 0);
+
+        // Outlier Detection (Z-Score Method for better small-N support)
+        const parseAmount = (val) => {
+            if (!val) return 0;
+            const parsed = parseFloat(String(val).replace(/,/g, ''));
+            return isNaN(parsed) ? 0 : Math.abs(parsed);
+        };
+
+        const amounts = filteredTransactions
+            .map(t => parseAmount(t.amountBaseCurrency ?? t.amountBase ?? t.finalAmountLocal ?? t.amountLocal))
+            .filter(a => a > 0);
+            
+        let outliers = { lower: -1, upper: Infinity }; // default to impossible bounds
+        if (amounts.length >= 2) {
+            const maxVal = Math.max(...amounts);
+            const minVal = Math.min(...amounts);
+            
+            // Only flag if there is a distinct difference between values
+            if (maxVal > minVal) {
+                outliers = { 
+                    lower: minVal, 
+                    upper: maxVal 
+                };
+            }
+        }
+
+        // --- Frequency Anomaly Logic ---
+        const partyDayCounts = {};
+        filteredTransactions.forEach(t => {
+            const categoryName = typeof t.category === 'object' ? t.category?.name : String(t.category || t.categoryId || '');
+            const groupingKey = (t.contact || t.payee || t.counterpartyName || t.party || categoryName || '').trim();
+            if (!groupingKey) return;
+            const dateStr = t.date ? String(t.date).split('T')[0] : null;
+            if (!dateStr) return;
+            
+            if (!partyDayCounts[groupingKey]) partyDayCounts[groupingKey] = { totalTx: 0, days: {} };
+            if (!partyDayCounts[groupingKey].days[dateStr]) partyDayCounts[groupingKey].days[dateStr] = 0;
+            partyDayCounts[groupingKey].days[dateStr]++;
+            partyDayCounts[groupingKey].totalTx++;
+        });
+
+        const anomalousPartyDays = new Set();
+        Object.entries(partyDayCounts).forEach(([party, data]) => {
+            const uniqueDays = Object.keys(data.days).length;
+            if (uniqueDays > 0) { 
+                const avgPerDay = data.totalTx / uniqueDays;
+                Object.entries(data.days).forEach(([day, count]) => {
+                    // Flag as anomaly if there are 3+ transactions on a single day,
+                    // AND it's strictly > 2.5x the average daily rate.
+                    if (count >= 3 && count > 2.5 * avgPerDay) {
+                        anomalousPartyDays.add(`${party}|${day}`);
+                    }
+                });
+            }
+        });
+        // -------------------------------
+
+        // --- Duplicate Transaction Anomaly ---
+        const duplicateTransactions = new Set();
+        const transactionFingerprints = new Map();
+        
+        filteredTransactions.forEach(t => {
+            const categoryName = typeof t.category === 'object' ? t.category?.name : String(t.category || t.categoryId || '');
+            const partyKey = (t.contact || t.payee || t.counterpartyName || t.party || '').trim();
+            
+            const rawDate = t.txnDate || t.date;
+            const dateStr = rawDate ? new Date(rawDate).toISOString().split('T')[0] : null;
+            
+            const amountVal = parseAmount(t.amountBaseCurrency ?? t.amountBase ?? t.finalAmountLocal ?? t.amountLocal);
+            const branchName = Array.isArray(t.branchNames) && t.branchNames.length > 0 
+                ? t.branchNames[0] 
+                : (typeof t.branch === 'object' ? t.branch?.name : String(t.branch || ''));
+            
+            if (dateStr && amountVal > 0) {
+                const fingerprint = `${dateStr}|${amountVal}|${partyKey}|${categoryName}|${branchName}`;
+                if (!transactionFingerprints.has(fingerprint)) {
+                    transactionFingerprints.set(fingerprint, [t.id]);
+                } else {
+                    transactionFingerprints.get(fingerprint).push(t.id);
+                }
+            }
+        });
+
+        transactionFingerprints.forEach((ids) => {
+            if (ids.length > 1) {
+                ids.forEach(id => duplicateTransactions.add(id));
+            }
+        });
+        // ------------------------------------
+
+        return {
+            trendData,
+            gstTrendData,
+            gstBreakdownData,
+            categoryData,
+            totalIncome,
+            totalExpense,
+            totalGstPaid,
+            totalCgstPaid,
+            totalSgstPaid,
+            totalIgstPaid,
+            taxableExpenseCount,
+            outliers,
+            anomalousPartyDays,
+            duplicateTransactions,
+            netFlow: totalIncome - totalExpense
+        };
     }, [filteredTransactions]);
 
     const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
@@ -854,16 +1227,71 @@ const Transactions = () => {
             if (p) uniqueSet.add(p);
         });
         const arr = Array.from(uniqueSet).sort((a,b) => a.localeCompare(b));
-        return [{ label: "All Parties", value: "all" }, ...arr.map(p => ({ label: p, value: p }))];
+        return arr.map(p => ({ label: p, value: p }));
     }, [transactions]);
 
-    const buildExportPayload = (format) => ({
-        branchId: 'all',
-        financialYearId: selectedYear?.id,
-        searchTerm,
-        format,
-        appliedFilters
-    });
+    const buildExportPayload = (format) => {
+        const normalizedBranchIds = Array.isArray(selectedBranchIds)
+            ? selectedBranchIds.map(Number).filter(Boolean)
+            : [];
+
+        const exportBranchId = normalizedBranchIds.length > 1
+            ? normalizedBranchIds
+            : normalizedBranchIds.length === 1
+                ? normalizedBranchIds[0]
+                : selectedBranch?.id
+                    ? Number(selectedBranch.id)
+                    : 'all';
+
+        let mappedRows = undefined;
+        if (gridRef.current?.api) {
+            mappedRows = [];
+            gridRef.current.api.forEachNodeAfterFilterAndSort(node => {
+                const d = node.data;
+                if (!d) return;
+
+                mappedRows.push({
+                    id: d.id,
+                    name: d.name || '',
+                    txnDate: d.txnDate || null,
+                    txnType: (d.transactionType?.name || d.txnType || '').toLowerCase(),
+                    status: d.status ?? null,
+                    contact: d.contact || d.payee || d.counterpartyName || d.party || '',
+                    accountName: d.account?.name || '-',
+                    categoryName: d.category?.name || '-',
+                    notes: d.notes || d.description || '',
+                    amount: Number(d.amountLocal ?? d.amountBaseCurrency ?? d.finalAmountLocal ?? d.amountBase ?? 0),
+                    branchNames: Array.isArray(d.groupBranchIds) 
+                        ? d.groupBranchIds.map(id => branches?.find(b => String(b.id) === String(id))?.name || 'Unknown')
+                        : (d.branch?.name ? [d.branch.name] : ['Unknown']),
+                    createdByName: d.createdByName || d.createdByDisplayName || d.creatorName || '-'
+                });
+            });
+        }
+
+        const normalizedAppliedFilters = {
+            ...(appliedFilters.type !== 'all' ? { scope: appliedFilters.type } : {}),
+            ...(appliedFilters.party !== 'all' ? { payee: appliedFilters.party } : {}),
+            ...(appliedFilters.dateRange?.startDate
+                ? {
+                    timePeriod: 'Custom Range',
+                    startDate: appliedFilters.dateRange.startDate,
+                    endDate: appliedFilters.dateRange.endDate || appliedFilters.dateRange.startDate
+                }
+                : {})
+        };
+
+        return {
+            branchId: exportBranchId,
+            financialYearId: selectedYear?.id,
+            searchTerm,
+            format,
+            targetCurrency: appliedFilters.currency,
+            appliedFilters: normalizedAppliedFilters,
+            mappedRows,
+            visibleColumns: Object.keys(visibleColumns).filter(k => visibleColumns[k])
+        };
+    };
 
     const downloadExportFile = (bytes, fileName, mimeType) => {
         const blob = new Blob([bytes], { type: mimeType });
@@ -881,15 +1309,13 @@ const Transactions = () => {
     // Export Handlers
     const handleExportExcel = async () => {
         try {
-            const response = await apiService.transactions.export(buildExportPayload('csv'));
+            const response = await apiService.transactions.export(buildExportPayload('xlsx'));
             const exportData = response?.data || response;
             const base64Content = exportData?.fileContent;
-            const fileName = exportData?.fileName || 'transactions-export.csv';
-            const mimeType = exportData?.mimeType || 'text/csv;charset=utf-8';
+            const fileName = exportData?.fileName || `transactions-${new Date().toISOString().split('T')[0]}.xlsx`;
+            const mimeType = exportData?.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-            if (!base64Content) {
-                throw new Error('Missing export file content');
-            }
+            if (!base64Content) throw new Error('Missing export file content');
 
             const binaryString = window.atob(base64Content);
             const fileBytes = new Uint8Array(binaryString.length);
@@ -899,10 +1325,9 @@ const Transactions = () => {
 
             downloadExportFile(fileBytes, fileName, mimeType);
         } catch (error) {
-            console.error('Failed to export transactions to Excel:', error);
-            alert('Failed to export transactions');
-        } finally {
-            setActiveDropdown(null);
+            const message = error?.response?.data?.message || error?.message || 'Failed to export to Excel';
+            console.error('Excel export failed:', error);
+            alert(message);
         }
     };
 
@@ -912,15 +1337,31 @@ const Transactions = () => {
                 responseType: 'blob'
             });
 
-            const htmlBlob = new Blob([response.data], { type: 'text/html;charset=utf-8' });
-            const url = URL.createObjectURL(htmlBlob);
-            window.open(url, '_blank', 'noopener,noreferrer');
-            setTimeout(() => URL.revokeObjectURL(url), 10000);
+            const textResponse = await response.data.text();
+            // The backend HTML includes a <script> that auto-prints. We strip it here to avoid double print dialogs.
+            const cleanHtml = textResponse.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+            
+            const iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            document.body.appendChild(iframe);
+            
+            iframe.contentDocument.open();
+            iframe.contentDocument.write(cleanHtml);
+            iframe.contentDocument.close();
+
+            // Wait a tiny bit for the browser to render the written HTML
+            setTimeout(() => {
+                iframe.contentWindow.focus();
+                iframe.contentWindow.print();
+                
+                // Cleanup after a delay to allow the print dialog to appear
+                setTimeout(() => {
+                    document.body.removeChild(iframe);
+                }, 10000);
+            }, 500);
         } catch (error) {
             console.error('Failed to export transactions to PDF:', error);
             alert('Failed to export transactions');
-        } finally {
-            setActiveDropdown(null);
         }
     };
 
@@ -961,6 +1402,7 @@ const Transactions = () => {
         setDeleteDialog({
             open: true,
             id: txn.id,
+            ids: txn.originalTxnIds?.length > 0 ? txn.originalTxnIds : [txn.id],
             label: String(txn.contact || txn.payee || txn.counterpartyName || txn.name || '').trim(),
             loading: false
         });
@@ -973,22 +1415,52 @@ const Transactions = () => {
     };
 
     const handleConfirmDelete = async () => {
-        if (!deleteDialog.id) return;
+        if (!deleteDialog.id && (!deleteDialog.ids || deleteDialog.ids.length === 0)) return;
 
         setDeleteDialog((current) => ({ ...current, loading: true }));
 
         try {
-            await apiService.transactions.delete(deleteDialog.id);
+            const idsToDelete = deleteDialog.ids?.length > 0 ? deleteDialog.ids : [deleteDialog.id];
+            await Promise.all(idsToDelete.map(id => apiService.transactions.delete(id)));
             notifyTransactionDataChanged();
             await fetchTransactions();
             setDeleteDialog(createInitialDeleteDialog());
         } catch (error) {
-            console.error("Failed to delete transaction:", error);
-            const msg = error.response?.data?.message || error.message || "Failed to delete transaction";
+            console.error("Failed to delete transaction(s):", error);
+            const msg = error.response?.data?.message || error.message || "Failed to delete transaction(s)";
             alert(msg);
             setDeleteDialog((current) => ({ ...current, loading: false }));
         }
     };
+
+    // Global Escape Key Listener to focus Sidebar Navigation
+    useEffect(() => {
+        const handleGlobalKeyDown = (e) => {
+            // Prevent intercepting if they are actively working in an open modal
+            if (e.key === 'Escape') {
+                if (isImportModalOpen || deleteDialog.open || drawerState.open || attachmentViewer.isOpen || fullScreenAttachment.isOpen) {
+                    return;
+                }
+                
+                const sidebar = document.getElementById('app-main-sidebar');
+                if (sidebar) {
+                    sidebar.focus({ preventScroll: true });
+                    // Specifically target the transactions menu link in the sidebar
+                    const txnLink = sidebar.querySelector('a[href*="/transactions"]');
+                    if (txnLink) {
+                        txnLink.focus({ preventScroll: true });
+                    } else {
+                        // Fallback if not found
+                        const firstBtn = sidebar.querySelector('[data-sidebar-focusable="true"], button, a');
+                        if (firstBtn) firstBtn.focus({ preventScroll: true });
+                    }
+                }
+            }
+        };
+
+        document.addEventListener('keydown', handleGlobalKeyDown);
+        return () => document.removeEventListener('keydown', handleGlobalKeyDown);
+    }, [isImportModalOpen, deleteDialog.open, drawerState.open, attachmentViewer.isOpen, fullScreenAttachment.isOpen]);
 
     // Calculate totals grouped by currency
     const currencyTotals = useMemo(() => {
@@ -1110,10 +1582,11 @@ const Transactions = () => {
                         breadcrumbs={['Transactions', 'List']}
                     />
                 )}
-                contentClassName="p-0 lg:p-0"
-                cardClassName="border-none shadow-none rounded-none overflow-visible bg-transparent"
+                className="flex-1 flex flex-col min-h-0 lg:overflow-y-auto"
+                contentClassName="p-0 lg:p-0 lg:overflow-visible"
+                cardClassName="border-none shadow-none rounded-none overflow-visible lg:overflow-visible bg-transparent lg:max-h-none"
             >
-                <div className="flex flex-col h-full min-h-0">
+                <div className="flex flex-col min-h-full h-auto">
 
                 {/* Print Only Header */}
                 <div className="hidden print:block text-center py-6 mb-4">
@@ -1131,7 +1604,7 @@ const Transactions = () => {
                         className="h-[32px]"
                     />
                     
-                    <BranchSelector />
+                    <BranchSelector hideSettings={true} />
 
                     <CurrencySelector 
                         value={appliedFilters.currency}
@@ -1146,59 +1619,91 @@ const Transactions = () => {
                         onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
                         placeholder="Party"
                         options={availableParties}
+                        showSelectAll
+                        selectAllLabel="Select All"
+                        allDisplayLabel="All Parties"
+                        darkActiveState={true}
                     />
                 </div>
 
+                {appliedFilters.accountId && (
+                    <div className="px-5 pb-2 text-xs print:hidden animate-in fade-in duration-300">
+                        <span className="inline-flex items-center gap-1.5 bg-[#EEF0FC] text-[#4A8AF4] px-2.5 py-1 rounded-md font-semibold border border-[#D5DDFB]">
+                            Isolated Account View
+                            <button 
+                                onClick={() => {
+                                    setAppliedFilters(p => ({ ...p, accountId: null }));
+                                    // Remove from URL gracefully
+                                    const params = new URLSearchParams(searchParams);
+                                    params.delete('accountId');
+                                    navigate(`?${params.toString()}`, { replace: true });
+                                }} 
+                                className="hover:text-blue-900 ml-1 focus:outline-none"
+                            >
+                                <X size={12} className="stroke-[3px]" />
+                            </button>
+                        </span>
+                    </div>
+                )}
+
                 {/* Always-Visible KPI Strip & Conditionally Visible Charts */}
-                <div className="px-5 pt-4 pb-2 w-full animate-in fade-in duration-300">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-                        <div className="flex flex-wrap items-center gap-8">
-                            <div className="flex items-center gap-3 min-w-fit">
-                                <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-                                    <ArrowDownLeft size={18} className="text-emerald-600" />
+                <div className="px-5 pt-2 pb-0 w-full animate-in fade-in duration-300 relative z-10">
+                    <div className="px-2 py-2">
+                        {/* Metrics Row */}
+                        <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-lg border border-white/60 bg-emerald-50 flex items-center justify-center shrink-0">
+                                    <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
                                 </div>
                                 <div>
-                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Inflow</div>
-                                    <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
+                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Inflow</div>
+                                    <div className="text-[17px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 min-w-fit">
-                                <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
-                                    <ArrowUpRight size={18} className="text-rose-600" />
+                            <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-lg border border-white/60 bg-rose-50 flex items-center justify-center shrink-0">
+                                    <ArrowUpRight size={16} className="text-rose-600" strokeWidth={2.5} />
                                 </div>
                                 <div>
-                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Outflow</div>
-                                    <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
+                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Outflow</div>
+                                    <div className="text-[17px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-3 min-w-fit pl-6 border-l border-gray-100">
-                                <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
-                                    <Activity size={18} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
+                            <div className="flex items-center gap-3">
+                                <div className={cn("w-9 h-9 rounded-lg border border-white/60 flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
+                                    <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} strokeWidth={2.5} />
                                 </div>
                                 <div>
-                                    <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Net Flow</div>
-                                    <div className={cn("text-[16px] font-extrabold whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Net Flow</div>
+                                    <div className={cn("text-[17px] font-bold tracking-tight whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
                                         {formatCurrency(insightsData.netFlow)}
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div className="shrink-0 flex items-center justify-end">
+
+                        {/* Chart Toggle */}
+                        <div className="mt-4 border-t border-gray-50 flex justify-between items-center">
                             <button
+                                type="button"
                                 onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="h-[32px] px-3.5 flex items-center gap-2 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus:bg-[#F0F9FF] focus:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
                             >
-                                <TrendingUp size={14} className={isInsightsExpanded ? "text-primary" : "text-gray-500"} />
-                                <span className={isInsightsExpanded ? "text-primary" : "hidden sm:inline"}>{isInsightsExpanded ? 'Hide Charts' : 'Show Charts'}</span>
+                                <TrendingUp size={14} />
+                                {isInsightsExpanded ? "Hide Charts" : "Show Charts"}
+                                {isInsightsExpanded ? (
+                                    <ChevronUp size={14} />
+                                ) : (
+                                    <ChevronDown size={14} />
+                                )}
                             </button>
                         </div>
                     </div>
 
                     {/* Charts Area */}
                     {isInsightsExpanded && (
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
-                            <div className="lg:col-span-2">
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
+                            <div className="lg:col-span-4">
                                 <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
                                     <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
                                 </h3>
@@ -1242,8 +1747,54 @@ const Transactions = () => {
                                     </ResponsiveContainer>
                                 </div>
                             </div>
+
+                            <div className="lg:col-span-4">
+                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                    <FileText size={14} className="text-indigo-600" /> GST Paid Trend
+                                </h3>
+                                <div className="h-[220px] w-full">
+                                    {insightsData.totalGstPaid > 0 ? (
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                                <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} 
+                                                    tickFormatter={(val) => {
+                                                        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                                        if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                        return val;
+                                                    }}
+                                                />
+                                                <Tooltip
+                                                    cursor={{ fill: 'transparent' }}
+                                                    content={({ active, payload, label }) => {
+                                                        if (active && payload && payload.length) {
+                                                            return (
+                                                                <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
+                                                                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
+                                                                    <div className="flex items-center justify-between gap-4">
+                                                                        <span className="text-[13px] font-medium text-gray-600">GST Paid:</span>
+                                                                        <span className="text-[14px] font-bold text-indigo-600">{formatCurrency(payload[0].value)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        }
+                                                        return null;
+                                                    }}
+                                                />
+                                                <Bar dataKey="gstPaid" name="GST Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    ) : (
+                                        <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
+                                            <FileText size={24} className="text-gray-200" />
+                                            <span>No GST paid in this view</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                             
-                            <div>
+                            <div className="lg:col-span-4">
                                 <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
                                     <PieChartIcon size={14} className="text-primary" /> Top Expense Categories
                                 </h3>
@@ -1304,20 +1855,26 @@ const Transactions = () => {
 
                 {/* Custom List Header (Table Actions) */}
                 <div className="px-5 pb-4 pt-1.5 flex flex-col xl:flex-row xl:items-center justify-between print:hidden gap-4 relative z-10 w-full">
-                    {/* LEFT SIDE: Core Table Actions */}
+                    {/* LEFT SIDE: Search & Primary Action */}
                     <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
                         <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setDrawerState({ open: true, transaction: null })}
-                                className="h-[32px] px-3.5 flex items-center gap-1.5 justify-center rounded-md bg-[#4A8AF4] text-white hover:bg-[#3b7ee1] transition-colors font-medium text-[13px] focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <Plus size={15} strokeWidth={2.5} />
-                                <span className="hidden sm:inline">Add Transaction</span>
-                            </button>
+                            <div className="relative group w-full sm:w-[240px]">
+                                <Search
+                                    size={14}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
+                                />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search"
+                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                />
+                            </div>
 
                             <button
                                 onClick={() => fetchTransactions()}
-                                className="w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-gray-800 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
                                 title="Refresh table data"
                             >
                                 <RefreshCcw
@@ -1326,29 +1883,40 @@ const Transactions = () => {
                                     className={cn(loading && "animate-spin text-primary")}
                                 />
                             </button>
-                            
-                            <div className="h-4 w-px bg-gray-200 mx-1"></div>
 
-                            <button
-                                onClick={() => setIsImportModalOpen(true)}
-                                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <FileSpreadsheet size={14} className="text-emerald-600" />
-                                <span className="hidden sm:inline">Import</span>
-                            </button>
-                            
-                            <button
-                                onClick={() => handleExport('excel')}
-                                className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 transition-colors font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <Download size={14} className="text-gray-500" />
-                                <span className="hidden sm:inline">Export</span>
-                            </button>
                         </div>
                     </div>
 
-                    {/* RIGHT SIDE: Table View Controls & Insights */}
+                    {/* RIGHT SIDE: Import / Export / View Controls */}
                     <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2 w-full xl:w-auto">
+                        <button
+                            ref={importBtnRef}
+                            onClick={() => setIsImportModalOpen(true)}
+                            className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                        >
+                            <FileSpreadsheet size={14} className="text-emerald-600" />
+                            <span className="hidden sm:inline">Import</span>
+                        </button>
+
+                        <div className="flex border border-gray-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-white divide-x divide-gray-200 shrink-0">
+                            <button
+                                onClick={handleExportExcel}
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] rounded-l-md"
+                                title="Export to Excel"
+                            >
+                                <Download size={14} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                                <span className="hidden sm:inline">Excel</span>
+                            </button>
+                            <button
+                                onClick={handleExportPDF}
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center text-gray-600 hover:text-rose-600 hover:bg-rose-50 focus:outline-none focus-visible:bg-rose-50 focus-visible:text-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100 transition-all font-medium text-[13px] rounded-r-md"
+                                title="Export to PDF"
+                            >
+                                <FileText size={14} className="group-hover:text-rose-500 group-focus-visible:text-rose-500 transition-colors" />
+                                <span className="hidden sm:inline">PDF</span>
+                            </button>
+                        </div>
+
                         
                         <FilterDropdown
                             value={appliedFilters.type}
@@ -1369,28 +1937,23 @@ const Transactions = () => {
                             setVisibleColumns={setVisibleColumns}
                         />
 
-                        <div className="h-4 w-px bg-gray-200 mx-1 hidden md:block"></div>
-
-                        <div className="relative group w-full xl:w-[240px] max-w-[300px]">
-                            <Search
-                                size={14}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors"
-                            />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search transactions..."
-                                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 focus:ring-2 focus:ring-primary/20 focus:border-primary/50 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            />
-                        </div>
+                        <button
+                            onClick={() => setDrawerState({ open: true, transaction: null })}
+                            className="group w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                            title="Add Transaction"
+                        >
+                            <Plus size={16} strokeWidth={2.5} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                        </button>
                     </div>
                 </div>
 
-                <div className="w-full px-5 pb-1 relative flex-1 min-h-[500px] flex flex-col" aria-busy={loading}>
-                    <div className="flex-1 w-full overflow-hidden relative">
-                        <div className="absolute inset-0">
+                <div className="w-full px-5 pb-8 relative" aria-busy={loading}>
+                    <div 
+                        style={{ height: "600px", width: "100%" }} 
+                        className={`border border-gray-200 rounded-lg overflow-hidden transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}
+                    >
                             <AgGridReact
+                                ref={gridRef}
                                 theme={themeQuartz}
                                 rowData={filteredTransactions}
                                 columnDefs={colDefs}
@@ -1408,13 +1971,15 @@ const Transactions = () => {
                                     canEditTxn,
                                     setFullScreenAttachment,
                                     formatCurrency,
-                                    formatDate
+                                    formatDate,
+                                    outliers: insightsData.outliers,
+                                    anomalousPartyDays: insightsData.anomalousPartyDays,
+                                    duplicateTransactions: insightsData.duplicateTransactions
                                 }}
                                 overlayNoRowsTemplate={
                                     loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'
                                 }
                             />
-                        </div>
                     </div>
                 </div>
             </div>

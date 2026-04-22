@@ -6,7 +6,7 @@ import React, {
   useRef,
 } from "react";
 import { createPortal } from "react-dom";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Edit,
   Trash2,
@@ -240,7 +240,7 @@ const FilterDropdown = React.forwardRef(
             className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
           >
             <span className="group-hover:text-blue-500 transition-colors uppercase text-[11px] tracking-tight">{label && `${label}: `}</span>
-            <span className="group-hover:text-blue-600 font-bold transition-colors">{selectedOption?.label}</span>
+            <span className="group-hover:text-blue-600 font-medium transition-colors">{selectedOption?.label}</span>
           </div>
           {!hideIcon && (
             <ChevronDown
@@ -640,6 +640,27 @@ const BranchTooltip = ({ branchNames }) => {
         </span>
       )}
     </span>
+  );
+};
+
+const TxnCountCellRenderer = (props) => {
+  const navigate = useNavigate();
+  const value = props.value;
+  
+  if (!value || value === 0) return <span className="text-gray-300 font-medium w-full h-full flex items-center justify-center">0</span>;
+  
+  return (
+    <button
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        navigate(`/transactions?accountId=${props.data.id}`);
+      }}
+      className="text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer font-bold w-full h-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm"
+      title={`View ${value} transactions for ${props.data.name}`}
+    >
+      {value}
+    </button>
   );
 };
 
@@ -1564,7 +1585,8 @@ const Accounts = () => {
         field: "totalTransactions",
         headerName: "Txns",
         width: 100,
-        cellClass: "text-center font-bold text-slate-500 tabular-nums flex items-center justify-center",
+        cellClass: "flex items-center justify-center",
+        cellRenderer: TxnCountCellRenderer,
         headerClass: "ag-center-aligned-header",
       },
 

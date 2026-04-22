@@ -1,12 +1,12 @@
 
 import { db } from '../../db';
 import { transactions, transactionEntries, accounts, auditLogs, transactionTypes, categories, subCategories, currencies, financialYears, branches, organizations, users, parties } from '../../db/schema';
-import { eq, and, desc, lte, gte, inArray, sql } from 'drizzle-orm';
+import { eq, and, or, desc, lte, gte, inArray, sql } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
-import { read, utils } from 'xlsx';
+import { read, utils, write } from 'xlsx';
 import { WebSocketService } from '../../shared/websocket.service';
 import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
@@ -24,6 +24,7 @@ interface TransactionExportFilters {
         startDate?: string;
         endDate?: string;
         payee?: string;
+        activeIds?: number[];
     };
     sortConfig?: {
         key?: string;
@@ -243,8 +244,14 @@ export class TransactionService {
         user?: any,
         filters: TransactionExportFilters = {}
     ) {
-        const transactions = (await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user))
-            .map((txn: any) => this.enrichExportTransaction(txn));
+        let transactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user);
+        
+        if (filters.appliedFilters && filters.appliedFilters.activeIds && Array.isArray(filters.appliedFilters.activeIds)) {
+            const allowedIds = new Set(filters.appliedFilters.activeIds.map(Number));
+            transactions = transactions.filter(txn => allowedIds.has(txn.id));
+        }
+
+        const enrichedTransactions = transactions.map((txn: any) => this.enrichExportTransaction(txn));
         const grouped = new Map<string, GroupedExportTransaction>();
 
         transactions.forEach((txn: any) => {
@@ -283,21 +290,32 @@ export class TransactionService {
         return this.filterGroupedTransactions(Array.from(grouped.values()), filters);
     }
 
-    static buildExportCsv(groupedTransactions: GroupedExportTransaction[]) {
-        const headers = ['Id', 'Name', 'Date', 'Type', 'Status', 'Payee', 'Account', 'Category', 'Notes', 'Amount', 'Branches'];
-        const rows = groupedTransactions.map((txn) => [
-            txn.id,
-            txn.name || '',
-            this.formatExportDate(txn.txnDate),
-            txn.txnType ? txn.txnType.charAt(0).toUpperCase() + txn.txnType.slice(1) : '',
-            this.normalizeStatus(txn.status),
-            txn.contact || '',
-            txn.accountName || '',
-            txn.categoryName || '',
-            txn.notes || '',
-            Number(txn.amount || 0).toFixed(2),
-            txn.branchNames.join(', ')
-        ]);
+    private static getExportColumns(visibleColumns?: string[]) {
+        const COLUMNS = [
+            { key: 'id', header: 'Id', width: 10, extract: (txn: any, index: number) => index + 1 },
+            { key: null, header: 'Name', width: 35, extract: (txn: any) => txn.name || '' },
+            { key: 'date', header: 'Date', width: 15, extract: (txn: any) => this.formatExportDate(txn.txnDate) },
+            { key: 'type', header: 'Type', width: 15, extract: (txn: any) => txn.txnType ? txn.txnType.charAt(0).toUpperCase() + txn.txnType.slice(1) : '' },
+            { key: 'party', header: 'Payee', width: 35, extract: (txn: any) => txn.contact || '' },
+            { key: 'account', header: 'Account', width: 30, extract: (txn: any) => txn.accountName || '' },
+            { key: 'category', header: 'Category', width: 30, extract: (txn: any) => txn.categoryName || '' },
+            { key: 'notes', header: 'Notes', width: 50, extract: (txn: any) => txn.notes || '' },
+            { key: 'amount', header: 'Amount', width: 15, htmlAlign: 'right', extract: (txn: any) => Number(txn.amount || 0).toFixed(2), extractValue: (txn: any) => Number(txn.amount || 0) },
+            { key: 'branch', header: 'Branches', width: 70, extract: (txn: any) => Array.isArray(txn.branchNames) ? txn.branchNames.join(', ') : (txn.branchNames || ''), extractHtml: (txn: any) => Array.isArray(txn.branchNames) ? txn.branchNames.join('<br />') : (txn.branchNames || '') },
+            { key: 'createdBy', header: 'Created By', width: 25, extract: (txn: any) => txn.createdByName || txn.createdByDisplayName || txn.creatorName || '' }
+        ];
+
+        if (!visibleColumns || visibleColumns.length === 0) {
+            return COLUMNS.filter(c => c.key !== 'createdBy');
+        }
+
+        return COLUMNS.filter(c => c.key === null || visibleColumns.includes(c.key));
+    }
+
+    static buildExportCsv(groupedTransactions: GroupedExportTransaction[], visibleColumns?: string[]) {
+        const columns = this.getExportColumns(visibleColumns);
+        const headers = columns.map(c => c.header);
+        const rows = groupedTransactions.map((txn, index) => columns.map(c => c.extract(txn, index)));
 
         return [
             headers.map((header) => this.escapeCsvValue(header)).join(','),
@@ -305,22 +323,36 @@ export class TransactionService {
         ].join('\n');
     }
 
-    static buildPrintableHtml(groupedTransactions: GroupedExportTransaction[]) {
+    static buildExportExcel(groupedTransactions: GroupedExportTransaction[], visibleColumns?: string[]) {
+        const columns = this.getExportColumns(visibleColumns);
+        const headers = columns.map(c => c.header);
+        const rows = groupedTransactions.map((txn, index) => {
+            const rowData: any = {};
+            columns.forEach(c => {
+                rowData[c.header] = c.extractValue ? c.extractValue(txn, index) : c.extract(txn, index);
+            });
+            return rowData;
+        });
+
+        const worksheet = utils.json_to_sheet(rows, { header: headers });
+        worksheet['!cols'] = columns.map(c => ({ wch: c.width }));
+
+        const workbook = utils.book_new();
+        utils.book_append_sheet(workbook, worksheet, 'Transactions');
+        
+        return write(workbook, { type: 'buffer', bookType: 'xlsx' });
+    }
+
+    static buildPrintableHtml(groupedTransactions: GroupedExportTransaction[], visibleColumns?: string[]) {
+        const columns = this.getExportColumns(visibleColumns);
+        
         const rows = groupedTransactions.map((txn, index) => `
             <tr>
-                <td>${index + 1}</td>
-                <td>${txn.name || '-'}</td>
-                <td>${this.formatExportDate(txn.txnDate)}</td>
-                <td>${txn.txnType ? txn.txnType.charAt(0).toUpperCase() + txn.txnType.slice(1) : '-'}</td>
-                <td>${this.normalizeStatus(txn.status)}</td>
-                <td>${txn.contact || '-'}</td>
-                <td>${txn.accountName || '-'}</td>
-                <td>${txn.categoryName || '-'}</td>
-                <td>${txn.notes || '-'}</td>
-                <td style="text-align:right;">${Number(txn.amount || 0).toFixed(2)}</td>
-                <td>${txn.branchNames.join(', ') || '-'}</td>
+                ${columns.map(c => `<td${c.htmlAlign ? ` style="text-align:${c.htmlAlign};"` : ''}>${c.extractHtml ? c.extractHtml(txn, index) : c.extract(txn, index) ?? '-'}</td>`).join('\n                ')}
             </tr>
         `).join('');
+
+        const headerHtml = columns.map(c => `<th>${c.header}</th>`).join('\n                            ');
 
         return `
             <!doctype html>
@@ -354,17 +386,7 @@ export class TransactionService {
                 <table>
                     <thead>
                         <tr>
-                            <th>No.</th>
-                            <th>Name</th>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Status</th>
-                            <th>Payee</th>
-                            <th>Account</th>
-                            <th>Category</th>
-                            <th>Notes</th>
-                            <th>Amount</th>
-                            <th>Branches</th>
+                            ${headerHtml}
                         </tr>
                     </thead>
                     <tbody>${rows}</tbody>
@@ -559,7 +581,7 @@ export class TransactionService {
             if (dateStr) {
                 if (typeof dateStr === 'number') {
                     const d = new Date(Math.round((dateStr - 25569) * 86400 * 1000));
-                    txnDate = d.toISOString().split('T')[0] ?? null;
+                    txnDate = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
                 } else {
                     // Try parsing DD/MM/YYYY or MM/DD/YYYY if standard fail
                     let d = new Date(dateStr);
@@ -576,7 +598,9 @@ export class TransactionService {
                             }
                         }
                     }
-                    if (!isNaN(d.getTime())) txnDate = d.toISOString().split('T')[0] ?? null;
+                    if (!isNaN(d.getTime())) {
+                        txnDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                    }
                 }
             }
             if (!txnDate) rowErrors.push('Invalid date');
@@ -648,11 +672,11 @@ export class TransactionService {
                 if (!party) party = row.name || row.description;
 
                 validTransactions.push({
-                    _rowNum: rowNum, 
+                    _rowNum: rowNum,
                     orgId,
                     branchId,
                     financialYearId: defaultFinancialYearId || 0, // Fallback handled by create if needed
-                    name: row.name || row.description || 'Imported Transaction',
+                    name: row.name || row.description || party || 'Imported Transaction',
                     txnDate,
                     txnTypeId: tid,
                     categoryId: catId || null,
@@ -1190,7 +1214,7 @@ export class TransactionService {
             if (transactionCurrency === branchCurrency) {
                 fxRate = 1;
             } else if (fxRate === 1) {
-                const fetchedRate = await ExchangeRateService.getRate(data.currencyCode, branchCurrency);
+                const fetchedRate = await ExchangeRateService.getRate(data.currencyCode, branchCurrency, data.orgId);
                 if (fetchedRate !== 1) {
                     fxRate = fetchedRate;
                 }
@@ -1397,7 +1421,7 @@ export class TransactionService {
         });
     }
 
-    static async getAll(orgId: number, branchId: number | number[] | 'all' | null, financialYearId: number, limit?: number, targetCurrency?: string, user?: any) {
+    static async getAll(orgId: number, branchId: number | number[] | 'all' | null, financialYearId: number, limit?: number, targetCurrency?: string, user?: any, accountId?: number) {
         const filters = [
             eq(transactions.orgId, orgId),
             eq(transactions.financialYearId, financialYearId),
@@ -1410,7 +1434,17 @@ export class TransactionService {
             filters.push(eq(transactions.branchId, branchId));
         }
 
+        if (accountId) {
+             const matchingTxnsQuery = db.select({ id: transactionEntries.transactionId })
+                 .from(transactionEntries)
+                 .where(eq(transactionEntries.accountId, accountId));
+                 
+             filters.push(inArray(transactions.id, matchingTxnsQuery));
+        }
+
         const orgPromise = db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
+
+        const limitClause = limit === -1 ? undefined : (limit ? limit : (accountId ? undefined : 50));
 
         const txns = await db.select({
             transaction: transactions,
@@ -1467,7 +1501,7 @@ export class TransactionService {
             .leftJoin(parties, eq(transactions.contactId, parties.id))
             .where(and(...filters))
             .orderBy(desc(transactions.txnDate), desc(transactions.createdAt))
-            .limit(limit || 50);
+            .limit(limitClause);
 
         // Batch fetch entries
         const txnIds = txns.map(r => r.transaction.id);
@@ -1689,7 +1723,7 @@ export class TransactionService {
             } else if (data.currencyCode && data.currencyCode !== (existing as any).currency?.code) {
                 // Update Rate
                 if (branch) {
-                    finalFxRate = (await ExchangeRateService.getRate(data.currencyCode, branch.currencyCode)).toString();
+                    finalFxRate = (await ExchangeRateService.getRate(data.currencyCode, branch.currencyCode, existing.orgId)).toString();
                 }
             }
 

@@ -40,6 +40,28 @@ const persistRate = async (
     });
 };
 
+const fetchFxApiRate = async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
+    const from = String(fromCurrency || '').trim().toLowerCase();
+    const to = String(toCurrency || '').trim().toLowerCase();
+    const url = `https://fxapi.app/api/${from}/${to}.json`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+        console.warn(`[ExchangeRateService] fxapi.app fetch failed: ${response.status} for ${fromCurrency} -> ${toCurrency}`);
+        return null;
+    }
+
+    const data: any = await response.json();
+    const rate = Number(data?.rate);
+
+    if (!Number.isFinite(rate) || rate <= 0) {
+        console.warn(`[ExchangeRateService] fxapi.app returned invalid rate for ${fromCurrency} -> ${toCurrency}: ${JSON.stringify(data)}`);
+        return null;
+    }
+
+    return rate;
+};
+
 const fetchFrankfurterRate = async (fromCurrency: string, toCurrency: string): Promise<number | null> => {
     const url = `https://api.frankfurter.dev/v1/latest?from=${fromCurrency}&to=${toCurrency}`;
     const response = await fetch(url);
@@ -202,9 +224,9 @@ export const ExchangeRateService = {
         // 3. Define the Fetch Logic as a single unit
         const fetchAndStore = async (): Promise<number> => {
             try {
-                // PRIMARY: Fetch from YOUR Exchange Rate API
-                console.log(`[ExchangeRateService] Attempting PRIMARY fetch from exchangeratesapi.io...`);
-                const rate = await fetchExchangeRatesIoRate(normalizedFromCurrency, normalizedToCurrency, 'latest');
+                // PRIMARY: Fetch live pair rate from fxapi.app
+                console.log(`[ExchangeRateService] Attempting PRIMARY fetch from fxapi.app...`);
+                const rate = await fetchFxApiRate(normalizedFromCurrency, normalizedToCurrency);
                 
                 if (rate) {
                     console.log(`[ExchangeRateService] SUCCESS: Fetched LIVE rate from PRIMARY API: ${rate}`);
@@ -219,10 +241,11 @@ export const ExchangeRateService = {
 
             // SECONDARY: Fallback to other Public APIs only if Primary fails
             try {
-                console.log(`[ExchangeRateService] Attempting SECONDARY fetch from Fallback APIs (Frankfurter/OpenER)...`);
+                console.log(`[ExchangeRateService] Attempting SECONDARY fetch from fallback APIs (Frankfurter/OpenER/exchangeratesapi.io)...`);
                 const secondaryProviders = [
                     () => fetchFrankfurterRate(normalizedFromCurrency, normalizedToCurrency),
-                    () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency)
+                    () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency),
+                    () => fetchExchangeRatesIoRate(normalizedFromCurrency, normalizedToCurrency, 'latest')
                 ];
 
                 for (const fetchRate of secondaryProviders) {

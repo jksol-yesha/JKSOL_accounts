@@ -24,9 +24,18 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                 setIsBranchDropdownOpen(false);
             }
         };
+        const handleEscape = (e) => {
+            if (e.key === 'Escape' && isOpen && !isBranchDropdownOpen) {
+                onClose();
+            }
+        };
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+        document.addEventListener('keydown', handleEscape);
+        return () => {
+             document.removeEventListener('mousedown', handleClickOutside);
+             document.removeEventListener('keydown', handleEscape);
+        };
+    }, [isOpen, isBranchDropdownOpen, onClose]);
 
     // Keep target branches in sync with current scope so upload never starts with an empty selection.
     React.useEffect(() => {
@@ -200,7 +209,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
         );
     }
 
-        return createPortal(
+    return createPortal(
         <>
             {/* Backdrop */}
             <div
@@ -249,7 +258,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                         <label className="text-[11px] font-bold text-slate-600 block">Target Branch <span className="text-rose-500">*</span></label>
                                         <p className="text-[10px] font-bold text-slate-400 mt-0.5">Where would you like to map these statements?</p>
                                     </div>
-        
+
                                     <div className="flex flex-col overflow-hidden border border-slate-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-white">
                                         {/* Action Bar */}
                                         <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
@@ -264,16 +273,16 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                                 className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors ${isAllSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} uppercase tracking-wider`}
                                             >
                                                 <div className="w-4 flex justify-center shrink-0">
-                                                    <Check 
-                                                        size={14} 
-                                                        className={`${isAllSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`} 
-                                                        strokeWidth={isAllSelected ? 3 : 2.5} 
+                                                    <Check
+                                                        size={14}
+                                                        className={`${isAllSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                                        strokeWidth={isAllSelected ? 3 : 2.5}
                                                     />
                                                 </div>
                                                 Select All
                                             </button>
                                         </div>
-                                        
+
                                         {/* Branch List */}
                                         <div className="flex flex-col max-h-[140px] overflow-y-auto no-scrollbar py-1">
                                             {branches?.map(b => {
@@ -330,42 +339,42 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                                 }
                                             }
                                         }}>
-                                <input
-                                    ref={fileInputRef}
-                                    type="file"
-                                    accept=".xlsx,.xls"
-                                    onChange={handleFileChange}
-                                    className="hidden"
-                                />
+                                        <input
+                                            ref={fileInputRef}
+                                            type="file"
+                                            accept=".xlsx,.xls"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                        />
 
-                                {file ? (
-                                    <div className="w-full relative border border-slate-200 shadow-sm rounded-lg p-5 bg-slate-50/50 group flex flex-col items-center justify-center">
-                                       <div className="absolute top-2 right-2">
-                                           <button onClick={(e) => { e.stopPropagation(); setFile(null); if(fileInputRef.current) fileInputRef.current.value = ''; }} className="p-1 bg-white border border-slate-200 shadow-sm rounded-md text-rose-500 hover:bg-rose-50 transition-colors">
-                                              <X size={12} strokeWidth={2.5}/>
-                                           </button>
-                                       </div>
-                                       <div className="w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4] mb-3">
-                                          <FileSpreadsheet size={18} strokeWidth={2.5} />
-                                       </div>
-                                       <p className="text-[13px] font-extrabold text-slate-900 truncate w-full px-4 text-center">{file.name}</p>
-                                       <p className="text-[10px] font-bold text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                                        {file ? (
+                                            <div className="w-full relative border border-slate-200 shadow-sm rounded-lg p-5 bg-slate-50/50 group flex flex-col items-center justify-center">
+                                                <div className="absolute top-2 right-2">
+                                                    <button onClick={(e) => { e.stopPropagation(); setFile(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} className="p-1 bg-white border border-slate-200 shadow-sm rounded-md text-rose-500 hover:bg-rose-50 transition-colors">
+                                                        <X size={12} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
+                                                <div className="w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4] mb-3">
+                                                    <FileSpreadsheet size={18} strokeWidth={2.5} />
+                                                </div>
+                                                <p className="text-[13px] font-extrabold text-slate-900 truncate w-full px-4 text-center">{file.name}</p>
+                                                <p className="text-[10px] font-bold text-slate-500 mt-0.5">{(file.size / 1024).toFixed(1)} KB</p>
+                                            </div>
+                                        ) : (
+                                            <div
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className={"w-full border-2 border-dashed border-slate-200 hover:border-[#4A8AF4] hover:bg-[#4A8AF4]/5 transition-all shadow-sm rounded-lg p-8 cursor-pointer flex flex-col items-center justify-center " + (error ? "border-rose-400 bg-rose-50/30" : "")}
+                                            >
+                                                <div className="w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 mb-3 group-hover:text-[#4A8AF4] transition-colors">
+                                                    <Upload size={18} strokeWidth={2.5} />
+                                                </div>
+                                                <p className="text-[13px] font-extrabold text-slate-900">Click to upload statement</p>
+                                                <p className="text-[10px] font-bold text-slate-500 mt-1">Excel files (.xlsx, .xls) only</p>
+                                            </div>
+                                        )}
                                     </div>
-                                ) : (
-                                    <div
-                                        onClick={() => fileInputRef.current?.click()}
-                                        className={"w-full border-2 border-dashed border-slate-200 hover:border-[#4A8AF4] hover:bg-[#4A8AF4]/5 transition-all shadow-sm rounded-lg p-8 cursor-pointer flex flex-col items-center justify-center " + (error ? "border-rose-400 bg-rose-50/30" : "")}
-                                    >
-                                        <div className="w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 mb-3 group-hover:text-[#4A8AF4] transition-colors">
-                                           <Upload size={18} strokeWidth={2.5} />
-                                        </div>
-                                        <p className="text-[13px] font-extrabold text-slate-900">Click to upload statement</p>
-                                        <p className="text-[10px] font-bold text-slate-500 mt-1">Excel files (.xlsx, .xls) only</p>
-                                    </div>
-                                )}
+                                </div>
                             </div>
-                        </div>
-                        </div>
                         );
                     })()}
 
@@ -395,7 +404,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                     </div>
                                     <h4 className="text-[14px] font-extrabold text-slate-900 mb-1">Import Successful!</h4>
                                     <p className="text-[11px] font-bold text-slate-600 leading-relaxed">
-                                        Processed {result.totalRows} records. <br/>
+                                        Processed {result.totalRows} records. <br />
                                         <span className="text-emerald-700">Inserted {result.insertedRows} transactions safely.</span>
                                     </p>
                                     {result.message ? (
@@ -430,8 +439,8 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                     {errorCount > 0 && (
                                         <div className="border border-slate-200 shadow-sm rounded-lg overflow-hidden flex flex-col">
                                             <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">
-                                               <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Row Focus</span>
-                                               <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Error Detail</span>
+                                                <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Row Focus</span>
+                                                <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Error Detail</span>
                                             </div>
                                             <div className="max-h-48 overflow-y-auto no-scrollbar bg-white">
                                                 {result.errors.map((err, idx) => (
@@ -467,8 +476,8 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                     {errorCount > 0 && (
                                         <div className="border border-slate-200 shadow-sm rounded-lg overflow-hidden flex flex-col">
                                             <div className="bg-slate-50 border-b border-slate-200 px-3 py-2 flex items-center justify-between">
-                                               <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Row Focus</span>
-                                               <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Error Detail</span>
+                                                <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Row Focus</span>
+                                                <span className="text-[10px] font-extrabold text-slate-700 uppercase tracking-widest">Error Detail</span>
                                             </div>
                                             <div className="max-h-48 overflow-y-auto no-scrollbar bg-white">
                                                 {result.errors.map((err, idx) => (
@@ -488,10 +497,10 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                     {/* Error Message */}
                     {error && (
                         <div className="mt-2 border border-rose-200 bg-rose-50 p-2.5 rounded-lg flex items-center gap-2">
-                           <div className="w-6 h-6 rounded-full bg-white border border-rose-200 shadow-sm flex items-center justify-center text-rose-600 shrink-0">
+                            <div className="w-6 h-6 rounded-full bg-white border border-rose-200 shadow-sm flex items-center justify-center text-rose-600 shrink-0">
                                 <AlertCircle size={12} strokeWidth={2.5} />
-                           </div>
-                           <span className="text-[11px] font-bold text-rose-700">{error}</span>
+                            </div>
+                            <span className="text-[11px] font-bold text-rose-700">{error}</span>
                         </div>
                     )}
 
@@ -501,9 +510,9 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                 <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
                     {step === 'upload' && (
                         <>
-                            <button 
+                            <button
                                 type="button"
-                                onClick={onClose} 
+                                onClick={onClose}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                             >
                                 Cancel
@@ -521,9 +530,9 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
 
                     {step === 'confirm_missing' && (
                         <>
-                            <button 
+                            <button
                                 type="button"
-                                onClick={reset} 
+                                onClick={reset}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                             >
                                 Cancel
@@ -539,9 +548,9 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
 
                     {step === 'confirm_final' && (
                         <>
-                            <button 
+                            <button
                                 type="button"
-                                onClick={() => setStep('confirm_missing')} 
+                                onClick={() => setStep('confirm_missing')}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 hover:text-slate-900 transition-colors shadow-sm"
                             >
                                 Back
@@ -563,7 +572,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                             onClick={() => { if (insertedRows > 0) onClose(); else reset(); }}
                             className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-[#4A8AF4] hover:bg-[#3b76d6] text-white shadow-sm shadow-[#4A8AF4]/20 transition-colors flex items-center gap-2"
                         >
-                            {insertedRows > 0 ? <Check size={14} strokeWidth={2.5}/> : <AlertCircle size={14} strokeWidth={2.5}/>}
+                            {insertedRows > 0 ? <Check size={14} strokeWidth={2.5} /> : <AlertCircle size={14} strokeWidth={2.5} />}
                             {insertedRows > 0 ? 'Finish Setup' : 'Try Again'}
                         </button>
                     )}

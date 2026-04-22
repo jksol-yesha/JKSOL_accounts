@@ -163,6 +163,10 @@ const CurrencySelector = React.forwardRef(({
                 setHighlightedIndex(-1);
                 buttonRef.current?.focus();
                 break;
+            case 'Tab':
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                break;
             default:
                 break;
         }
@@ -192,14 +196,14 @@ const CurrencySelector = React.forwardRef(({
                 }}
                 onKeyDown={handleInternalKeyDown}
                 className={cn(
-                    "group relative flex items-center justify-center px-2.5 h-[32px] rounded-md border border-slate-200 bg-white transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none",
+                    "group relative flex items-center justify-center px-2.5 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none",
                     disabled
                         ? "cursor-not-allowed opacity-70"
-                        : "hover:bg-slate-50",
+                        : "hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100",
                     className,
                 )}
             >
-                <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-800">
+                <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
                     {hasSymbolLabel ? (
                         <>
                             <span className="text-[#4A8AF4] font-bold opacity-90">
@@ -214,8 +218,8 @@ const CurrencySelector = React.forwardRef(({
                 <ChevronDown
                     size={14}
                     className={cn(
-                        "ml-1 text-slate-500 transition-transform",
-                        isOpen ? "rotate-180" : "",
+                        "ml-1 transition-transform",
+                        isOpen ? "rotate-180 text-[#4A8AF4]" : "text-slate-500 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]",
                     )}
                 />
             </button>
@@ -228,32 +232,40 @@ const CurrencySelector = React.forwardRef(({
                     className="fixed z-[100] rounded-md border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in zoom-in-95 duration-200"
                     style={{ top: dropdownPosition.top, right: dropdownPosition.right, width: dropdownPosition.width }}
                 >
-                    {options.map((option, index) => (
-                        <button
-                            key={option.value}
-                            type="button"
-                            role="option"
-                            aria-selected={currentValue === option.value}
-                            onClick={() => handleSelect(option.value)}
-                            className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
-                                currentValue === option.value || index === highlightedIndex
-                                ? 'bg-[#EEF0FC]' 
-                                : 'hover:bg-[#EEF0FC]'
-                            }`}
-                        >
-                            <div className="w-4 flex justify-center shrink-0">
-                                {currentValue === option.value && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
-                            </div>
-                            <span className="text-[13px] tracking-tight text-slate-800">
-                                <span className={`font-bold mr-1 ${currentValue === option.value || index === highlightedIndex ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
-                                    {option.label.split(' - ')[0]}
+                    {options.map((option, index) => {
+                        const isSelected = currentValue === option.value;
+                        const isHighlighted = highlightedIndex === index;
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                role="option"
+                                aria-selected={isSelected}
+                                onClick={() => handleSelect(option.value)}
+                                onMouseEnter={() => setHighlightedIndex(index)}
+                                onMouseLeave={() => setHighlightedIndex(-1)}
+                                className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
+                                    isSelected
+                                    ? 'bg-[#EEF0FC]' 
+                                    : isHighlighted
+                                        ? 'bg-[#EEF0FC]/80 ring-1 ring-inset ring-[#CBD4F7]/40'
+                                        : 'hover:bg-[#EEF0FC]/60'
+                                }`}
+                            >
+                                <div className="w-4 flex justify-center shrink-0">
+                                    {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                </div>
+                                <span className="text-[13px] tracking-tight text-slate-800">
+                                    <span className={`font-bold mr-1 ${isSelected ? 'text-[#2F5FC6]' : isHighlighted ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
+                                        {option.label.split(' - ')[0]}
+                                    </span>
+                                    <span className={isSelected ? 'font-bold text-[#2F5FC6]' : isHighlighted ? 'font-bold text-[#4A8AF4]' : 'font-medium text-slate-600 group-hover:text-[#4A8AF4]'}>
+                                        {option.value}
+                                    </span>
                                 </span>
-                                <span className={currentValue === option.value || index === highlightedIndex ? 'font-bold' : 'font-medium'}>
-                                    {option.value}
-                                </span>
-                            </span>
-                        </button>
-                    ))}
+                            </button>
+                        );
+                    })}
                 </div>,
                 document.body
             )}

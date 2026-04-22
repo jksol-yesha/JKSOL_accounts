@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, Check, AlertCircle, X, ChevronDown, Download, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, X, ChevronDown, Download, ArrowRightLeft } from 'lucide-react';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
@@ -14,6 +14,16 @@ import GstRateDropdown from './GstRateDropdown';
 import { notifyTransactionDataChanged } from '../transactionDataSync';
 
 const TRANSACTIONS_CREATE_SCROLL_MODE_EVENT = 'transactions-create-scroll-mode';
+const TRANSACTION_DRAWER_CLOSE_ANIMATION_MS = 280;
+const SEARCHABLE_TRANSACTION_SELECT_PROPS = {
+    isSearchable: true,
+    searchInInput: true,
+    matchTriggerWidth: true,
+    maxVisibleOptions: 4,
+    optionRowHeight: 24,
+    openOnArrowKeys: false,
+    openOnFocus: false,
+};
 
 const isPartyInactive = (party) => {
     if (!party) return false;
@@ -29,19 +39,6 @@ const isCategoryInactive = (category) => {
     if (typeof category.status === 'string') return category.status.trim().toLowerCase() === 'inactive';
     if (typeof category.status === 'number') return category.status === 2;
     return false;
-};
-
-const getDefaultCategory = (categories) => {
-    const categoryList = categories || [];
-    const firstActiveCategory = categoryList.find((category) => !isCategoryInactive(category));
-    return firstActiveCategory || categoryList[0] || null;
-};
-
-const getDefaultSubCategoryId = (category) => {
-    const subCategories = category?.subCategories || [];
-    const firstActiveSubCategory = subCategories.find((subCategory) => !isCategoryInactive(subCategory));
-    const fallbackSubCategory = firstActiveSubCategory || subCategories[0];
-    return fallbackSubCategory ? String(fallbackSubCategory.id) : '';
 };
 
 const isAccountInactive = (account) => {
@@ -66,8 +63,9 @@ const isBranchInactive = (branch) => {
 const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) => {
     const navigate = useNavigate();
     const id = transactionToEdit?.id;
-    const location = useLocation();
     const isEditMode = !!id;
+    const shouldFetchData = !!id;
+    const location = useLocation();
     const { selectedBranch, branches } = useBranch();
     const { selectedYear } = useYear();
     const { selectedOrg } = useOrganization();
@@ -114,11 +112,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             }
             return [];
         }
-        // Default to the currently selected branch, or first available
-        if (canUseSelectedBranchAsDefault) {
-            return [Number(selectedBranch.id)];
-        }
-        return activeBranches.length > 0 ? [Number(activeBranches[0].id)] : [];
+        // Default to no branch selected requiring explicit action by the user
+        return [];
     });
     const visibleBranches = isEditMode
         ? branches.filter(branch => !isBranchInactive(branch) || targetBranchIds.includes(Number(branch.id)))
@@ -126,27 +121,108 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const formRef = useRef(null);
     const scrollAreaRef = useRef(null);
+    const fieldRefs = useRef({});
+    const pendingFocusFromFieldRef = useRef(null);
+    const datePickerAdvanceOnEnterRef = useRef(false);
+    const submitFormRef = useRef(async () => false);
+    const [focusTick, setFocusTick] = useState(0);
+    const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
+    const [isClosingDrawer, setIsClosingDrawer] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
 
     useEffect(() => {
+        let openStateTimer = null;
+
         if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+
+            openStateTimer = setTimeout(() => {
+                setShouldRenderDrawer(true);
+                setIsClosingDrawer(false);
+            }, 0);
+
+            return () => {
+                if (openStateTimer) clearTimeout(openStateTimer);
+            };
+        }
+
+        if (!shouldRenderDrawer) {
+            return;
+        }
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingDrawer(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderDrawer(false);
+            setIsClosingDrawer(false);
+            closeAnimationTimerRef.current = null;
+        }, TRANSACTION_DRAWER_CLOSE_ANIMATION_MS);
+
+        return () => {
+            if (openStateTimer) clearTimeout(openStateTimer);
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderDrawer]);
+
+    useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, []);
+
+    useEffect(() => {
+        if (shouldRenderDrawer) {
             document.body.style.overflow = "hidden";
             return () => {
                 document.body.style.overflow = "unset";
             };
         }
-    }, [isOpen]);
+    }, [shouldRenderDrawer]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        const handleGlobalKeyDown = (e) => {
+            if (e.defaultPrevented) return;
+
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                void submitFormRef.current?.();
+                return;
+            }
+
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                onClose?.();
+            }
+        };
+
+        window.addEventListener('keydown', handleGlobalKeyDown);
+        return () => {
+            window.removeEventListener('keydown', handleGlobalKeyDown);
+        };
+    }, [isOpen, onClose]);
 
     useEffect(() => {
         if (isEditMode) return;
 
         setTargetBranchIds(prev => {
             const normalizedPrev = prev.map(Number).filter(id => activeBranchIds.includes(id));
-            if (normalizedPrev.length > 0) return [normalizedPrev[0]];
-            if (canUseSelectedBranchAsDefault) return [Number(selectedBranch.id)];
-            if (activeBranchIds.length > 0) return [activeBranchIds[0]];
-            return [];
+            return normalizedPrev.length > 0 ? [normalizedPrev[0]] : [];
         });
-    }, [isEditMode, canUseSelectedBranchAsDefault, selectedBranch?.id, activeBranchIds.join(',')]);
+    }, [isEditMode, activeBranchIds.join(',')]);
 
     const [initialData, setInitialData] = useState(null); // State to hold initial transaction data for edit mode
 
@@ -175,7 +251,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const createEmptyFormData = (currencyCode = transactionBranchCurrency) => ({
         txnDate: new Date().toISOString().split('T')[0],
-        txnTypeId: 2,
+        txnTypeId: '', // No default transaction type
         name: '',
         accountId: '',
         attachmentPath: '',
@@ -219,6 +295,31 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         return sanitized;
     };
 
+    const formatLocalizedNumber = (value, currencyCode) => {
+        if (!value && value !== 0) return '';
+
+        const raw = String(value).replace(/,/g, '');
+        if (isNaN(raw)) return value;
+
+        const [integerPart, decimalPart] = raw.split('.');
+        const locale = String(currencyCode || '').toUpperCase() === 'INR' ? 'en-IN' : 'en-US';
+
+        const formattedInteger = new Intl.NumberFormat(locale, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(integerPart || 0);
+
+        if (decimalPart !== undefined) {
+            return `${formattedInteger}.${decimalPart.slice(0, 2)}`;
+        }
+
+        if (raw.endsWith('.')) {
+            return `${formattedInteger}.`;
+        }
+
+        return formattedInteger;
+    };
+
     const resolveTransactionCurrencyCode = (txn, fallbackCurrency) =>
         txn?.currencyCode || txn?.currency?.code || fallbackCurrency;
 
@@ -239,6 +340,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const normalizedTransactionCurrencyCode = String(formData.currencyCode || '').trim().toUpperCase();
     const normalizedTransactionBranchCurrency = String(transactionBranchCurrency || '').trim().toUpperCase();
+    const formattedAmountLocal = formatLocalizedNumber(formData.amountLocal, formData.currencyCode);
     const isForeignCurrencyTransaction = Boolean(
         normalizedTransactionCurrencyCode &&
         normalizedTransactionBranchCurrency &&
@@ -272,23 +374,12 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     const handleTargetBranchChange = (branchId) => {
         const nextBranchId = Number(branchId);
         const nextBranchCurrency = String(getBranchCurrencyCode(nextBranchId) || '').toUpperCase();
-        const previousBranchCurrency = String(transactionBranchCurrency || '').toUpperCase();
 
         setTargetBranchIds([nextBranchId]);
         setFormData(prev => {
-            const currentCurrency = String(prev.currencyCode || '').toUpperCase();
-            const shouldFollowBranchCurrency = !currentCurrency || currentCurrency === previousBranchCurrency;
-
-            if ((shouldFollowBranchCurrency || currentCurrency === nextBranchCurrency) && nextBranchCurrency) {
-                return {
-                    ...prev,
-                    currencyCode: nextBranchCurrency,
-                    fxRate: '1'
-                };
-            }
-
             return {
                 ...prev,
+                currencyCode: nextBranchCurrency || prev.currencyCode,
                 fxRate: '1'
             };
         });
@@ -305,7 +396,6 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const [loading, setLoading] = useState(false);
     const [fxLoading, setFxLoading] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
     const [errorMsg, setErrorMsg] = useState('');
     const [errors, setErrors] = useState({});
 
@@ -340,32 +430,27 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     }, [transactionBranchCurrency]);
 
     useEffect(() => {
-        if (isEditMode) return;
+        if (shouldFetchData) return;
 
         setInitialData(null);
         setAttachment(null);
         setFullScreenAttachment({ isOpen: false, path: null });
         setFormData(createEmptyFormData(transactionBranchCurrency));
-    }, [isEditMode, id]);
+        setErrorMsg('');
+        setErrors({});
+    }, [shouldFetchData, id, transactionBranchCurrency]);
 
     // Fetch Dependencies
     useEffect(() => {
         const controller = new AbortController();
 
-        const fetchDependencies = async (referenceId) => {
+        const fetchDependencies = async () => {
             try {
-                if (!referenceId) return;
-
                 // Fetch Transaction Types (Only if not already loaded)
                 if (txnTypes.length === 0) {
                     const typesRes = await apiService.get('/transactions/types', { signal: controller.signal });
                     if (typesRes.success && Array.isArray(typesRes.data)) {
                         setTxnTypes(typesRes.data);
-                        if (!isEditMode && typesRes.data.length > 0) {
-                            // Default to Expense or first
-                            const expense = typesRes.data.find(t => t.name.toLowerCase() === 'expense');
-                            setFormData(prev => ({ ...prev, txnTypeId: expense ? expense.id : typesRes.data[0].id }));
-                        }
                     }
                 }
 
@@ -426,9 +511,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             }
         };
 
-        if (referenceBranchId) {
-            fetchDependencies(referenceBranchId);
-        }
+        fetchDependencies();
 
         return () => controller.abort();
     }, [referenceBranchId, isEditMode]); // React to referenceBranchId changes
@@ -436,7 +519,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     // Load Transaction Data for Edit
     useEffect(() => {
         const fetchTransaction = async () => {
-            if (!isEditMode) return;
+            if (!shouldFetchData) return;
 
             try {
                 const response = await apiService.transactions.getById(id);
@@ -644,7 +727,6 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
         if (targetBranchIds.length === 0) newErrors.targetBranchIds = "Please select at least one branch";
         if (!formData.txnTypeId) newErrors.txnTypeId = "Type is required";
-        if (Number(formData.txnTypeId) !== 4 && !String(formData.contact || '').trim()) newErrors.contact = "Party is required";
         if (!formData.txnDate) newErrors.txnDate = "Date is required";
         if (!formData.amountLocal || parseFloat(formData.amountLocal) <= 0) newErrors.amountLocal = "Valid Amount is required";
 
@@ -696,20 +778,29 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     }, [formData, targetBranchIds, isGstEligible, txnTypes, errors]);
 
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    const submitForm = async () => {
         setLoading(true);
         setErrorMsg('');
 
-        if (!selectedYear?.id) { setErrorMsg("Financial Year not selected."); setLoading(false); return; }
+        if (!selectedYear?.id) { setErrorMsg("Financial Year not selected."); setLoading(false); return false; }
 
         const newErrors = getValidationErrors();
 
         if (Object.keys(newErrors).length > 0) {
             setErrors(newErrors);
             setErrorMsg("Please complete all compulsory fields highlighted in red.");
+            const firstInvalidField = getNavigationFieldOrder().find((fieldName) => {
+                if (fieldName === 'branchId') return Boolean(newErrors.targetBranchIds);
+                if (fieldName === 'contactId') return Boolean(newErrors.contact);
+                return Boolean(newErrors[fieldName]);
+            });
+            if (firstInvalidField) {
+                setTimeout(() => {
+                    focusField(firstInvalidField);
+                }, 0);
+            }
             setLoading(false);
-            return;
+            return false;
         }
 
         setErrors({});
@@ -819,18 +910,26 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             }
 
             notifyTransactionDataChanged();
-            setShowSuccess(true);
-            setTimeout(() => {
-                if (onSuccess) onSuccess();
-                if (onClose) onClose();
-            }, 1000);
+            if (onSuccess) onSuccess();
+            if (onClose) onClose();
+            return true;
 
         } catch (error) {
             console.error("Failed to save transaction:", error);
             setErrorMsg(error.response?.data?.message || error.message || "Failed to save transaction");
+            return false;
         } finally {
             setLoading(false);
         }
+    };
+
+    useEffect(() => {
+        submitFormRef.current = submitForm;
+    });
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        await submitForm();
     };
 
 
@@ -859,16 +958,230 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     const selectedCategoryObj = categories.find(c => c.id === Number(formData.categoryId));
     const currentSubcategories = selectedCategoryObj?.subCategories || [];
 
-    const handleTypeChange = (typeId) => {
-        const categoryPool = getCategoryPoolForType(typeId);
-        const defaultCategory = getDefaultCategory(categoryPool);
+    const setFieldRef = (name) => (el) => {
+        if (!el) {
+            delete fieldRefs.current[name];
+            return;
+        }
+        fieldRefs.current[name] = el;
+    };
 
+    const focusField = (name) => {
+        if (!name) return false;
+        
+        let el = fieldRefs.current[name];
+        
+        // Aggressive DOM fallback if React ref pool ghosted during conditional renders
+        if (!el) {
+            el = document.querySelector(`[data-nav-select="${name}"]`) || 
+                 document.querySelector(`[data-nav-field="true"][name="${name}"]`) ||
+                 document.querySelector(`input[ref*="${name}"]`);
+        }
+        
+        if (el && typeof el.focus === 'function') {
+            el.focus();
+            if (typeof el.select === 'function' && (!el.type || ['text', 'number', 'tel', 'email'].includes(el.type))) {
+                el.select();
+            }
+            return true;
+        }
+        return false;
+    };
+
+    const getNavigationFieldOrder = () => {
+        const fields = [];
+
+        if (visibleBranches.length > 0) {
+            fields.push('branchId');
+        }
+
+        fields.push('txnTypeId');
+
+        if (Number(formData.txnTypeId) !== 4) {
+            fields.push('contactId');
+        }
+
+        if (Number(formData.txnTypeId) === 4) {
+            fields.push('txnDate', 'amountLocal', 'fromAccountId', 'toAccountId');
+        } else if (isInvestmentSelected) {
+            fields.push('txnDate', 'accountId', 'toAccountId', 'categoryId');
+            if (currentSubcategories.length > 0) {
+                fields.push('subCategoryId');
+            }
+            fields.push('currencyCode', 'amountLocal');
+        } else {
+            fields.push('txnDate', 'accountId', 'categoryId');
+            if (currentSubcategories.length > 0) {
+                fields.push('subCategoryId');
+            }
+            fields.push('currencyCode', 'amountLocal', 'isTaxable');
+            if (formData.isTaxable) {
+                fields.push('gstType', 'gstRate');
+            }
+        }
+
+        fields.push('notes', 'attachment');
+        return fields;
+    };
+
+    const focusNextLinear = (currentFieldName, step = 1) => {
+        const fields = getNavigationFieldOrder();
+        const currentIndex = fields.indexOf(currentFieldName);
+        if (currentIndex === -1) return false;
+
+        let nextIndex = currentIndex + step;
+        while (nextIndex >= 0 && nextIndex < fields.length) {
+            if (focusField(fields[nextIndex])) {
+                return true;
+            }
+            nextIndex += step;
+        }
+
+        return false;
+    };
+
+    const queueFocusToNextField = (fieldName) => {
+        pendingFocusFromFieldRef.current = fieldName;
+        setFocusTick((tick) => tick + 1);
+    };
+
+    useLayoutEffect(() => {
+        if (!isOpen || !pendingFocusFromFieldRef.current) return;
+
+        const sourceField = pendingFocusFromFieldRef.current;
+        pendingFocusFromFieldRef.current = null;
+
+        const timer = setTimeout(() => {
+            const fields = getNavigationFieldOrder();
+            const currentIndex = fields.indexOf(sourceField);
+            const nextField = currentIndex >= 0 ? fields[currentIndex + 1] : null;
+
+            if (nextField) {
+                focusField(nextField);
+                return;
+            }
+
+            void submitFormRef.current?.();
+        }, 0);
+
+        return () => clearTimeout(timer);
+    }, [
+        isOpen,
+        visibleBranches.length,
+        formData.txnTypeId,
+        isInvestmentSelected,
+        currentSubcategories.length,
+        formData.isTaxable,
+        focusTick,
+    ]);
+
+    const restoreDateInputFocus = (input) => {
+        if (!input || input.disabled || input.readOnly) return;
+
+        if (typeof input.blur === 'function') {
+            input.blur();
+        }
+
+        setTimeout(() => {
+            if (typeof input.focus === 'function') {
+                input.focus({ preventScroll: true });
+            }
+        }, 0);
+    };
+
+    const handleFieldKeyDown = (e, fieldName) => {
+        const fields = getNavigationFieldOrder();
+        const currentIndex = fields.indexOf(fieldName);
+
+        if (currentIndex === -1) return;
+
+        const isDropdown =
+            (e.target.closest('[role="combobox"]') ||
+                e.target.closest('[data-custom-select-trigger="true"]')) &&
+            e.target.type !== 'date';
+
+        // 1. Dropdowns handle their own Enter & Arrows
+        if (isDropdown) {
+            if (['Enter', 'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+                return; // Let CustomSelect natively handle these
+            }
+        }
+
+        // 2. Date Pickers explicitly use Enter to Open only.
+        if (e.target.type === 'date') {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                e.target.showPicker?.();
+                return;
+            }
+            if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
+                return;
+            }
+        }
+
+        // 3. Tab Key Traversing (Global)
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            if (e.shiftKey) {
+                focusNextLinear(fieldName, -1);
+            } else {
+                const moved = focusNextLinear(fieldName, 1);
+                if (!moved) {
+                    void submitFormRef.current?.();
+                }
+            }
+            return;
+        }
+
+        // 4. Enter Key Traversing (For non-dropdowns, non-dates)
+        if (e.key === 'Enter') {
+            
+            // Toggle intercept
+            if (fieldName === 'isTaxable') {
+                e.preventDefault();
+                setFormData((prev) => ({
+                    ...prev,
+                    isTaxable: !prev.isTaxable,
+                }));
+                return; // don't advance
+            }
+
+            e.preventDefault();
+            const moved = focusNextLinear(fieldName, 1);
+            if (!moved) {
+                void submitFormRef.current?.();
+            }
+            return;
+        }
+
+        // 5. Arrow Key Traversing (Global fallback)
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            e.preventDefault();
+            focusNextLinear(fieldName, 1);
+            return;
+        }
+
+        if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            focusNextLinear(fieldName, -1);
+        }
+    };
+
+    const getSelectNavigationProps = (fieldName) => ({
+        ref: setFieldRef(fieldName),
+        openOnArrowKeys: true,
+        openOnFocus: false,
+        onKeyDown: (e) => handleFieldKeyDown(e, fieldName),
+        onFocusNext: () => queueFocusToNextField(fieldName),
+    });
+
+    const handleTypeChange = (typeId) => {
         setFormData(prev => ({
             ...prev,
             txnTypeId: Number(typeId),
             accountId: '',
-            categoryId: defaultCategory ? String(defaultCategory.id) : '',
-            subCategoryId: defaultCategory ? getDefaultSubCategoryId(defaultCategory) : '',
+            categoryId: '',
+            subCategoryId: '',
             fromAccountId: '',
             toAccountId: '',
             // Reset tax when switching to non-eligible type
@@ -878,15 +1191,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     useEffect(() => {
         const categoryPool = getCategoryPoolForType(formData.txnTypeId);
-        const defaultCategory = getDefaultCategory(categoryPool);
-
-        if (!defaultCategory) return;
         if (!formData.categoryId) {
-            setFormData((prev) => ({
-                ...prev,
-                categoryId: String(defaultCategory.id),
-                subCategoryId: getDefaultSubCategoryId(defaultCategory)
-            }));
             return;
         }
 
@@ -897,8 +1202,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         if (!selectedCategory) {
             setFormData((prev) => ({
                 ...prev,
-                categoryId: String(defaultCategory.id),
-                subCategoryId: getDefaultSubCategoryId(defaultCategory)
+                categoryId: '',
+                subCategoryId: ''
             }));
         }
     }, [categories, txnTypes, formData.txnTypeId, formData.categoryId]);
@@ -918,8 +1223,6 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             return;
         }
 
-        const defaultSubCategoryId = getDefaultSubCategoryId(selectedCategoryObj);
-
         if (!formData.subCategoryId) return;
 
         const isCurrentSubcategoryValid = currentSubcategories.some(
@@ -927,59 +1230,30 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         );
 
         if (!isCurrentSubcategoryValid) {
-            setFormData((prev) => ({ ...prev, subCategoryId: defaultSubCategoryId || '' }));
+            setFormData((prev) => ({ ...prev, subCategoryId: '' }));
         }
     }, [categories.length, formData.categoryId, selectedCategoryObj, currentSubcategories, formData.subCategoryId]);
 
-    const getNavigableFields = () => {
-        if (!formRef.current) return [];
-        return Array.from(
-            formRef.current.querySelectorAll('[data-nav-field="true"], [data-custom-select-trigger="true"]')
-        ).filter((el) => {
-            if (!el || el.disabled) return false;
-            return el.offsetParent !== null || el.getClientRects?.().length > 0;
-        });
-    };
-
-    const handleFormKeyNavigation = (e) => {
-        const navKeys = ['Enter', 'ArrowDown', 'ArrowUp', 'ArrowRight', 'ArrowLeft'];
-        if (!navKeys.includes(e.key)) return;
-
-        const current = e.target.closest('[data-nav-field="true"], [data-custom-select-trigger="true"]');
-        if (!current) return;
-
-        const fields = getNavigableFields();
-        const currentIndex = fields.indexOf(current);
-        if (currentIndex === -1) return;
-
-        e.preventDefault();
-
-        const step = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
-        const nextIndex = currentIndex + step;
-        const next = fields[nextIndex];
-
-        if (next) {
-            next.focus();
-            return;
-        }
-
-        if (e.key === 'Enter') {
-            e.currentTarget.requestSubmit();
-        }
-    };
-
-    if (!isOpen) return null;
+    if (!shouldRenderDrawer) return null;
 
     return (
         <>
             {/* Backdrop */}
             <div
-                className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[110] transition-opacity"
+                className={cn(
+                    "fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[110]",
+                    isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
+                )}
                 onClick={onClose}
             />
 
             {/* Drawer Container */}
-            <div className="fixed inset-y-0 right-0 z-[120] w-[480px] max-w-full bg-white shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div
+                className={cn(
+                    "fixed inset-y-0 right-0 z-[120] w-[480px] max-w-full bg-white shadow-2xl flex flex-col",
+                    isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
+                )}
+            >
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
                     <div className="flex items-center gap-3">
@@ -1004,18 +1278,21 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                     </button>
                 </div>
 
-                <form ref={formRef} noValidate onSubmit={handleSubmit} onKeyDown={handleFormKeyNavigation} className="flex-1 flex flex-col min-h-0">
+                <form ref={formRef} noValidate onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                     <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-5 py-5 no-scrollbar bg-white">
                         <div className="flex flex-col gap-3">
 
 
                                 {/* Branch selector */}
-                                {visibleBranches.length > 1 && (
+                                {visibleBranches.length > 0 && (
                                     <div className="space-y-1 w-full">
                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                             Branch <span className="text-rose-500">*</span>
                                         </label>
                                         <CustomSelect
+                                            {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                            {...getSelectNavigationProps('branchId')}
+                                            searchPlaceholder="Search branches..."
                                             value={targetBranchIds[0] ?? ''}
                                             onChange={(e) => handleTargetBranchChange(e.target.value)}
                                             className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.targetBranchIds ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
@@ -1035,6 +1312,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                             Transaction Type <span className="text-rose-500">*</span>
                                         </label>
                                         <CustomSelect
+                                            {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                            {...getSelectNavigationProps('txnTypeId')}
+                                            searchPlaceholder="Search type..."
                                             value={formData.txnTypeId ?? ""}
                                             onChange={(e) => handleTypeChange(Number(e.target.value))}
                                             className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all capitalize", errors.txnTypeId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
@@ -1056,6 +1336,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                         <div className="space-y-1 w-full">
                                             <label className="text-[11px] font-bold text-slate-600 block capitalize">Party</label>
                                             <CustomSelect
+                                                {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                {...getSelectNavigationProps('contactId')}
+                                                searchPlaceholder="Search party..."
                                                 value={formData.contactId ?? ""}
                                                 onChange={(e) => {
                                                     const selectedId = e.target.value;
@@ -1068,7 +1351,6 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 }}
                                                 className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.contact ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                             >
-                                                <option value="">Select Party</option>
                                                 {/* If current contact label exists but ID is missing (fallback), show it */}
                                                 {!formData.contactId && formData.contact && (
                                                     <option value="" disabled>{formData.contact}</option>
@@ -1098,10 +1380,20 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 </label>
                                                 <input
                                                     type="date"
+                                                    ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
+                                                    onClick={(e) => {
+                                                        restoreDateInputFocus(e.currentTarget);
+                                                        e.currentTarget.showPicker?.();
+                                                        datePickerAdvanceOnEnterRef.current = true;
+                                                    }}
+                                                    onBlur={() => {
+                                                        datePickerAdvanceOnEnterRef.current = false;
+                                                    }}
+                                                    onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
@@ -1112,6 +1404,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 </label>
                                                 <div className="flex gap-2">
                                                     <CustomSelect
+                                                        {...getSelectNavigationProps('currencyCode')}
                                                         value={formData.currencyCode ?? ""}
                                                         onChange={(e) => handleCurrencyCodeChange(e.target.value)}
                                                         className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
@@ -1123,10 +1416,12 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     <input
                                                         type="text"
                                                         inputMode="decimal"
+                                                        ref={setFieldRef('amountLocal')}
                                                         data-nav-field="true"
                                                         required
-                                                        value={formData.amountLocal}
+                                                        value={formattedAmountLocal}
                                                         onChange={handleAmountLocalChange}
+                                                        onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
                                                         className="flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         placeholder="0.00"
                                                     />
@@ -1142,6 +1437,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('fromAccountId')}
+                                                    searchPlaceholder="Search account..."
                                                     required
                                                     value={formData.fromAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, fromAccountId: e.target.value })}
@@ -1164,6 +1462,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     To Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('toAccountId')}
+                                                    searchPlaceholder="Search account..."
                                                     required
                                                     value={formData.toAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}
@@ -1193,10 +1494,20 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 </label>
                                                 <input
                                                     type="date"
+                                                    ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
+                                                    onClick={(e) => {
+                                                        restoreDateInputFocus(e.currentTarget);
+                                                        e.currentTarget.showPicker?.();
+                                                        datePickerAdvanceOnEnterRef.current = true;
+                                                    }}
+                                                    onBlur={() => {
+                                                        datePickerAdvanceOnEnterRef.current = false;
+                                                    }}
+                                                    onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
@@ -1206,6 +1517,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('accountId')}
+                                                    searchPlaceholder="Search account..."
                                                     required
                                                     value={formData.accountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
@@ -1230,6 +1544,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     Investment Account <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('toAccountId')}
+                                                    searchPlaceholder="Search investment account..."
                                                     required
                                                     value={formData.toAccountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, toAccountId: e.target.value })}
@@ -1252,20 +1569,22 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     Investment Category <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('categoryId')}
+                                                    searchPlaceholder="Search category..."
                                                     required
                                                     value={formData.categoryId ?? ""}
                                                     onChange={(e) => {
                                                         const categoryId = e.target.value;
-                                                        const selectedCategory = investmentCategories.find((category) => String(category.id) === String(categoryId));
                                                         setFormData({
                                                             ...formData,
                                                             categoryId,
-                                                            subCategoryId: getDefaultSubCategoryId(selectedCategory)
+                                                            subCategoryId: ''
                                                         });
                                                     }}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
-                                                    {investmentCategories.length === 0 && <option value="">Select Category</option>}
+                                                    <option value="">Select Category</option>
                                                     {investmentCategories.map(c => {
                                                         const inactive = isCategoryInactive(c);
                                                         return (
@@ -1278,36 +1597,99 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                             </div>
                                         </div>
 
-                                        <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1">
-                                                <label className="text-[11px] font-bold text-slate-600 block capitalize">
-                                                    Amount <span className="text-rose-500">*</span>
-                                                </label>
-                                                <div className="flex gap-2">
+                                        {currentSubcategories.length > 0 ? (
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
+                                                        Sub-Category
+                                                    </label>
                                                     <CustomSelect
-                                                        value={formData.currencyCode ?? ""}
-                                                        onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                        className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                        {...getSelectNavigationProps('subCategoryId')}
+                                                        searchPlaceholder="Search sub-category..."
+                                                        value={formData.subCategoryId ?? ""}
+                                                        onChange={(e) => setFormData({ ...formData, subCategoryId: e.target.value })}
+                                                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                     >
-                                                        {transactionCurrencyOptions.map(c => (
-                                                            <option key={c} value={c}>{c}</option>
-                                                        ))}
+                                                        <option value="">Select Sub-Category</option>
+                                                        {currentSubcategories.map((subCategory) => {
+                                                            const inactive = isCategoryInactive(subCategory);
+                                                            return (
+                                                                <option key={subCategory.id} value={subCategory.id} disabled={inactive}>
+                                                                    {subCategory.name}{inactive ? ' (Inactive)' : ''}
+                                                                </option>
+                                                            );
+                                                        })}
                                                     </CustomSelect>
-                                                    <input
-                                                        type="text"
-                                                        inputMode="decimal"
-                                                        data-nav-field="true"
-                                                        required
-                                                        value={formData.amountLocal}
-                                                        onChange={handleAmountLocalChange}
-                                                        className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
-                                                        placeholder="0.00"
-                                                    />
                                                 </div>
-                                                {renderForeignExchangeHelper()}
-                                                {errors.amountLocal && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.amountLocal}</p>}
+
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
+                                                        Amount <span className="text-rose-500">*</span>
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        <CustomSelect
+                                                            {...getSelectNavigationProps('currencyCode')}
+                                                            value={formData.currencyCode ?? ""}
+                                                            onChange={(e) => handleCurrencyCodeChange(e.target.value)}
+                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        >
+                                                            {transactionCurrencyOptions.map(c => (
+                                                                <option key={c} value={c}>{c}</option>
+                                                            ))}
+                                                        </CustomSelect>
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            ref={setFieldRef('amountLocal')}
+                                                            data-nav-field="true"
+                                                            required
+                                                            value={formattedAmountLocal}
+                                                            onChange={handleAmountLocalChange}
+                                                            onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
+                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                    {renderForeignExchangeHelper()}
+                                                    {errors.amountLocal && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.amountLocal}</p>}
+                                                </div>
                                             </div>
-                                        </div>
+                                        ) : (
+                                            <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] font-bold text-slate-600 block capitalize">
+                                                        Amount <span className="text-rose-500">*</span>
+                                                    </label>
+                                                    <div className="flex gap-2">
+                                                        <CustomSelect
+                                                            {...getSelectNavigationProps('currencyCode')}
+                                                            value={formData.currencyCode ?? ""}
+                                                            onChange={(e) => handleCurrencyCodeChange(e.target.value)}
+                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        >
+                                                            {transactionCurrencyOptions.map(c => (
+                                                                <option key={c} value={c}>{c}</option>
+                                                            ))}
+                                                        </CustomSelect>
+                                                        <input
+                                                            type="text"
+                                                            inputMode="decimal"
+                                                            ref={setFieldRef('amountLocal')}
+                                                            data-nav-field="true"
+                                                            required
+                                                            value={formattedAmountLocal}
+                                                            onChange={handleAmountLocalChange}
+                                                            onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
+                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            placeholder="0.00"
+                                                        />
+                                                    </div>
+                                                    {renderForeignExchangeHelper()}
+                                                    {errors.amountLocal && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.amountLocal}</p>}
+                                                </div>
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     // Income / Expense
@@ -1320,10 +1702,20 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 </label>
                                                 <input
                                                     type="date"
+                                                    ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
+                                                    onClick={(e) => {
+                                                        restoreDateInputFocus(e.currentTarget);
+                                                        e.currentTarget.showPicker?.();
+                                                        datePickerAdvanceOnEnterRef.current = true;
+                                                    }}
+                                                    onBlur={() => {
+                                                        datePickerAdvanceOnEnterRef.current = false;
+                                                    }}
+                                                    onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
@@ -1335,12 +1727,14 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     {Number(formData.txnTypeId) === 1 ? 'Deposit To' : 'Paid From'} <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('accountId')}
+                                                    searchPlaceholder="Search account..."
                                                     required
                                                     value={formData.accountId ?? ""}
                                                     onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.accountId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                 >
-                                                    <option value="">Account</option>
                                                     {Number(formData.txnTypeId) === 1 ? (
                                                         accounts.map(a => {
                                                             const inactive = isAccountInactive(a);
@@ -1373,21 +1767,21 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     {Number(formData.txnTypeId) === 1 ? 'Income Category' : 'Expense Category'} <span className="text-rose-500">*</span>
                                                 </label>
                                                 <CustomSelect
+                                                    {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                    {...getSelectNavigationProps('categoryId')}
+                                                    searchPlaceholder="Search category..."
                                                     value={formData.categoryId ?? ""}
                                                     onChange={(e) => {
                                                         const categoryId = e.target.value;
-                                                        const categoryPool = Number(formData.txnTypeId) === 1 ? incomeCategories : expenseCategories;
-                                                        const selectedCategory = categoryPool.find((category) => String(category.id) === String(categoryId));
                                                         setFormData({
                                                             ...formData,
                                                             categoryId,
-                                                            subCategoryId: getDefaultSubCategoryId(selectedCategory)
+                                                            subCategoryId: ''
                                                         });
                                                     }}
                                                     className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.categoryId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                     required
                                                 >
-                                                    {(Number(formData.txnTypeId) === 1 ? incomeCategories : expenseCategories).length === 0 && <option value="">Select Category</option>}
                                                     {Number(formData.txnTypeId) === 1 ? (
                                                         incomeCategories.map(c => {
                                                             const inactive = isCategoryInactive(c);
@@ -1418,11 +1812,14 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         Sub-Category
                                                     </label>
                                                     <CustomSelect
+                                                        {...SEARCHABLE_TRANSACTION_SELECT_PROPS}
+                                                        {...getSelectNavigationProps('subCategoryId')}
+                                                        searchPlaceholder="Search sub-category..."
                                                         value={formData.subCategoryId ?? ""}
                                                         onChange={(e) => setFormData({ ...formData, subCategoryId: e.target.value })}
                                                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
                                                     >
-                                                        <option value="">No Sub-Category</option>
+                                                        <option value="">Select Sub-Category</option>
                                                         {currentSubcategories.map(s => {
                                                             const inactive = isCategoryInactive(s);
                                                             return (
@@ -1440,6 +1837,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                     </label>
                                                     <div className="flex gap-2">
                                                             <CustomSelect
+                                                            {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
                                                             className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
@@ -1451,10 +1849,12 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
+                                                            ref={setFieldRef('amountLocal')}
                                                             data-nav-field="true"
                                                             required
-                                                            value={formData.amountLocal}
+                                                            value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
+                                                            onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
                                                             className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
@@ -1464,15 +1864,16 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                             )}
                                         </div>
 
-                                        {/* If Sub-category exists, place Amount below */}
+                                        {/* If Sub-category exists, place Amount below in half-width */}
                                         {currentSubcategories.length > 0 && (
-                                            <div className="">
+                                            <div className="grid grid-cols-2 gap-x-3">
                                                 <div className="space-y-1">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
                                                     <div className="flex gap-2">
                                                             <CustomSelect
+                                                            {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
                                                             className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
@@ -1484,10 +1885,12 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         <input
                                                             type="text"
                                                             inputMode="decimal"
+                                                            ref={setFieldRef('amountLocal')}
                                                             data-nav-field="true"
                                                             required
-                                                            value={formData.amountLocal}
+                                                            value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
+                                                            onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
                                                             className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
@@ -1503,12 +1906,14 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                 <label className="relative inline-flex items-center cursor-pointer">
                                                     <input
                                                         type="checkbox"
+                                                        ref={setFieldRef('isTaxable')}
                                                         data-nav-field="true"
                                                         checked={formData.isTaxable}
                                                         onChange={(e) => setFormData({ ...formData, isTaxable: e.target.checked })}
+                                                        onKeyDown={(e) => handleFieldKeyDown(e, 'isTaxable')}
                                                         className="sr-only peer"
                                                     />
-                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
+                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
                                                 </label>
                                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap leading-none">
                                                     {formData.isTaxable ? 'Taxable' : 'Non-Taxable'}
@@ -1520,35 +1925,66 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                         {/* GST Fields — only when Taxable */}
                                         {formData.isTaxable && (
                                             <>
-                                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                                <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                                                     {/* GST Type */}
-                                                    <div className="space-y-1">
+                                                    <div className="space-y-2">
                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
-                                                            GST Type <span className="text-rose-500">*</span>
+                                                            Tax Regime <span className="text-rose-500">*</span>
                                                         </label>
-                                                        <CustomSelect
-                                                            value={formData.gstType ?? ""}
-                                                            onChange={(e) => setFormData({ ...formData, gstType: e.target.value })}
-                                                            className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.gstType ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
-                                                        >
-                                                            <option value={1}>Intra-State (CGST + SGST)</option>
-                                                            <option value={0}>Inter-State (IGST)</option>
-                                                        </CustomSelect>
+                                                        <div className="flex p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 w-full h-[40px]">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData({ ...formData, gstType: 1 })}
+                                                                className={cn(
+                                                                    "flex-1 h-full px-1 text-[12px] font-bold rounded-lg transition-all flex flex-col items-center justify-center leading-[1.1]",
+                                                                    Number(formData.gstType) === 1 ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 border border-transparent"
+                                                                )}
+                                                            >
+                                                                <span>Intra</span>
+                                                                <span className="font-semibold text-[9.5px] text-slate-400 opacity-90 mt-[1.5px] tracking-wide">CGST & SGST</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFormData({ ...formData, gstType: 0 })}
+                                                                className={cn(
+                                                                    "flex-1 h-full px-1 text-[12px] font-bold rounded-lg transition-all flex flex-col items-center justify-center leading-[1.1]",
+                                                                    Number(formData.gstType) === 0 ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 border border-transparent"
+                                                                )}
+                                                            >
+                                                                <span>Inter</span>
+                                                                <span className="font-semibold text-[9.5px] text-slate-400 opacity-90 mt-[1.5px] tracking-wide">IGST Only</span>
+                                                            </button>
+                                                        </div>
                                                         {errors.gstType && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.gstType}</p>}
                                                     </div>
 
                                                     {/* GST Rate */}
-                                                    <div className="space-y-1">
+                                                    <div className="space-y-2">
                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
-                                                            GST Rate (%) <span className="text-rose-500">*</span>
+                                                            GST Slabs <span className="text-rose-500">*</span>
                                                         </label>
-                                                        <GstRateDropdown
-                                                            value={formData.gstRate}
-                                                            onChange={(e) => setFormData(prev => ({ ...prev, gstRate: e.target.value }))}
-                                                            orgId={selectedOrg?.id}
-                                                            branchId={referenceBranchId}
-                                                            error={!!errors.gstRate}
-                                                        />
+                                                        <div className="flex flex-wrap gap-1.5 w-full h-[40px]">
+                                                            {['0', '5', '12', '18', '28'].map((rate) => {
+                                                                const isSelected = String(formData.gstRate) === rate;
+                                                                return (
+                                                                    <button
+                                                                        key={rate}
+                                                                        type="button"
+                                                                        onClick={() => setFormData(prev => ({ ...prev, gstRate: rate }))}
+                                                                        className={cn(
+                                                                            "flex-1 min-w-[36px] h-full rounded-xl text-[12px] font-bold transition-all border outline-none flex items-center justify-center",
+                                                                            isSelected 
+                                                                                ? "bg-[#4A8AF4] border-[#4A8AF4] text-white shadow-md shadow-[#4A8AF4]/30" 
+                                                                                : "bg-white border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50",
+                                                                            errors.gstRate && !isSelected && "border-rose-500 text-rose-500"
+                                                                        )}
+                                                                    >
+                                                                        {rate}%
+                                                                    </button>
+                                                                );
+                                                            })}
+                                                        </div>
+
                                                         {errors.gstRate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.gstRate}</p>}
                                                     </div>
                                                 </div>
@@ -1622,9 +2058,11 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">Notes</label>
                                     <textarea
                                         rows="2"
+                                        ref={setFieldRef('notes')}
                                         data-nav-field="true"
                                         value={formData.notes}
                                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                                        onKeyDown={(e) => handleFieldKeyDown(e, 'notes')}
                                         className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all resize-none"
                                         placeholder="Add notes..."
                                     />
@@ -1640,6 +2078,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                         <div className="flex-1 min-w-0">
                                             <input
                                                 type="file"
+                                                ref={setFieldRef('attachment')}
                                                 onChange={(e) => {
                                                     if (e.target.files?.[0]) {
                                                         setAttachment(e.target.files[0]);
@@ -1651,8 +2090,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                           file:mr-4 file:py-2 file:px-4
                                           file:rounded-full file:border-0
                                           file:text-xs file:font-semibold
-                                          file:bg-black file:text-white
-                                          hover:file:bg-gray-800
+                                          file:bg-[#4A8AF4] file:text-white
+                                          hover:file:bg-[#3b71ca] transition-colors
                                         "
                                             />
                                         </div>
@@ -1725,21 +2164,6 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                     </div>
                 </form>
             </div>
-
-            {/* Success Popup */}
-            {showSuccess && (
-                <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
-                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600">
-                            <Check size={32} strokeWidth={3} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">
-                            {isEditMode ? "Transaction Updated" : "Transaction Created"}
-                        </h3>
-                        <p className="text-gray-500 text-center text-sm">Closing...</p>
-                    </div>
-                </div>
-            )}
 
             {/* Full Screen Attachment Viewer */}
             {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(

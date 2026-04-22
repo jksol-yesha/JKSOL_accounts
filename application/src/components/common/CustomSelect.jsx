@@ -49,6 +49,8 @@ const CustomSelect = React.forwardRef(
       searchPlaceholder = "Search...",
       searchInInput = false,
       showSelectedCheck = true,
+      openOnArrowKeys = true,
+      openOnFocus = true,
       ...rest
     },
     ref,
@@ -105,6 +107,11 @@ const CustomSelect = React.forwardRef(
     const buttonLabel =
       selectedOption?.label || fallbackOption?.label || "Select";
     const selectedLabel = selectedOption?.label || "";
+    const usesEmptyValuePlaceholder =
+      searchInInput &&
+      currentValue === "" &&
+      selectedOption?.value === "" &&
+      Boolean(selectedLabel);
     const activeSearchTerm = searchInInput ? triggerInputValue : searchTerm;
 
     const filteredOptions = React.useMemo(() => {
@@ -272,6 +279,10 @@ const CustomSelect = React.forwardRef(
 
     const openDropdown = React.useCallback(() => {
       if (disabled) return;
+      if (usesEmptyValuePlaceholder) {
+        setTriggerInputValue("");
+        setSearchTerm("");
+      }
       updatePosition();
       if (dropdownGroup) {
         document.dispatchEvent(
@@ -281,7 +292,13 @@ const CustomSelect = React.forwardRef(
         );
       }
       setIsOpen(true);
-    }, [disabled, dropdownGroup, selectId, updatePosition]);
+    }, [
+      disabled,
+      dropdownGroup,
+      selectId,
+      updatePosition,
+      usesEmptyValuePlaceholder,
+    ]);
 
     React.useEffect(() => {
       const handleOutsideClick = (event) => {
@@ -346,11 +363,15 @@ const CustomSelect = React.forwardRef(
       if (disabled) return;
 
       if (!isOpen) {
+        if (e.shiftKey && (e.key === "Enter" || e.key === "Tab")) {
+          onKeyDown?.(e);
+          return;
+        }
+
         if (
           e.key === "Enter" ||
-          e.key === "Tab" ||
-          e.key === "ArrowDown" ||
-          e.key === "ArrowUp"
+          (openOnArrowKeys &&
+            (e.key === "ArrowDown" || e.key === "ArrowUp"))
         ) {
           e.preventDefault();
           openDropdown();
@@ -364,16 +385,18 @@ const CustomSelect = React.forwardRef(
         case "Tab": {
           if (filteredOptions.length === 0) {
             setIsOpen(false);
+            onKeyDown?.(e);
             break;
           }
           e.preventDefault();
-          const direction = e.shiftKey ? -1 : 1;
-          setHighlightedIndex((prev) => {
-            const next = prev + direction;
-            if (next < 0) return filteredOptions.length - 1;
-            if (next >= filteredOptions.length) return 0;
-            return next;
-          });
+          if (highlightedIndex >= 0 && filteredOptions[highlightedIndex]) {
+            handleSelect(filteredOptions[highlightedIndex].value);
+          } else {
+            setIsOpen(false);
+            setTimeout(() => {
+              onFocusNext?.();
+            }, 0);
+          }
           break;
         }
         case "ArrowDown":
@@ -442,7 +465,9 @@ const CustomSelect = React.forwardRef(
               value={triggerInputValue}
               placeholder={searchPlaceholder}
               onFocus={(e) => {
-                openDropdown();
+                if (openOnFocus) {
+                  openDropdown();
+                }
                 setSearchTerm("");
                 if (e.target.value && typeof e.target.select === "function") {
                   setTimeout(() => e.target.select(), 0);

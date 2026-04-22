@@ -181,7 +181,8 @@ export const getAllAccounts = async (
             eq(transactions.id, transactionEntries.transactionId),
             eq(transactions.orgId, orgId),
             eq(transactions.status, 1),
-            isNotDeleted(transactions)
+            isNotDeleted(transactions),
+            ...(selectedFinancialYear ? [eq(transactions.financialYearId, selectedFinancialYear.id)] : [])
         ))
         .where(inArray(transactionEntries.accountId, accountIds))
         .groupBy(transactionEntries.accountId);

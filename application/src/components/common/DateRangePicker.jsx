@@ -33,6 +33,7 @@ const DateRangePicker = forwardRef(({
     const [dropdownStyles, setDropdownStyles] = useState({});
     const [draftRange, setDraftRange] = useState({ startDate, endDate });
     const [draftPreset, setDraftPreset] = useState(selectedPreset);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     // Refs
     const containerRef = useRef(null);
@@ -251,6 +252,90 @@ const DateRangePicker = forwardRef(({
 
     const handleKeyDownInternal = (e) => {
         if (onKeyDown) onKeyDown(e);
+        if (!isOpen && ['Enter', ' ', 'ArrowDown'].includes(e.key)) {
+            e.preventDefault();
+            e.stopPropagation();
+            updatePosition();
+            setIsOpen(true);
+            setHighlightedIndex(0);
+            
+            if (presetOptions.length > 0) {
+                 const opt = presetOptions[0];
+                 setHoveredPreset(opt);
+                 if (opt.range?.startDate) {
+                     const d = parseLocalDate(opt.range.startDate);
+                     if (d) setCurrentMonth(d);
+                 }
+            }
+        } else if (isOpen) {
+            switch (e.key) {
+                case 'Escape':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsOpen(false);
+                    setHighlightedIndex(-1);
+                    setHoveredPreset(null);
+                    inputRef.current?.focus();
+                    break;
+                case 'ArrowDown':
+                    if (presetOptions.length > 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHighlightedIndex(prev => {
+                            const next = (prev + 1) % presetOptions.length;
+                            const opt = presetOptions[next];
+                            setHoveredPreset(opt);
+                            if (opt.range?.startDate) {
+                                const d = parseLocalDate(opt.range.startDate);
+                                if (d) setCurrentMonth(d);
+                            }
+                            return next;
+                        });
+                    }
+                    break;
+                case 'ArrowUp':
+                    if (presetOptions.length > 0) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setHighlightedIndex(prev => {
+                            const next = (prev - 1 + presetOptions.length) % presetOptions.length;
+                            const opt = presetOptions[next];
+                            setHoveredPreset(opt);
+                            if (opt.range?.startDate) {
+                                const d = parseLocalDate(opt.range.startDate);
+                                if (d) setCurrentMonth(d);
+                            }
+                            return next;
+                        });
+                    }
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (highlightedIndex >= 0 && presetOptions[highlightedIndex]) {
+                        const opt = presetOptions[highlightedIndex];
+                        handlePresetSelect(opt);
+                        const appliedRange = {
+                            startDate: opt.range.startDate || '',
+                            endDate: opt.range.endDate || opt.range.startDate || '',
+                            preset: opt.value
+                        };
+                        if (usesDeferredApply) {
+                            onApplyRange(appliedRange);
+                        } else {
+                            onChange(appliedRange);
+                        }
+                        setIsOpen(false);
+                        setHighlightedIndex(-1);
+                        setHoveredPreset(null);
+                    } else {
+                        handleApply();
+                        setHighlightedIndex(-1);
+                        setHoveredPreset(null);
+                    }
+                    break;
+            }
+        }
     };
 
     const handlePresetSelect = (option) => {
@@ -291,16 +376,16 @@ const DateRangePicker = forwardRef(({
                 ref={inputRef}
                 tabIndex={0}
                 onKeyDown={handleKeyDownInternal}
-                className="group relative flex items-center gap-2 px-3 w-full h-[32px] rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)] focus:outline-none focus:ring-2 focus:ring-primary/20"
+                className="group relative flex items-center gap-2 px-3 w-full h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
                 onClick={() => {
                     if (!isOpen) updatePosition();
                     setIsOpen(!isOpen);
                 }}
             >
-                <CalendarDays size={16} className="text-gray-400 group-hover:text-primary transition-colors shrink-0" />
+                <CalendarDays size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors shrink-0" />
                 <div className="flex-1 text-left truncate">
                     {startDate ? (
-                        <span className="text-sm font-semibold text-slate-800">
+                        <span className="text-sm font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
                             {formatDisplayDate(startDate)}
                             {endDate && endDate !== startDate ? ` to ${formatDisplayDate(endDate)}` : ''}
                         </span>
@@ -329,8 +414,9 @@ const DateRangePicker = forwardRef(({
                                     }}
                                 >
                                     <div className="space-y-0.5">
-                                        {presetOptions.map((option) => {
-                                            const isActive = (usesDeferredApply ? draftPreset : selectedPreset) === option.value;
+                                        {presetOptions.map((option, idx) => {
+                                            const isSelected = (usesDeferredApply ? draftPreset : selectedPreset) === option.value;
+                                            const isHighlighted = highlightedIndex === idx;
                                             return (
                                                 <button
                                                     key={option.value}
@@ -338,22 +424,28 @@ const DateRangePicker = forwardRef(({
                                                     onClick={() => handlePresetSelect(option)}
                                                     onMouseEnter={() => {
                                                         setHoveredPreset(option);
+                                                        setHighlightedIndex(idx);
                                                         if (option.range?.startDate) {
                                                             const d = parseLocalDate(option.range.startDate);
                                                             if (d) setCurrentMonth(d);
                                                         }
                                                     }}
-                                                    onMouseLeave={() => setHoveredPreset(null)}
+                                                    onMouseLeave={() => {
+                                                        setHoveredPreset(null);
+                                                        setHighlightedIndex(-1);
+                                                    }}
                                                     className={`group cursor-pointer w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
-                                                        isActive
+                                                        isSelected
                                                             ? 'bg-[#EEF0FC]'
-                                                            : 'hover:bg-[#EEF0FC]'
+                                                            : isHighlighted 
+                                                                ? 'bg-[#EEF0FC]/80 ring-1 ring-inset ring-[#CBD4F7]/40'
+                                                                : 'hover:bg-[#EEF0FC]/60'
                                                     }`}
                                                 >
                                                     <div className="w-4 flex justify-center shrink-0">
-                                                        {isActive && <Check size={16} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                                        {isSelected && <Check size={16} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                                     </div>
-                                                    <span className={`text-[13px] tracking-tight truncate ${isActive ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                    <span className={`text-[13px] tracking-tight truncate ${isSelected ? 'font-bold text-[#2F5FC6]' : isHighlighted ? 'font-bold text-[#4A8AF4]' : 'font-medium text-slate-600 group-hover:text-[#4A8AF4]'}`}>
                                                         {option.label}
                                                     </span>
                                                 </button>

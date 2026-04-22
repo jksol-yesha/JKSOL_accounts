@@ -134,6 +134,8 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             sortConfig: t.Optional(t.Object({
                 key: t.Optional(t.String()),
                 direction: t.Optional(t.String())
-            }))
+            })),
+            mappedRows: t.Optional(t.Array(t.Any())),
+            visibleColumns: t.Optional(t.Array(t.String()))
         })
     });

@@ -1,8 +1,8 @@
 // @ts-ignore - pdf-parse doesn't have proper TypeScript definitions
 if (typeof (globalThis as any).DOMMatrix === 'undefined') {
-    (globalThis as any).DOMMatrix = class DOMMatrix {} as any;
-  }
-  
+    (globalThis as any).DOMMatrix = class DOMMatrix { } as any;
+}
+
 
 const { PDFParse } = require('pdf-parse');
 
@@ -160,7 +160,7 @@ export class PDFParserService {
             const part0 = dateParts[0];
             const part1 = dateParts[1];
             const part2 = dateParts[2];
-            
+
             if (!part0 || !part1 || !part2) {
                 throw new Error(`Invalid date format: ${txn.date}`);
             }

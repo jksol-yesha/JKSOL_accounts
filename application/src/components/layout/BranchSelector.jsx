@@ -5,7 +5,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { ChevronDown, Building2, Check, Plus, Settings } from 'lucide-react';
 import ManageBranchModal from './ManageBranchModal';
 
-const BranchSelector = () => {
+const BranchSelector = ({ hideSettings = false }) => {
     const {
         branches,
         selectedBranch,
@@ -20,6 +20,7 @@ const BranchSelector = () => {
     const buttonRef = useRef(null);
     const dropdownMenuRef = useRef(null);
     const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     // Sync stagedIds when dropdown opens
     useEffect(() => {
@@ -74,6 +75,62 @@ const BranchSelector = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
+    // Traversal logic
+    const totalItems = (branches?.length || 0) > 0 ? branches.length + 2 : 0;
+    // 0: Select All
+    // 1 to N: Branches
+    // N + 1: Apply
+
+    const handleKeyDown = (e) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                e.preventDefault();
+                setIsOpen(true);
+                setHighlightedIndex(0); // Start at Select All
+            }
+            return;
+        }
+
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                setHighlightedIndex(prev => (prev + 1) % totalItems);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                setHighlightedIndex(prev => (prev - 1 + totalItems) % totalItems);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (highlightedIndex === 0) {
+                    if (isAllStagedSelected) {
+                        setStagedIds([Number(branches[0].id)]);
+                    } else {
+                        setStagedIds(branches.map(b => Number(b.id)));
+                    }
+                } else if (highlightedIndex > 0 && highlightedIndex <= branches.length) {
+                    const branch = branches[highlightedIndex - 1];
+                    if (branch.status !== 'inactive') {
+                        toggleStagedBranch(branch.id);
+                    }
+                } else if (highlightedIndex === branches.length + 1) {
+                    handleApply();
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                // Cleanly close and apply if they natively tab away
+                handleApply();
+                setHighlightedIndex(-1);
+                break;
+        }
+    };
+
     // Hide Branch Selector only if no Organization is selected or no branches exist
     if (!selectedOrg || (branches || []).length === 0) return null;
 
@@ -113,10 +170,16 @@ const BranchSelector = () => {
             <div className="relative" ref={dropdownRef}>
                 <button
                     ref={buttonRef}
-                    onClick={() => setIsOpen(!isOpen)}
-                    className="group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-slate-200 bg-white hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                    onClick={() => {
+                        const next = !isOpen;
+                        setIsOpen(next);
+                        if (next) setHighlightedIndex(0);
+                        else setHighlightedIndex(-1);
+                    }}
+                    onKeyDown={handleKeyDown}
+                    className="group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
                 >
-                    <Building2 size={16} className="text-gray-400 group-hover:text-primary transition-colors" />
+                    <Building2 size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                     {isAllBranchesApplied ? (
                         <span className="max-w-[150px] truncate text-sm font-semibold text-slate-800">
                             All Branches
@@ -138,7 +201,7 @@ const BranchSelector = () => {
                             {selectedBranch?.name || 'Select Branch'}
                         </span>
                     )}
-                    <ChevronDown size={14} className={`text-gray-400 transition-transform ml-1 ${isOpen ? 'rotate-180 text-primary' : ''}`} />
+                    <ChevronDown size={14} className={`transition-transform ml-1 ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
                 </button>
 
                 {isOpen && (
@@ -150,7 +213,7 @@ const BranchSelector = () => {
                                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
                                     style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
                                 >
-                                    <div className="px-3 py-1.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             {branches.length > 0 && (
                                                 <button
@@ -161,7 +224,7 @@ const BranchSelector = () => {
                                                             setStagedIds(branches.map(b => Number(b.id)));
                                                         }
                                                     }}
-                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} uppercase tracking-wider`}
+                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} ${highlightedIndex === 0 ? 'bg-slate-200/50' : ''}`}
                                                 >
                                                     <div className="w-4 flex justify-center shrink-0">
                                                         <Check 
@@ -175,7 +238,7 @@ const BranchSelector = () => {
                                             )}
                                         </div>
                                         <div className="flex items-center">
-                                            {canManageBranches && (
+                                            {canManageBranches && !hideSettings && (
                                                 <button
                                                     onClick={() => {
                                                         setIsOpen(false);
@@ -191,9 +254,10 @@ const BranchSelector = () => {
                                     </div>
 
                                     <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
-                                {(branches || []).map(branch => {
+                                {(branches || []).map((branch, idx) => {
                                     const isInactive = branch.status === 'inactive';
                                     const isStaged = stagedIds.includes(Number(branch.id));
+                                    const isHighlighted = highlightedIndex === idx + 1;
                                     return (
                                         <button
                                             key={branch.id}
@@ -202,7 +266,7 @@ const BranchSelector = () => {
                                                 if (isInactive) return;
                                                 toggleStagedBranch(branch.id);
                                             }}
-                                            className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isInactive ? 'opacity-50 bg-slate-50 cursor-not-allowed' : 'hover:bg-[#EEF0FC]'}`}
+                                            className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isInactive ? 'opacity-50 bg-slate-50 cursor-not-allowed' : isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
                                         >
                                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                                 <div className="w-4 flex justify-center shrink-0">
@@ -230,7 +294,7 @@ const BranchSelector = () => {
                                     <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
                                         <button
                                             onClick={handleApply}
-                                            className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all"
+                                            className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === branches.length + 1 ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
                                         >
                                             Apply
                                         </button>

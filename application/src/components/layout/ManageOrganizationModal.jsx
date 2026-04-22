@@ -130,6 +130,8 @@ const parseMemberBranchNames = (member, allBranches = []) => {
     return Array.from(names);
 };
 
+const MANAGE_ORG_CLOSE_ANIMATION_MS = 280;
+
 const MemberBranchTooltip = ({ branchNames = [], children }) => {
     const [visible, setVisible] = useState(false);
     const [position, setPosition] = useState(null);
@@ -212,6 +214,9 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
     const [memberToRemove, setMemberToRemove] = useState(null);
     const [memberToEdit, setMemberToEdit] = useState(null);
     const [editingAccessData, setEditingAccessData] = useState({ roleId: 3, branchIds: [] });
+    const [shouldRenderModal, setShouldRenderModal] = useState(isOpen);
+    const [isClosingModal, setIsClosingModal] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
 
     const resetMemberInviteForm = () => {
         setInviteEmail('');
@@ -277,6 +282,60 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
         }
     };
 
+    useEffect(() => {
+        let openStateTimer = null;
+
+        if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+
+            openStateTimer = setTimeout(() => {
+                setShouldRenderModal(true);
+                setIsClosingModal(false);
+            }, 0);
+
+            return () => {
+                if (openStateTimer) {
+                    clearTimeout(openStateTimer);
+                }
+            };
+        }
+
+        if (!shouldRenderModal) {
+            return;
+        }
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingModal(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderModal(false);
+            setIsClosingModal(false);
+            closeAnimationTimerRef.current = null;
+        }, MANAGE_ORG_CLOSE_ANIMATION_MS);
+
+        return () => {
+            if (openStateTimer) {
+                clearTimeout(openStateTimer);
+            }
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderModal]);
+
+    useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+            }
+        };
+    }, []);
+
     // Reset loop when opening
     useEffect(() => {
         if (isOpen) {
@@ -300,7 +359,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             setEditingAccessData({ roleId: 3, branchIds: [] });
             setIsAddingOrg(initialView === 'create');
             setIsAddingUser(false);
-        } else {
+        } else if (!shouldRenderModal) {
             setView('list');
             setEditingOrg(null);
             setRequestError('');
@@ -308,7 +367,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             setMemberToRemove(null);
             setMemberToEdit(null);
         }
-    }, [isOpen, initialView, initialOrg]);
+    }, [isOpen, initialView, initialOrg, shouldRenderModal]);
 
 
 
@@ -576,17 +635,21 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
         }
     };
 
-    if (!isOpen) return null;
+    if (!shouldRenderModal) return null;
 
     return createPortal(
         <div 
-            className="fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm animate-fade-in"
+            className={cn(
+                "fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm",
+                isClosingModal ? "animate-fade-out" : "animate-fade-in"
+            )}
             onClick={onClose}
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
-                    "manage-org-modal-shell bg-white h-screen w-full md:w-[420px] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] animate-slide-in-right relative flex flex-col",
+                    "manage-org-modal-shell bg-white h-screen w-full md:w-[420px] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] relative flex flex-col",
+                    isClosingModal ? "animate-slide-out-right" : "animate-slide-in-right",
                     view === 'manage' ? "manage-org-modal-manage" : ""
                 )}
             >

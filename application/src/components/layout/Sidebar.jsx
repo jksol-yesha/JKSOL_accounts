@@ -923,8 +923,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 />
             )}
 
-            <aside className={cn(
-                "fixed inset-y-0 left-0 z-[70] w-[208px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-screen min-h-screen max-h-screen rounded-none overflow-visible",
+            <aside 
+                id="app-main-sidebar"
+                tabIndex={-1}
+                className={cn(
+                "fixed inset-y-0 left-0 z-[70] w-[208px] bg-[#f4f6fe] border-r border-slate-200 flex flex-col transition-[width,transform,box-shadow] duration-300 ease-in-out h-screen min-h-screen max-h-screen rounded-none overflow-visible outline-none",
                 usesHoverOverlay ? "md:fixed md:translate-x-0" : "md:relative md:translate-x-0",
                 isTabletViewport ? (effectiveCollapsed ? "md:w-[50px]" : "md:w-[208px]") : (isCollapsed && "lg:w-[52px]"),
                 usesHoverOverlay && !effectiveCollapsed && "md:z-[85] md:shadow-[0_18px_40px_rgba(15,23,42,0.14)]",

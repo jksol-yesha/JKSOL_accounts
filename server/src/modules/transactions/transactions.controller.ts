@@ -353,7 +353,8 @@ export const getTransactions = async ({ body, set, user, orgId, branchId, header
             }
         }
 
-        const items = await TransactionService.getAll(orgId, effectiveBranchId, financialYearId, limit, targetCurrency, user);
+        const accountId = body.accountId ? Number(body.accountId) : undefined;
+        const items = await TransactionService.getAll(orgId, effectiveBranchId, financialYearId, limit, targetCurrency, user, accountId);
         return { success: true, data: items };
     } catch (error: any) {
         console.error('Get Transactions Error:', error);
@@ -367,7 +368,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
     try {
         const financialYearId = Number(body.financialYearId);
         const rawBranchId = body.branchId ?? branchId;
-        const format = body.format === 'pdf' ? 'pdf' : 'csv';
+        const format = body.format === 'pdf' ? 'pdf' : (body.format === 'excel' || body.format === 'xlsx') ? 'xlsx' : 'csv';
 
         if ((!rawBranchId && rawBranchId !== 0) || (Array.isArray(rawBranchId) && rawBranchId.length === 0)) {
             set.status = 400;
@@ -401,21 +402,24 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
             }
         }
 
-        const groupedTransactions = await TransactionService.getGroupedExportData(
-            orgId,
-            effectiveBranchId,
-            financialYearId,
-            targetCurrency,
-            user,
-            {
-                searchTerm: body.searchTerm,
-                appliedFilters: body.appliedFilters,
-                sortConfig: body.sortConfig
-            }
-        );
+        const useMappedRows = body.mappedRows && Array.isArray(body.mappedRows);
+        const groupedTransactions = useMappedRows
+            ? body.mappedRows
+            : await TransactionService.getGroupedExportData(
+                orgId,
+                effectiveBranchId,
+                financialYearId,
+                targetCurrency,
+                user,
+                {
+                    searchTerm: body.searchTerm,
+                    appliedFilters: body.appliedFilters,
+                    sortConfig: body.sortConfig
+                }
+            );
 
         if (format === 'pdf') {
-            const html = TransactionService.buildPrintableHtml(groupedTransactions);
+            const html = TransactionService.buildPrintableHtml(groupedTransactions, body.visibleColumns);
             set.headers['content-type'] = 'text/html; charset=utf-8';
             set.headers['content-disposition'] = 'inline; filename="transactions-export.html"';
             return new Response(html, {
@@ -426,7 +430,21 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
             });
         }
 
-        const csvContent = TransactionService.buildExportCsv(groupedTransactions);
+        if (format === 'excel' || format === 'xlsx') {
+            const excelBuffer = TransactionService.buildExportExcel(groupedTransactions, body.visibleColumns);
+            const fileName = `transactions-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+            return {
+                success: true,
+                data: {
+                    fileName,
+                    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    fileContent: excelBuffer.toString('base64')
+                }
+            };
+        }
+
+        const csvContent = TransactionService.buildExportCsv(groupedTransactions, body.visibleColumns);
         const fileName = `transactions-export-${new Date().toISOString().slice(0, 10)}.csv`;
 
         return {
@@ -436,7 +454,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
                 mimeType: 'text/csv;charset=utf-8',
                 fileContent: Buffer.from(csvContent, 'utf-8').toString('base64')
             }
-        };
+        }
     } catch (error: any) {
         console.error('Export Transactions Error:', error);
         set.status = 500;

@@ -3,51 +3,67 @@ import { createPortal } from 'react-dom';
 import { Trash2, Plus, Check, X, ChevronDown } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 
-const GstRateDropdown = ({
+const DEFAULT_GST_RATES = ['5', '12', '18', '28'];
+
+const getStoredRates = (storageKey) => {
+    if (typeof window === 'undefined') {
+        return DEFAULT_GST_RATES;
+    }
+
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) {
+        return DEFAULT_GST_RATES;
+    }
+
+    try {
+        const parsed = JSON.parse(saved);
+        if (!Array.isArray(parsed)) {
+            return DEFAULT_GST_RATES;
+        }
+
+        return Array.from(new Set([...DEFAULT_GST_RATES, ...parsed.map(String)]))
+            .sort((a, b) => parseFloat(a) - parseFloat(b));
+    } catch (e) {
+        console.error('Failed to parse GST rates', e);
+        return DEFAULT_GST_RATES;
+    }
+};
+
+const GstRateDropdown = React.forwardRef(({
     value,
     onChange,
     orgId,
     branchId,
     className = '',
     error = false,
-}) => {
+    onKeyDown,
+    onFocusNext,
+}, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [isAdding, setIsAdding] = useState(false);
     const [newRate, setNewRate] = useState('');
-    const [rates, setRates] = useState(['5', '12', '18', '28']); // Default common rates
+    const [storageRevision, setStorageRevision] = useState(0);
     const dropdownRef = useRef(null);
     const containerRef = useRef(null);
     const inputRef = useRef(null);
+    const buttonRef = useRef(null);
     const [dropdownStyles, setDropdownStyles] = useState({});
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
 
     const storageKey = useMemo(() => {
         const orgKey = orgId || 'org';
         const branchKey = branchId || 'branch';
         return `gst_rate_options_${orgKey}_${branchKey}`;
     }, [orgId, branchId]);
-
-    // Load rates from localStorage
-    useEffect(() => {
-        const saved = localStorage.getItem(storageKey);
-        if (saved) {
-            try {
-                const parsed = JSON.parse(saved);
-                if (Array.isArray(parsed)) {
-                    // Combine with defaults and deduplicate
-                    const combined = Array.from(new Set([...['5', '12', '18', '28'], ...parsed.map(String)]))
-                        .sort((a, b) => parseFloat(a) - parseFloat(b));
-                    setRates(combined);
-                }
-            } catch (e) {
-                console.error('Failed to parse GST rates', e);
-            }
-        }
-    }, [storageKey]);
+    const rates = useMemo(() => {
+        const revision = storageRevision;
+        return getStoredRates(storageKey, revision);
+    }, [storageKey, storageRevision]);
 
     const saveRates = (newRates) => {
         const sorted = [...newRates].sort((a, b) => parseFloat(a) - parseFloat(b));
-        setRates(sorted);
         localStorage.setItem(storageKey, JSON.stringify(sorted));
+        setStorageRevision((prev) => prev + 1);
     };
 
     const handleAddRate = () => {
@@ -120,12 +136,111 @@ const GstRateDropdown = ({
     }, [isAdding]);
 
     const displayValue = value ? `${parseFloat(value).toFixed(2)}%` : 'Select Rate';
+    const getSelectedIndex = () => {
+        const selectedIndex = rates.findIndex((rate) => String(rate) === String(value));
+        return selectedIndex >= 0 ? selectedIndex : 0;
+    };
+
+    const handleSelectRate = (rate) => {
+        onChange({ target: { value: rate } });
+        setIsOpen(false);
+        setTimeout(() => {
+            onFocusNext?.();
+        }, 0);
+    };
+
+    const handleTriggerKeyDown = (e) => {
+        if (isAdding) return;
+
+        if (!isOpen) {
+            if (e.shiftKey && (e.key === 'Enter' || e.key === 'Tab')) {
+                onKeyDown?.(e);
+                return;
+            }
+
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                onKeyDown?.(e);
+                return;
+            }
+
+            if (['Enter', 'Tab'].includes(e.key)) {
+                e.preventDefault();
+                setHighlightedIndex(getSelectedIndex());
+                setIsOpen(true);
+                return;
+            }
+
+            onKeyDown?.(e);
+            return;
+        }
+
+        switch (e.key) {
+            case 'Tab': {
+                if (rates.length === 0) {
+                    setIsOpen(false);
+                    break;
+                }
+                e.preventDefault();
+                const direction = e.shiftKey ? -1 : 1;
+                setHighlightedIndex((prev) => {
+                    const nextIndex = prev + direction;
+                    if (nextIndex < 0) return rates.length - 1;
+                    if (nextIndex >= rates.length) return 0;
+                    return nextIndex;
+                });
+                break;
+            }
+            case 'ArrowDown':
+                if (rates.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                e.preventDefault();
+                setHighlightedIndex((prev) => (prev + 1) % rates.length);
+                break;
+            case 'ArrowUp':
+                if (rates.length === 0) {
+                    e.preventDefault();
+                    return;
+                }
+                e.preventDefault();
+                setHighlightedIndex((prev) => (prev - 1 + rates.length) % rates.length);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (highlightedIndex >= 0 && rates[highlightedIndex]) {
+                    handleSelectRate(rates[highlightedIndex]);
+                } else {
+                    setIsOpen(false);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setIsOpen(false);
+                buttonRef.current?.focus();
+                break;
+            default:
+                break;
+        }
+    };
 
     return (
         <div className="relative w-full" ref={containerRef}>
             <button
+                ref={(node) => {
+                    buttonRef.current = node;
+                    if (typeof ref === 'function') ref(node);
+                    else if (ref) ref.current = node;
+                }}
                 type="button"
-                onClick={() => setIsOpen(!isOpen)}
+                data-custom-select-trigger="true"
+                onClick={() => {
+                    if (!isOpen) {
+                        setHighlightedIndex(getSelectedIndex());
+                    }
+                    setIsOpen(!isOpen);
+                }}
+                onKeyDown={handleTriggerKeyDown}
                 className={cn(
                     "w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 flex items-center justify-between transition-all outline-none focus:border-black",
                     error ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100",
@@ -146,13 +261,11 @@ const GstRateDropdown = ({
                         {rates.map((rate) => (
                             <div
                                 key={rate}
-                                onClick={() => {
-                                    onChange({ target: { value: rate } });
-                                    setIsOpen(false);
-                                }}
+                                onClick={() => handleSelectRate(rate)}
                                 className={cn(
                                     "group w-full rounded-lg px-3 py-1.5 text-[13px] text-left transition-colors flex items-center justify-between cursor-pointer",
-                                    value === rate ? "bg-slate-50 text-slate-900 font-bold" : "text-slate-600 font-semibold hover:bg-slate-50"
+                                    value === rate ? "bg-slate-50 text-slate-900 font-bold" : "text-slate-600 font-semibold hover:bg-slate-50",
+                                    highlightedIndex >= 0 && rates[highlightedIndex] === rate && "bg-slate-50"
                                 )}
                             >
                                 <span>{parseFloat(rate).toFixed(0)}%</span>
@@ -223,6 +336,6 @@ const GstRateDropdown = ({
             )}
         </div>
     );
-};
+});
 
 export default GstRateDropdown;
