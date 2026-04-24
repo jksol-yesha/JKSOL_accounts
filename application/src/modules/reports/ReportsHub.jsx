@@ -72,12 +72,6 @@ const ReportsHub = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 lg:gap-5">
                             <ReportCard
-                                id="summary"
-                                title="Transaction Summary"
-                                description="A high-level aggregated summary of all transaction activities, categorized by primary types."
-                                icon={PieChart}
-                            />
-                            <ReportCard
                                 id="detailed"
                                 title="Detailed Transactions"
                                 description="A chronological, itemized list of every transaction logged within the system."

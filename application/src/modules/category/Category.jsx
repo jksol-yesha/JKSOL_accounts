@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
@@ -31,6 +32,7 @@ const isUsedCategoryDeleteError = (message) => {
 };
 
 const Category = () => {
+    const navigate = useNavigate();
     const { selectedBranch, loading: branchLoading } = useBranch();
     const { selectedYear } = useYear();
     const { showToast } = useToast();
@@ -38,7 +40,7 @@ const Category = () => {
     const [subCategories, setSubCategories] = useState([]);
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
-    
+
     // Drawer state
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [categoryToEdit, setCategoryToEdit] = useState(null);
@@ -360,14 +362,13 @@ const Category = () => {
             header={(
                 <PageHeader
                     title="Category Management"
-                    breadcrumbs={['Apps', 'Categories']}
-                    tabs={transactionTabs}
-                    activeTab="categories"
+                    breadcrumbs={['Transactions', 'Categories']}
+                    onBack={() => navigate('/transactions')}
                 />
             )}
-            className="category-laptop-page-shell"
-            contentClassName="category-laptop-page-content flex flex-col"
-            cardClassName="bg-transparent border-none shadow-none overflow-visible lg:overflow-hidden"
+            className="category-laptop-page-shell !overflow-visible lg:!overflow-visible"
+            contentClassName="category-laptop-page-content flex flex-col p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
+            cardClassName="bg-white border-none shadow-none rounded-none overflow-visible lg:overflow-visible"
         >
             <style>{`
                 @media print {

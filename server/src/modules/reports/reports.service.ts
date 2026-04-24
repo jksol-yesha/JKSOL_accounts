@@ -238,7 +238,7 @@ export const ReportsService = {
                 }
             });
         }
- else {
+        else {
             let dataToExport = Array.isArray(reportData?.tableData) ? [...reportData.tableData] : [];
             if (term) {
                 dataToExport = dataToExport.filter((item: any) => {
@@ -246,7 +246,7 @@ export const ReportsService = {
                         const categoryText = typeof item.category === 'object' && item.category !== null ? (item.category.name || '') : (item.category || '');
                         return `${item.description || ''} ${categoryText} ${item.party || item.contact || ''}`.toLowerCase().includes(term);
                     }
-                    if (reportData?.type === 'categories' || reportData?.type === 'accounts') {
+                    if (reportData?.type === 'categories' || reportData?.type === 'accounts' || reportData?.type === 'parties') {
                         return String(item.name || '').toLowerCase().includes(term);
                     }
                     return false;
@@ -279,8 +279,8 @@ export const ReportsService = {
                 if (!term && reportData?.closingBalance !== undefined) {
                     rows.push(['', 'Closing Balance', '', '', '', reportData.closingBalance]);
                 }
-            } else if (reportData?.type === 'categories' || reportData?.type === 'accounts') {
-                headers = [reportData.type === 'categories' ? 'Category' : 'Account Name', 'Opening Balance', 'Income', 'Expense', 'Investment', 'Closing Balance', 'Count'];
+            } else if (reportData?.type === 'categories' || reportData?.type === 'accounts' || reportData?.type === 'parties') {
+                headers = [reportData.type === 'categories' ? 'Category' : (reportData.type === 'accounts' ? 'Account Name' : 'Party Name'), 'Opening Balance', 'Income', 'Expense', 'Investment', 'Closing Balance', 'Count'];
                 rows = dataToExport.map((item: any) => [
                     item.name || '',
                     item.openingBalance ?? '',
@@ -532,8 +532,8 @@ export const ReportsService = {
                 rows.push(['', 'Closing Balance', '', '', '', String(reportData.closingBalance)]);
             }
             content = renderTable(['Date', 'Description', 'Category', 'Debit', 'Credit', 'Balance'], rows);
-        } else if (reportData?.type === 'categories' || reportData?.type === 'accounts') {
-            const nameHeader = reportData.type === 'categories' ? 'Category' : 'Account Name';
+        } else if (reportData?.type === 'categories' || reportData?.type === 'accounts' || reportData?.type === 'parties') {
+            const nameHeader = reportData.type === 'categories' ? 'Category' : (reportData.type === 'accounts' ? 'Account Name' : 'Party Name');
             const rows = (Array.isArray(reportData?.tableData) ? reportData.tableData : [])
                 .filter((item: any) => !term || String(item?.name || '').toLowerCase().includes(term))
                 .map((item: any) => [
@@ -749,46 +749,74 @@ export const ReportsService = {
         const org = orgList[0];
         const finalCurrency = targetCurrency || org?.baseCurrency || 'USD';
 
-        // 1. Calculate Global Opening Balance (Initial + Past Movements)
-        const pastConditions = [
+        // 1. Calculate Date-filtered Opening Balance
+        let initialAccountBalance = 0;
+        const shouldIncludeInitialBalance = 
+            (!branchId || branchId === 'all') && 
+            !filters?.categoryId && 
+            !filters?.party && 
+            (!filters?.txnType || filters.txnType === 'All Types');
+
+        if (shouldIncludeInitialBalance) {
+            const accountConditions: any[] = [
+                eq(accounts.orgId, orgId),
+                isNotDeleted(accounts)
+            ];
+            if (filters?.accountId) {
+                accountConditions.push(eq(accounts.id, filters.accountId));
+            }
+
+            const accOpeningQuery = await db.select({
+                openingBalance: accounts.openingBalance,
+                currency: currencies.code
+            })
+                .from(accounts)
+                .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
+                .where(and(...accountConditions));
+
+            for (const acc of accOpeningQuery as any[]) {
+                const converted = await ExchangeRateService.convert(Number(acc.openingBalance || 0), acc.currency || 'USD', finalCurrency);
+                initialAccountBalance += converted;
+            }
+        }
+
+        const pastConditions: any[] = [
             eq(transactions.orgId, orgId),
             isNotDeleted(transactions),
             eq(transactions.status, 1),
             lt(transactions.txnDate, startDate)
         ];
-        // GLOBAL: Opening balance is organization-wide
-        const pastMovement = await db.select({
+        appendBranchFilter(pastConditions, transactions.branchId, branchId, user);
+        appendTxnAndCategoryFilters(pastConditions, types, filters);
+
+        const pastResults = await db.select({
             currency: currencies.code,
-            txnTypeId: transactions.txnTypeId,
-            totalLocal: sql<string>`SUM(COALESCE(${transactions.finalAmount}, ${transactions.amountLocal}))`
-        }).from(transactions)
+            totalLocal: sql<string>`
+                SUM(
+                    CASE 
+                        WHEN ${transactions.txnTypeId} = ${incomeId} THEN COALESCE(${transactions.finalAmount}, ${transactions.amountLocal})
+                        WHEN ${transactions.txnTypeId} = ${expenseId} THEN -COALESCE(${transactions.finalAmount}, ${transactions.amountLocal})
+                        WHEN ${transactions.txnTypeId} = ${investmentId} THEN -COALESCE(${transactions.finalAmount}, ${transactions.amountLocal})
+                        ELSE 0
+                    END
+                )
+            `
+        })
+            .from(transactions)
             .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
             .where(and(...pastConditions))
-            .groupBy(currencies.code, transactions.txnTypeId);
+            .groupBy(currencies.code);
 
-        let opIn = 0, opOut = 0, opInv = 0;
-        for (const r of pastMovement) {
-            const amt = await ExchangeRateService.convert(Number(r.totalLocal || 0), r.currency || 'USD', finalCurrency);
-            if (r.txnTypeId === incomeId) opIn += amt;
-            else if (r.txnTypeId === expenseId) opOut += amt;
-            else if (r.txnTypeId === investmentId) opInv += amt;
+        let pastTxnsValue = 0;
+        for (const r of pastResults as any[]) {
+            const amount = Number(r.totalLocal || 0);
+            const converted = await ExchangeRateService.convert(amount, r.currency || 'USD', finalCurrency);
+            pastTxnsValue += converted;
         }
 
-        const accountRows = await db.select({
-            openingBalance: accounts.openingBalance,
-            currencyCode: currencies.code
-        }).from(accounts)
-            .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-            .where(and(eq(accounts.orgId, orgId), isNotDeleted(accounts), eq(accounts.status, 1)));
+        const openingBalance = initialAccountBalance + pastTxnsValue;
 
-        let initialAccountBalance = 0;
-        for (const acc of accountRows) {
-            initialAccountBalance += await ExchangeRateService.convert(Number(acc.openingBalance || 0), acc.currencyCode || 'USD', finalCurrency);
-        }
-
-        const openingBalance = initialAccountBalance + (opIn - opOut - opInv);
-
-        // 2. Current Period Totals
+        // 2. Current Period Totals (for Debit / Credit)
         const conditions = [
             eq(transactions.orgId, orgId),
             isNotDeleted(transactions),
@@ -824,7 +852,7 @@ export const ReportsService = {
 
         // Net Balance matches Dashboard "Net Profit" (Income - Expense)
         const net = income - expense;
-        const closingBalance = openingBalance + (income - expense - investment);
+        const closingBalance = openingBalance + income - expense - investment;
 
         return {
             openingBalance,
@@ -868,6 +896,42 @@ export const ReportsService = {
 
         return {
             type: 'categories',
+            tableData: Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)),
+            currency
+        };
+    },
+
+    // 2b. Party-wise Report
+    getPartyWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+        const { rows, currency } = await fetchDetailedRows(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+
+        const map = new Map<string, any>();
+        for (const row of rows) {
+            const name = (row.party || '').trim();
+            if (!name || name === '-') continue;
+            const key = normKey(name);
+            if (!map.has(key)) {
+                map.set(key, {
+                    name,
+                    openingBalance: 0,
+                    income: 0,
+                    expense: 0,
+                    investment: 0,
+                    closingBalance: 0,
+                    count: 0
+                });
+            }
+            const item = map.get(key);
+            const amt = Number(row.amountNumeric || 0);
+            if (row.txnType === 'income') item.income += amt;
+            else if (row.txnType === 'expense') item.expense += amt;
+            else if (row.txnType === 'investment') item.investment += amt;
+            item.count += 1;
+            item.closingBalance = item.openingBalance + item.income - item.expense - item.investment;
+        }
+
+        return {
+            type: 'parties',
             tableData: Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name)),
             currency
         };
@@ -1198,7 +1262,8 @@ export const ReportsService = {
             eq(transactions.status, 1),
             lt(transactions.txnDate, startDate)
         ];
-        // GLOBAL: Opening balances are global
+        appendBranchFilter(pastConditions, transactions.branchId, branchId, user);
+        appendTxnAndCategoryFilters(pastConditions, types, filters);
 
         const pastResults = await db.select({
             currency: currencies.code,
@@ -1225,25 +1290,35 @@ export const ReportsService = {
             pastTxnsValue += converted;
         }
 
-        const accountConditions: any[] = [
-            eq(accounts.orgId, orgId),
-            isNotDeleted(accounts),
-            eq(accounts.status, 1)
-        ];
-        // GLOBAL: Accounts are unified
-
-        const accOpeningQuery = await db.select({
-            openingBalance: accounts.openingBalance,
-            currency: currencies.code
-        })
-            .from(accounts)
-            .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-            .where(and(...accountConditions));
-
         let initialAccountBalance = 0;
-        for (const acc of accOpeningQuery as any[]) {
-            const converted = await ExchangeRateService.convert(Number(acc.openingBalance || 0), acc.currency || 'USD', finalCurrency);
-            initialAccountBalance += converted;
+        
+        const shouldIncludeLedgerInitialBalance = 
+            (!branchId || branchId === 'all') && 
+            !filters?.categoryId && 
+            !filters?.party && 
+            (!filters?.txnType || filters.txnType === 'All Types');
+
+        if (shouldIncludeLedgerInitialBalance) {
+            const accountConditions: any[] = [
+                eq(accounts.orgId, orgId),
+                isNotDeleted(accounts)
+            ];
+            if (filters?.accountId) {
+                accountConditions.push(eq(accounts.id, filters.accountId));
+            }
+
+            const accOpeningQuery = await db.select({
+                openingBalance: accounts.openingBalance,
+                currency: currencies.code
+            })
+                .from(accounts)
+                .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
+                .where(and(...accountConditions));
+
+            for (const acc of accOpeningQuery as any[]) {
+                const converted = await ExchangeRateService.convert(Number(acc.openingBalance || 0), acc.currency || 'USD', finalCurrency);
+                initialAccountBalance += converted;
+            }
         }
 
         const finalOpeningBalance = initialAccountBalance + pastTxnsValue;

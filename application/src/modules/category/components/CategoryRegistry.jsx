@@ -66,15 +66,15 @@ const CategoryRegistry = ({
                 result.push({ ...sub, isSubCategory: true, parentType: cat.type, parentName: cat.name });
             });
         });
-        
+
         if (searchTerm) {
             const term = searchTerm.toLowerCase();
-            return result.filter(item => 
+            return result.filter(item =>
                 (item.name || '').toLowerCase().includes(term) ||
                 (item.type || item.parentType || '').toLowerCase().includes(term)
             );
         }
-        
+
         return result;
     }, [categories, subCategories, searchTerm]);
 
@@ -103,13 +103,13 @@ const CategoryRegistry = ({
                             <CornerDownRight size={14} className="text-gray-300 ml-4 shrink-0 transition-colors group-hover:text-gray-400" />
                         ) : (
                             <div className="w-5 h-5 rounded-md bg-gray-50 flex items-center justify-center text-gray-400 shrink-0">
-                                <ShoppingBag size={12} strokeWidth={2.5}/>
+                                <ShoppingBag size={12} strokeWidth={2.5} />
                             </div>
                         )}
                         <div className="flex flex-col justify-center min-w-0">
                             <span className={cn(
                                 "truncate font-bold tracking-tight",
-                                data.isSubCategory ? "text-[12px] text-gray-700" : "text-[13px] text-gray-900"
+                                data.isSubCategory ? "text-[12px] text-gray-700" : "text-[12px] text-gray-900"
                             )} title={data.name}>
                                 {data.name}
                             </span>
@@ -127,10 +127,10 @@ const CategoryRegistry = ({
                 const { data } = params;
                 const typeVal = data.isSubCategory ? data.parentType : data.type;
                 const lowerType = String(typeVal || '').toLowerCase();
-                
+
                 let Icon = ArrowDownCircle;
                 let textColorClass = 'text-rose-600';
-                
+
                 if (lowerType === 'income') {
                     Icon = ArrowUpCircle;
                     textColorClass = 'text-emerald-600';
@@ -141,7 +141,7 @@ const CategoryRegistry = ({
 
                 return (
                     <div className="flex items-center gap-1.5 h-full">
-                        <Icon size={12} className={textColorClass} strokeWidth={2.5}/>
+                        <Icon size={12} className={textColorClass} strokeWidth={2.5} />
                         <span className={cn("text-[11px] font-bold uppercase tracking-wider", textColorClass)}>
                             {typeVal || '-'}
                         </span>
@@ -179,8 +179,8 @@ const CategoryRegistry = ({
                 return (
                     <div className="flex items-center h-full">
                         <button
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
+                            onClick={(e) => {
+                                e.stopPropagation();
                                 if (data.isSubCategory) {
                                     onToggleSubStatus(data, isActive ? 2 : 1);
                                 } else {
@@ -189,9 +189,9 @@ const CategoryRegistry = ({
                             }}
                             className={cn(
                                 "inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider transition-colors",
-                                isActive 
-                                    ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700" 
-                                    : "bg-gray-100 text-gray-500 hover:bg-gray-200"
+                                isActive
+                                    ? "text-emerald-600 hover:text-emerald-700"
+                                    : "text-gray-500 hover:text-gray-600"
                             )}
                         >
                             {isActive ? 'Active' : 'Inactive'}
@@ -212,27 +212,27 @@ const CategoryRegistry = ({
                         {!data.isSubCategory && (
                             <button
                                 onClick={(e) => { e.stopPropagation(); onQuickAddSub(data); }}
-                                className="px-2 py-1 flex items-center gap-1 text-[10px] font-bold text-emerald-600 hover:bg-emerald-50 rounded bg-emerald-50/50 border border-emerald-100 transition-all"
+                                className="p-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors"
                                 title={`Add Sub-Category to ${data.name}`}
                             >
-                                <Plus size={10} strokeWidth={3} /> Add
+                                <Plus size={12} strokeWidth={2.5} />
                             </button>
                         )}
                         <button
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (data.isSubCategory) onEditSubCategory(data); 
-                                else onEditCategory(data); 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (data.isSubCategory) onEditSubCategory(data);
+                                else onEditCategory(data);
                             }}
                             className="p-1.5 text-gray-400 hover:text-[#4A8AF4] hover:bg-[#4A8AF4]/10 rounded-md transition-colors"
                         >
                             <Edit size={12} strokeWidth={2.5} />
                         </button>
                         <button
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                if (data.isSubCategory) onDeleteSubCategory(data.id); 
-                                else onDeleteCategory(data.id); 
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (data.isSubCategory) onDeleteSubCategory(data.id);
+                                else onDeleteCategory(data.id);
                             }}
                             className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
                         >
@@ -243,42 +243,35 @@ const CategoryRegistry = ({
             }
         }
     ], [onToggleStatus, onToggleSubStatus, onEditCategory, onEditSubCategory, onDeleteCategory, onDeleteSubCategory, onQuickAddSub]);
-
-    const myTheme = useMemo(() => themeQuartz.withParams({
-        headerHeight: 44,
-        rowHeight: 46,
-        headerBackgroundColor: '#F8FAFC',
-        headerTextColor: '#64748B',
-        headerFontWeight: 800,
-        headerFontSize: 11,
-        rowBorder: { style: 'solid', width: 1, color: '#f1f5f9' },
-        wrapperBorder: false,
-        wrapperBorderRadius: 0,
-        cellHorizontalPadding: 16,
+    const gridTheme = useMemo(() => themeQuartz.withParams({
+        headerFontSize: 12,
     }), []);
 
     return (
-        <Card noPadding className="rounded-2xl border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col bg-white overflow-hidden w-full h-full min-h-[400px]">
+        <Card noPadding className="border-none shadow-none rounded-none flex flex-col bg-white overflow-hidden w-full h-full min-h-[400px]">
             {/* Header Toolbar */}
-            <div className="relative z-50 px-5 py-4 border-b border-gray-50 flex items-center justify-between gap-4 flex-none bg-white">
-                <div className="relative w-72">
-                    <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input
-                        type="text"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search categories..."
-                        className="w-full pl-9 pr-4 py-1.5 bg-[#f8fafc] border border-gray-100 rounded-lg text-[13px] font-medium text-slate-700 outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all"
-                    />
+            <div className="px-5 py-3 flex flex-row items-center justify-between gap-4 relative print:hidden min-h-[60px] z-50 bg-white">
+                {/* Left: Actions */}
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onCreateCategory}
+                        className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
+                        title="Add Category"
+                    >
+                        <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
+                        <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Category</span>
+                    </button>
                 </div>
-                
-                <div className="flex items-center gap-2" ref={dropdownAreaRef}>
-                    <div className="relative">
+
+                {/* Right: Search */}
+                <div className="flex items-center gap-3">
+                    <div className="relative" ref={dropdownAreaRef}>
                         <button
                             onClick={() => setActiveDropdown(prev => prev === 'export' ? null : 'export')}
-                            className="px-3 py-1.5 border border-gray-200 text-gray-600 rounded-lg text-[13px] font-bold hover:bg-gray-50 transition-colors flex items-center gap-2"
+                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
                         >
-                            <Download size={14} /> Export
+                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                            <span>Export</span>
                         </button>
                         {activeDropdown === 'export' && (
                             <div className="absolute top-full mt-2 right-0 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-50 py-2 animate-in slide-in-from-top-2 duration-200">
@@ -293,48 +286,47 @@ const CategoryRegistry = ({
                             </div>
                         )}
                     </div>
-                    <button
-                        onClick={onCreateCategory}
-                        className="px-3 py-1.5 bg-black text-white rounded-lg text-[13px] font-bold hover:bg-gray-800 transition-colors shadow-sm active:scale-95 flex items-center gap-2"
-                    >
-                        <Plus size={14} strokeWidth={3} />
-                        New Category
-                    </button>
+                    <div className="relative group w-[240px]">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
+                        <input
+                            type="text"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search"
+                            className="w-full pl-9 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-[#BAE6FD] outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                        />
+                    </div>
                 </div>
             </div>
 
             {/* Grid Container */}
-            <div className="relative flex-1 min-h-[400px] bg-white w-full overflow-hidden">
+            <div className="relative flex-1 min-h-[400px] w-full px-5 pb-1 flex flex-col">
                 {showInitialLoader ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 backdrop-blur-sm">
                         <LoadingOverlay label="Loading Categories..." />
                     </div>
                 ) : (
-                    <>
-                        <style>{`
-                            .custom-category-grid .ag-root-wrapper { border: none !important; }
-                            .custom-category-grid .ag-header { border-bottom: 2px solid #f1f5f9; }
-                            .custom-category-grid .ag-row { transition: background-color 0.15s ease; border-bottom: 1px solid #f8fafc; }
-                            .custom-category-grid .ag-row:hover { background-color: #f8fafc !important; }
-                        `}</style>
-                        <div className="absolute inset-0 custom-category-grid">
+                    <div className="flex-1 w-full relative">
+                        <div className="absolute inset-0">
                             <AgGridReact
                                 ref={gridRef}
-                                theme={myTheme}
+                                theme={gridTheme}
                                 rowData={flatData}
                                 columnDefs={colDefs}
                                 defaultColDef={defaultColDef}
+                                rowHeight={42}
+                                headerHeight={44}
                                 animateRows={true}
                                 rowSelection="single"
                                 suppressCellFocus={true}
                                 suppressRowClickSelection={true}
                                 domLayout="normal"
                                 overlayNoRowsTemplate={
-                                    '<div class="flex flex-col items-center justify-center p-8 text-gray-400"><div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center mb-3 opacity-20"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div><span class="text-sm font-bold opacity-50">No categories found</span></div>'
+                                    '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No categories found</span>'
                                 }
                             />
                         </div>
-                    </>
+                    </div>
                 )}
                 {showOverlayLoader && <LoadingOverlay label="Updating Categories..." />}
             </div>

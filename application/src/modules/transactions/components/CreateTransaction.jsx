@@ -251,7 +251,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const createEmptyFormData = (currencyCode = transactionBranchCurrency) => ({
         txnDate: new Date().toISOString().split('T')[0],
-        txnTypeId: '', // No default transaction type
+        txnTypeId: 2, // Default to Expense
         name: '',
         accountId: '',
         attachmentPath: '',
@@ -267,6 +267,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         fromAccountId: '',
         toAccountId: '',
         isTaxable: false,
+        isGstInclusive: false,
         gstType: 1,
         gstRate: resolveDefaultGstRate(),
     });
@@ -284,7 +285,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     // GST is only applicable to Income (1) and Expense (2) in the branch's base currency
     const isGstEligible = [1, 2].includes(Number(formData.txnTypeId))
-        && formData.currencyCode === transactionBranchCurrency;
+        && String(formData.currencyCode || '').trim().toUpperCase() === String(transactionBranchCurrency || '').trim().toUpperCase();
 
     const sanitizeDecimalInput = (value) => {
         let sanitized = String(value ?? '').replace(/,/g, '').replace(/[^\d.]/g, '');
@@ -570,7 +571,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                         accountId: accountId ? String(accountId) : '',
                         categoryId: categoryId ? String(categoryId) : '',
                         subCategoryId: txn.subCategoryId ? String(txn.subCategoryId) : '',
-                        amountLocal: txn.amountLocal || txn.amountBase,
+                        amountLocal: (txn.isTaxable === true || txn.isTaxable === 1 || txn.isTaxable === '1')
+                            ? (txn.finalAmountLocal ?? txn.finalAmount ?? txn.amountLocal ?? txn.amountBase)
+                            : (txn.amountLocal ?? txn.amountBase),
 
                         contact: txn.contact || txn.counterpartyName || '',
                         contactId: txn.contactId ? String(txn.contactId) : '',
@@ -583,7 +586,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                         toAccountId: toAccountId ? String(toAccountId) : '',
 
                         // GST fields
-                        isTaxable: txn.isTaxable === true || txn.isTaxable === 1,
+                        isTaxable: txn.isTaxable === true || txn.isTaxable === 1 || txn.isTaxable === '1',
+                        isGstInclusive: txn.isTaxable === true || txn.isTaxable === 1 || txn.isTaxable === '1',
                         gstType: txn.gstType != null ? Number(txn.gstType) : 1,
                         gstRate: txn.gstRate != null ? String(txn.gstRate) : resolveDefaultGstRate(),
                     });
@@ -650,23 +654,46 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     // GST Auto-Calculation
     useEffect(() => {
+        const enteredAmount = parseFloat(formData.amountLocal) || 0;
+        
         if (!formData.isTaxable || !isGstEligible) {
-            const base = parseFloat(formData.amountLocal) || 0;
-            setGstCalc({ cgstAmount: 0, sgstAmount: 0, igstAmount: 0, gstTotal: 0, finalAmount: base });
+            setGstCalc({ cgstAmount: 0, sgstAmount: 0, igstAmount: 0, gstTotal: 0, finalAmount: enteredAmount });
             return;
         }
-        const base = parseFloat(formData.amountLocal) || 0;
+
         const rate = parseFloat(formData.gstRate) || 0;
-        if (Number(formData.gstType) === 1) {
+        let base = enteredAmount;
+        if (formData.isGstInclusive) {
+            base = enteredAmount / (1 + rate / 100);
+        }
+        
+        // Round base safely to 2 decimals
+        base = Math.round(base * 100) / 100;
+
+        if (Number(formData.gstType) === 1) { // Intra-state (CGST + SGST)
             const half = rate / 2;
             const cgst = Math.round(base * half / 100 * 100) / 100;
             const sgst = cgst;
-            setGstCalc({ cgstAmount: cgst, sgstAmount: sgst, igstAmount: 0, gstTotal: cgst + sgst, finalAmount: base + cgst + sgst });
-        } else {
+            setGstCalc({ 
+                cgstAmount: cgst, 
+                sgstAmount: sgst, 
+                igstAmount: 0, 
+                gstTotal: cgst + sgst, 
+                finalAmount: formData.isGstInclusive ? enteredAmount : base + cgst + sgst,
+                calculatedBase: base
+            });
+        } else { // Inter-state (IGST)
             const igst = Math.round(base * rate / 100 * 100) / 100;
-            setGstCalc({ cgstAmount: 0, sgstAmount: 0, igstAmount: igst, gstTotal: igst, finalAmount: base + igst });
+            setGstCalc({ 
+                cgstAmount: 0, 
+                sgstAmount: 0, 
+                igstAmount: igst, 
+                gstTotal: igst, 
+                finalAmount: formData.isGstInclusive ? enteredAmount : base + igst,
+                calculatedBase: base
+            });
         }
-    }, [formData.amountLocal, formData.isTaxable, formData.gstType, formData.gstRate, isGstEligible]);
+    }, [formData.amountLocal, formData.isTaxable, formData.gstType, formData.gstRate, formData.isGstInclusive, isGstEligible]);
 
     // Auto-fetch Exchange Rate
     useEffect(() => {
@@ -835,6 +862,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                     igstAmount: isGstEligible && formData.isTaxable ? gstCalc.igstAmount : null,
                     gstTotal: isGstEligible && formData.isTaxable ? gstCalc.gstTotal : null,
                     finalAmount: gstCalc.finalAmount,
+                    amountLocal: (isGstEligible && formData.isTaxable && formData.isGstInclusive && gstCalc.calculatedBase !== undefined) 
+                                    ? gstCalc.calculatedBase 
+                                    : parseFloat(formData.amountLocal),
                 };
 
                 const isNewFile = attachment && typeof attachment !== 'string';
@@ -1016,7 +1046,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             }
             fields.push('currencyCode', 'amountLocal', 'isTaxable');
             if (formData.isTaxable) {
-                fields.push('gstType', 'gstRate');
+                fields.push('isGstInclusive');
             }
         }
 
@@ -1145,6 +1175,14 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                 }));
                 return; // don't advance
             }
+            if (fieldName === 'isGstInclusive') {
+                e.preventDefault();
+                setFormData((prev) => ({
+                    ...prev,
+                    isGstInclusive: !prev.isGstInclusive,
+                }));
+                return; // don't advance
+            }
 
             e.preventDefault();
             const moved = focusNextLinear(fieldName, 1);
@@ -1255,16 +1293,16 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                 )}
             >
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 text-slate-600 shadow-sm shadow-[#4A8AF4]/5">
+                <div className="px-5 py-1 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
                             <ArrowRightLeft size={14} strokeWidth={2.5} />
                         </div>
-                        <div>
-                            <h2 className="text-[14px] font-bold text-slate-800 leading-tight">
+                        <div className="flex flex-col">
+                            <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
                                 {isEditMode ? "Edit Transaction" : "New Transaction"}
                             </h2>
-                            <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wide">
+                            <p className="text-[10px] font-semibold text-slate-500">
                                 {isEditMode ? "Update the details of your transaction" : "Create a new accounting entry"}
                             </p>
                         </div>
@@ -1407,7 +1445,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         {...getSelectNavigationProps('currencyCode')}
                                                         value={formData.currencyCode ?? ""}
                                                         onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                        className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        className="w-20 px-2 h-[32px] bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between"
                                                     >
                                                         {transactionCurrencyOptions.map(c => (
                                                             <option key={c} value={c}>{c}</option>
@@ -1422,7 +1460,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         value={formattedAmountLocal}
                                                         onChange={handleAmountLocalChange}
                                                         onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
-                                                        className="flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        className="flex-1 w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         placeholder="0.00"
                                                     />
                                                 </div>
@@ -1632,7 +1670,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                            className="w-20 px-2 h-[32px] bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1647,7 +1685,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
                                                             onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
-                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1666,7 +1704,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                            className="w-20 px-2 h-[32px] bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1681,7 +1719,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
                                                             onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
-                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1840,7 +1878,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                            className="w-20 px-2 h-[32px] bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1855,7 +1893,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
                                                             onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
-                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1876,7 +1914,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             {...getSelectNavigationProps('currencyCode')}
                                                             value={formData.currencyCode ?? ""}
                                                             onChange={(e) => handleCurrencyCodeChange(e.target.value)}
-                                                            className="w-20 px-2 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                            className="w-20 px-2 h-[32px] bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between"
                                                         >
                                                             {transactionCurrencyOptions.map(c => (
                                                                 <option key={c} value={c}>{c}</option>
@@ -1891,7 +1929,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                             value={formattedAmountLocal}
                                                             onChange={handleAmountLocalChange}
                                                             onKeyDown={(e) => handleFieldKeyDown(e, 'amountLocal')}
-                                                            className={cn("flex-1 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                            className={cn("flex-1 w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.amountLocal ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
                                                             placeholder="0.00"
                                                         />
                                                     </div>
@@ -1902,22 +1940,44 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
                                         {/* ── GST Section ── */}
                                         <div className="flex items-center justify-between gap-4 mt-4">
-                                            <div className="flex items-center gap-2">
-                                                <label className="relative inline-flex items-center cursor-pointer">
-                                                    <input
-                                                        type="checkbox"
-                                                        ref={setFieldRef('isTaxable')}
-                                                        data-nav-field="true"
-                                                        checked={formData.isTaxable}
-                                                        onChange={(e) => setFormData({ ...formData, isTaxable: e.target.checked })}
-                                                        onKeyDown={(e) => handleFieldKeyDown(e, 'isTaxable')}
-                                                        className="sr-only peer"
-                                                    />
-                                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
-                                                </label>
-                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap leading-none">
-                                                    {formData.isTaxable ? 'Taxable' : 'Non-Taxable'}
-                                                </span>
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex items-center gap-2">
+                                                    <label className="relative inline-flex items-center cursor-pointer">
+                                                        <input
+                                                            type="checkbox"
+                                                            ref={setFieldRef('isTaxable')}
+                                                            data-nav-field="true"
+                                                            checked={formData.isTaxable}
+                                                            onChange={(e) => setFormData({ ...formData, isTaxable: e.target.checked })}
+                                                            onKeyDown={(e) => handleFieldKeyDown(e, 'isTaxable')}
+                                                            className="sr-only peer"
+                                                        />
+                                                        <div className="w-10 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-[#4A8AF4]/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
+                                                    </label>
+                                                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap leading-none">
+                                                        {formData.isTaxable ? 'Taxable' : 'Non-Taxable'}
+                                                    </span>
+                                                </div>
+
+                                                {formData.isTaxable && (
+                                                    <div className="flex items-center gap-2 pl-4 border-l border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                                                        <label className="relative inline-flex items-center cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                ref={setFieldRef('isGstInclusive')}
+                                                                data-nav-field="true"
+                                                                checked={formData.isGstInclusive}
+                                                                onChange={(e) => setFormData({ ...formData, isGstInclusive: e.target.checked })}
+                                                                onKeyDown={(e) => handleFieldKeyDown(e, 'isGstInclusive')}
+                                                                className="sr-only peer"
+                                                            />
+                                                            <div className="w-8 h-4 bg-gray-200 peer-focus:ring-2 peer-focus:ring-[#4A8AF4]/40 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
+                                                        </label>
+                                                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider whitespace-nowrap leading-none" title="Reverse GST calculation from total amount">
+                                                            Inclusive GST
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
                                             {renderForeignExchangeHelper()}
                                         </div>
@@ -1931,30 +1991,17 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                                             Tax Regime <span className="text-rose-500">*</span>
                                                         </label>
-                                                        <div className="flex p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 w-full h-[40px]">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setFormData({ ...formData, gstType: 1 })}
-                                                                className={cn(
-                                                                    "flex-1 h-full px-1 text-[12px] font-bold rounded-lg transition-all flex flex-col items-center justify-center leading-[1.1]",
-                                                                    Number(formData.gstType) === 1 ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 border border-transparent"
-                                                                )}
-                                                            >
-                                                                <span>Intra</span>
-                                                                <span className="font-semibold text-[9.5px] text-slate-400 opacity-90 mt-[1.5px] tracking-wide">CGST & SGST</span>
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => setFormData({ ...formData, gstType: 0 })}
-                                                                className={cn(
-                                                                    "flex-1 h-full px-1 text-[12px] font-bold rounded-lg transition-all flex flex-col items-center justify-center leading-[1.1]",
-                                                                    Number(formData.gstType) === 0 ? "bg-white text-slate-800 shadow-sm border border-slate-200/50" : "text-slate-500 hover:text-slate-700 border border-transparent"
-                                                                )}
-                                                            >
-                                                                <span>Inter</span>
-                                                                <span className="font-semibold text-[9.5px] text-slate-400 opacity-90 mt-[1.5px] tracking-wide">IGST Only</span>
-                                                            </button>
-                                                        </div>
+                                                        <CustomSelect
+                                                            value={formData.gstType}
+                                                            onChange={(e) => setFormData({ ...formData, gstType: Number(e.target.value) })}
+                                                            className={cn(
+                                                                "w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all flex items-center justify-between",
+                                                                errors.gstType ? "border-rose-500 ring-2 ring-rose-500/20" : ""
+                                                            )}
+                                                        >
+                                                            <option value={1}>Intra (CGST & SGST)</option>
+                                                            <option value={0}>Inter (IGST Only)</option>
+                                                        </CustomSelect>
                                                         {errors.gstType && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.gstType}</p>}
                                                     </div>
 
@@ -1963,27 +2010,13 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                                             GST Slabs <span className="text-rose-500">*</span>
                                                         </label>
-                                                        <div className="flex flex-wrap gap-1.5 w-full h-[40px]">
-                                                            {['0', '5', '12', '18', '28'].map((rate) => {
-                                                                const isSelected = String(formData.gstRate) === rate;
-                                                                return (
-                                                                    <button
-                                                                        key={rate}
-                                                                        type="button"
-                                                                        onClick={() => setFormData(prev => ({ ...prev, gstRate: rate }))}
-                                                                        className={cn(
-                                                                            "flex-1 min-w-[36px] h-full rounded-xl text-[12px] font-bold transition-all border outline-none flex items-center justify-center",
-                                                                            isSelected 
-                                                                                ? "bg-[#4A8AF4] border-[#4A8AF4] text-white shadow-md shadow-[#4A8AF4]/30" 
-                                                                                : "bg-white border-slate-200 text-slate-600 hover:border-slate-400 hover:bg-slate-50",
-                                                                            errors.gstRate && !isSelected && "border-rose-500 text-rose-500"
-                                                                        )}
-                                                                    >
-                                                                        {rate}%
-                                                                    </button>
-                                                                );
-                                                            })}
-                                                        </div>
+                                                        <GstRateDropdown
+                                                            value={String(formData.gstRate)}
+                                                            onChange={(e) => setFormData(prev => ({ ...prev, gstRate: e.target.value }))}
+                                                            orgId={selectedOrg?.id}
+                                                            branchId={referenceBranchId}
+                                                            error={Boolean(errors.gstRate)}
+                                                        />
 
                                                         {errors.gstRate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.gstRate}</p>}
                                                     </div>
@@ -1998,9 +2031,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         <div className="px-2.5 py-1.5 space-y-1">
                                                             {/* Taxable Amount */}
                                                             <div className="flex items-center justify-between text-[12px]">
-                                                                <span className="text-gray-500 font-normal">Taxable Amount</span>
+                                                                <span className="text-gray-500 font-normal">Taxable Amount (Base)</span>
                                                                 <span className="font-medium text-gray-700">
-                                                                    {formData.currencyCode} {(parseFloat(formData.amountLocal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                    {formData.currencyCode} {(formData.isGstInclusive && gstCalc.calculatedBase !== undefined ? gstCalc.calculatedBase : (parseFloat(formData.amountLocal) || 0)).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                                 </span>
                                                             </div>
 
@@ -2057,14 +2090,14 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                 <div className="space-y-1">
                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">Notes</label>
                                     <textarea
-                                        rows="2"
+                                        rows={2}
                                         ref={setFieldRef('notes')}
                                         data-nav-field="true"
                                         value={formData.notes}
                                         onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                                         onKeyDown={(e) => handleFieldKeyDown(e, 'notes')}
-                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all resize-none"
-                                        placeholder="Add notes..."
+                                        className="w-full px-3 py-2 bg-white border border-slate-200 rounded-md text-[13px] font-medium text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all resize-none placeholder:text-slate-400 placeholder:font-normal"
+                                        placeholder="Internal memo or description..."
                                     />
                                 </div>
 

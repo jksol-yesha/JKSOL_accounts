@@ -11,10 +11,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
     const { selectedYear } = useYear();
 
     // Target Branch state
-    const [targetBranchIds, setTargetBranchIds] = useState(() => {
-        if (selectedBranch?.id && selectedBranch.id !== 'all' && selectedBranch.id !== 'multi') return [Number(selectedBranch.id)];
-        return branches ? branches.map(b => Number(b.id)) : [];
-    });
+    const [targetBranchIds, setTargetBranchIds] = useState([]);
     const [isBranchDropdownOpen, setIsBranchDropdownOpen] = useState(false);
     const branchDropdownRef = useRef(null);
 
@@ -37,20 +34,12 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
         };
     }, [isOpen, isBranchDropdownOpen, onClose]);
 
-    // Keep target branches in sync with current scope so upload never starts with an empty selection.
+    // Reset selection when modal closes
     React.useEffect(() => {
-        if (!isOpen) return;
-
-        if (selectedBranch?.id && selectedBranch.id !== 'all' && selectedBranch.id !== 'multi') {
-            setTargetBranchIds([Number(selectedBranch.id)]);
-            return;
+        if (!isOpen) {
+            setTargetBranchIds([]);
         }
-
-        const allIds = (branches || []).map((b) => Number(b.id)).filter(Boolean);
-        if (allIds.length > 0) {
-            setTargetBranchIds((prev) => (prev.length > 0 ? prev : allIds));
-        }
-    }, [isOpen, selectedBranch?.id, branches]);
+    }, [isOpen]);
     const fileInputRef = useRef(null);
 
     const [file, setFile] = useState(null);
@@ -260,40 +249,13 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                     </div>
 
                                     <div className="flex flex-col overflow-hidden border border-slate-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-white">
-                                        {/* Action Bar */}
-                                        <div className="px-3 py-2 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
-                                            <button
-                                                onClick={() => {
-                                                    if (isAllSelected) {
-                                                        setTargetBranchIds(branches.length > 0 ? [Number(branches[0].id)] : []);
-                                                    } else {
-                                                        setTargetBranchIds(branches.map(b => Number(b.id)));
-                                                    }
-                                                }}
-                                                className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors ${isAllSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} uppercase tracking-wider`}
-                                            >
-                                                <div className="w-4 flex justify-center shrink-0">
-                                                    <Check
-                                                        size={14}
-                                                        className={`${isAllSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
-                                                        strokeWidth={isAllSelected ? 3 : 2.5}
-                                                    />
-                                                </div>
-                                                Select All
-                                            </button>
-                                        </div>
-
                                         {/* Branch List */}
                                         <div className="flex flex-col max-h-[140px] overflow-y-auto no-scrollbar py-1">
                                             {branches?.map(b => {
                                                 const branchId = Number(b.id);
                                                 const isSelected = targetBranchIds.includes(branchId);
                                                 const toggleBranch = (id) => {
-                                                    setTargetBranchIds(prev => {
-                                                        const exists = prev.includes(id);
-                                                        const next = exists ? prev.filter(x => x !== id) : [...prev, id];
-                                                        return next.length === 0 ? prev : next;
-                                                    });
+                                                    setTargetBranchIds(prev => prev.includes(id) ? [] : [id]);
                                                 };
                                                 return (
                                                     <button
@@ -362,13 +324,28 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                             </div>
                                         ) : (
                                             <div
-                                                onClick={() => fileInputRef.current?.click()}
-                                                className={"w-full border-2 border-dashed border-slate-200 hover:border-[#4A8AF4] hover:bg-[#4A8AF4]/5 transition-all shadow-sm rounded-lg p-8 cursor-pointer flex flex-col items-center justify-center " + (error ? "border-rose-400 bg-rose-50/30" : "")}
+                                                onClick={() => {
+                                                    if (targetBranchIds.length === 0) return;
+                                                    fileInputRef.current?.click();
+                                                }}
+                                                className={cn(
+                                                    "w-full border-2 border-dashed shadow-sm rounded-lg p-8 flex flex-col items-center justify-center transition-all",
+                                                    targetBranchIds.length === 0 
+                                                        ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" 
+                                                        : "border-slate-200 hover:border-[#4A8AF4] hover:bg-[#4A8AF4]/5 cursor-pointer group",
+                                                    error ? "border-rose-400 bg-rose-50/30" : ""
+                                                )}
+                                                title={targetBranchIds.length === 0 ? "Select a branch first" : ""}
                                             >
-                                                <div className="w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center text-slate-400 mb-3 group-hover:text-[#4A8AF4] transition-colors">
+                                                <div className={cn(
+                                                    "w-10 h-10 rounded-full bg-white border border-slate-200 shadow-sm flex items-center justify-center mb-3 transition-colors",
+                                                    targetBranchIds.length === 0 ? "text-slate-300" : "text-slate-400 group-hover:text-[#4A8AF4]"
+                                                )}>
                                                     <Upload size={18} strokeWidth={2.5} />
                                                 </div>
-                                                <p className="text-[13px] font-extrabold text-slate-900">Click to upload statement</p>
+                                                <p className="text-[13px] font-extrabold text-slate-900">
+                                                    {targetBranchIds.length === 0 ? "Select a branch to upload" : "Click to upload statement"}
+                                                </p>
                                                 <p className="text-[10px] font-bold text-slate-500 mt-1">Excel files (.xlsx, .xls) only</p>
                                             </div>
                                         )}

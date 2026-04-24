@@ -24,7 +24,7 @@ const PARTIES_CREATE_SCROLL_MODE_EVENT = 'parties-create-scroll-mode';
 const CreateParty = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const { addToast } = useToast();
+    const { showToast } = useToast();
 
     // Check if we're editing an existing party  (must come FIRST — used in useState initializers below)
     const editingParty = location.state?.party;
@@ -50,7 +50,7 @@ const CreateParty = () => {
         const rows = [];
         rows.push(['companyName']);
         rows.push(['name']);
-        rows.push(['countryCode', 'phone']);
+        rows.push(['phone']);
         rows.push(['email']);
         rows.push(['address']);
         rows.push(['taxStatus']);
@@ -127,6 +127,40 @@ const CreateParty = () => {
 
             focusNextLinear(flatFields, currentFlatIndex, step);
         }
+    };
+
+    const appendPhoneDigit = (digit) => {
+        const currentPhone = fieldRefs.current.phone?.value || formData.phone || '';
+        const nextPhone = `${currentPhone}${digit}`;
+
+        setFormData(prev => ({ ...prev, phone: nextPhone }));
+        setErrors(prev => {
+            const nextErrors = { ...prev };
+            const fieldError = validateField('phone', nextPhone);
+            if (fieldError) nextErrors.phone = fieldError;
+            else delete nextErrors.phone;
+            return nextErrors;
+        });
+
+        setTimeout(() => {
+            const input = fieldRefs.current.phone;
+            if (input && typeof input.focus === 'function') {
+                input.focus({ preventScroll: true });
+                if (typeof input.setSelectionRange === 'function') {
+                    input.setSelectionRange(nextPhone.length, nextPhone.length);
+                }
+            }
+        }, 0);
+    };
+
+    const handleCountryCodeKeyDown = (e) => {
+        if (/^\d$/.test(e.key)) {
+            e.preventDefault();
+            appendPhoneDigit(e.key);
+            return;
+        }
+
+        handleFieldKeyDown(e, 'countryCode');
     };
 
     useEffect(() => {
@@ -376,7 +410,7 @@ const CreateParty = () => {
         e.preventDefault();
 
         if (!validateForm()) {
-            addToast?.('Please fix the errors in the form before submitting.', 'error');
+            showToast?.('Please fix the errors in the form before submitting.', 'error');
             return;
         }
 
@@ -385,6 +419,7 @@ const CreateParty = () => {
             const normalizedPhone = (formData.phone || '').trim();
             const phone = normalizedPhone ? `${formData.countryCode} ${normalizedPhone}`.trim() : '';
             const basePayload = { ...formData, phone };
+            delete basePayload.id;
             delete basePayload.countryCode;
             delete basePayload.taxStatus;
 
@@ -395,17 +430,17 @@ const CreateParty = () => {
 
             if (isEditing) {
                 await apiService.parties.update(editingParty.id, basePayload);
-                addToast?.('Party updated successfully', 'success');
+                showToast?.('Party updated successfully', 'success');
             } else {
                 await apiService.parties.create(basePayload);
-                addToast?.('Party created successfully', 'success');
+                showToast?.('Party created successfully', 'success');
             }
 
             navigate('/parties');
         } catch (error) {
             console.error('Failed to save party:', error);
             const msg = error.response?.data?.message || error.message || 'An unexpected error occurred.';
-            addToast?.(msg, 'error');
+            showToast?.(msg, 'error');
         } finally {
             setIsSubmitting(false);
         }
@@ -500,7 +535,7 @@ const CreateParty = () => {
                                             ref={setFieldRef('countryCode')}
                                             className="h-full px-4 flex items-center justify-center gap-2 focus:outline-none hover:bg-gray-100 rounded-l-xl transition-colors"
                                             onClick={() => setShowCountryDropdown(!showCountryDropdown)}
-                                            onKeyDown={(e) => handleFieldKeyDown(e, 'countryCode')}
+                                            onKeyDown={handleCountryCodeKeyDown}
                                         >
                                             <span className="text-base leading-none">{COUNTRY_CODES.find(c => c.code === formData.countryCode)?.flag || '🌍'}</span>
                                             <ChevronDown size={14} className="text-gray-600" />
@@ -510,6 +545,8 @@ const CreateParty = () => {
 
                                     <input
                                         type="tel"
+                                        inputMode="numeric"
+                                        pattern="[0-9]*"
                                         name="phone"
                                         ref={setFieldRef('phone')}
                                         value={formData.phone}
@@ -593,7 +630,7 @@ const CreateParty = () => {
                                         onKeyDown={(e) => handleFieldKeyDown(e, 'taxStatus')}
                                         className="sr-only peer"
                                     />
-                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
+                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
                                 </label>
                             </div>
 
@@ -610,7 +647,7 @@ const CreateParty = () => {
                                             onKeyDown={(e) => handleFieldKeyDown(e, 'isActive')}
                                             className="sr-only peer"
                                         />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
                                     </label>
                                 </div>
                             )}
@@ -670,7 +707,7 @@ const CreateParty = () => {
                                             onKeyDown={(e) => handleFieldKeyDown(e, 'isActive')}
                                             className="sr-only peer"
                                         />
-                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
+                                        <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#4A8AF4]"></div>
                                     </label>
                                 </div>
                             </div>

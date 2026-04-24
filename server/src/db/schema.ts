@@ -51,7 +51,7 @@ export const organizations = mysqlTable("organizations", {
   timezone: varchar("timezone", { length: 64 }).notNull().default('Asia/Kolkata'),
   status: int("status").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     // ukOrgName: uniqueIndex("uk_org_name").on(table.name),
@@ -89,7 +89,7 @@ export const branches = mysqlTable("branches", {
   country: varchar("country", { length: 80 }),
   status: int("status").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     idxBranchOrg: index("idx_branch_org").on(table.orgId),
@@ -192,7 +192,7 @@ export const financialYears = mysqlTable("financial_years", {
   startDate: date("start_date", { mode: "string" }).notNull(),
   endDate: date("end_date", { mode: "string" }).notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     ukFyOrgName: uniqueIndex("uk_fy_org_name").on(table.orgId, table.name),
@@ -227,6 +227,7 @@ export const transactions = mysqlTable("transactions", {
 
   // GST / Tax Fields
   isTaxable: boolean("is_taxable").notNull().default(false),
+  isRcm: boolean("is_rcm").notNull().default(false),
   gstType: int("gst_type"), // 1 for INTRA, 0 for INTER
   gstRate: decimal("gst_rate", { precision: 5, scale: 2 }),
   cgstAmount: decimal("cgst_amount", { precision: 12, scale: 2 }),
@@ -241,7 +242,7 @@ export const transactions = mysqlTable("transactions", {
 
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     idxTxOrgBranchDate: index("idx_tx_org_branch_date").on(table.orgId, table.branchId, table.txnDate),
@@ -266,7 +267,7 @@ export const parties = mysqlTable("parties", {
   status: int("status").notNull().default(1), // 1 = active, 2 = inactive
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     idxPartyOrg: index("idx_party_org").on(table.orgId),
@@ -319,7 +320,7 @@ export const monthlyBranchSummary = mysqlTable("monthly_branch_summary", {
 
   status: int("status").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     ukMbsOrgBranchDate: uniqueIndex("uk_mbs_org_branch_date").on(table.orgId, table.branchId, table.yearMonth, table.currencyCode),
@@ -344,7 +345,7 @@ export const yearlyBranchSummary = mysqlTable("yearly_branch_summary", {
 
   status: int("status").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     ukYbsOrgBranchFy: uniqueIndex("uk_ybs_org_branch_fy").on(table.orgId, table.branchId, table.financialYearId, table.currencyCode),
@@ -452,7 +453,7 @@ export const currencies = mysqlTable("currencies", {
   symbol: varchar("symbol", { length: 5 }),
   status: int("status").notNull().default(1),
   createdAt: timestamp("created_at").notNull().defaultNow(),
-  updatedAt: timestamp("updated_at").onUpdateNow(),
+  updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
 }, (table) => {
   return {
     ukCurrencyCode: uniqueIndex("uk_currency_code").on(table.code),

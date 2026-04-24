@@ -101,7 +101,7 @@ const EmailVerification = () => {
                     </div>
                 )}
                 {success && (
-                    <div className="mb-4 bg-emerald-50 text-emerald-600 text-sm p-3 rounded text-center">
+                    <div className="mb-4 bg-sky-50 text-sky-600 text-sm p-3 rounded text-center">
                         {success}
                     </div>
                 )}

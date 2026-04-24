@@ -246,7 +246,7 @@ const CurrencySelector = React.forwardRef(({
                                 onMouseLeave={() => setHighlightedIndex(-1)}
                                 className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
                                     isSelected
-                                    ? 'bg-[#EEF0FC]' 
+                                    ? ''
                                     : isHighlighted
                                         ? 'bg-[#EEF0FC]/80 ring-1 ring-inset ring-[#CBD4F7]/40'
                                         : 'hover:bg-[#EEF0FC]/60'

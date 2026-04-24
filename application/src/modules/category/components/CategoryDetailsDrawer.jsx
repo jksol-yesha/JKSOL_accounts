@@ -1,19 +1,69 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Save, X, ShoppingBag, CornerDownRight } from 'lucide-react';
 import { cn } from '../../../utils/cn';
 
-const CategoryDetailsDrawer = ({ 
-    isOpen, 
-    onClose, 
-    categoryToEdit, 
+const CategoryDetailsDrawer = ({
+    isOpen,
+    onClose,
+    categoryToEdit,
     parentCategory, // if present, means we are creating/editing a subcategory
-    onSave 
+    onSave
 }) => {
     const isEditing = !!categoryToEdit;
     const isSubCategory = !!parentCategory || !!categoryToEdit?.parentId;
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [nameError, setNameError] = useState('');
+    
+    // Animation States
+    const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
+    const [isClosingDrawer, setIsClosingDrawer] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
+
+    useEffect(() => {
+        let openStateTimer = null;
+        if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+            openStateTimer = setTimeout(() => {
+                setShouldRenderDrawer(true);
+                setIsClosingDrawer(false);
+            }, 0);
+            return () => {
+                if (openStateTimer) clearTimeout(openStateTimer);
+            };
+        }
+
+        if (!shouldRenderDrawer) return;
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingDrawer(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderDrawer(false);
+            setIsClosingDrawer(false);
+            closeAnimationTimerRef.current = null;
+        }, 280);
+
+        return () => {
+            if (openStateTimer) clearTimeout(openStateTimer);
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderDrawer]);
+
+    useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+            }
+        };
+    }, []);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -26,8 +76,8 @@ const CategoryDetailsDrawer = ({
             if (categoryToEdit) {
                 setFormData({
                     name: categoryToEdit.name || '',
-                    type: categoryToEdit.txnType 
-                        ? (categoryToEdit.txnType.charAt(0).toUpperCase() + categoryToEdit.txnType.slice(1)) 
+                    type: categoryToEdit.txnType
+                        ? (categoryToEdit.txnType.charAt(0).toUpperCase() + categoryToEdit.txnType.slice(1))
                         : (categoryToEdit.type || 'Expense'),
                     status: (categoryToEdit.status === 2 || categoryToEdit.status === 'inactive') ? 2 : 1,
                 });
@@ -42,7 +92,7 @@ const CategoryDetailsDrawer = ({
         }
     }, [isOpen, categoryToEdit, parentCategory]);
 
-    if (!isOpen) return null;
+
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -89,22 +139,35 @@ const CategoryDetailsDrawer = ({
         }
     };
 
+    if (!shouldRenderDrawer) return null;
+
     return (
         <div className="fixed inset-0 z-[110] flex justify-end">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            <div className="bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden animate-in slide-in-from-right duration-300">
-                
+            <div 
+                className={cn(
+                    "absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity",
+                    isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
+                )} 
+                onClick={onClose} 
+            />
+            <div 
+                className={cn(
+                    "bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden",
+                    isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
+                )}
+            >
+
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 text-slate-600 shadow-sm shadow-[#4A8AF4]/5">
-                            {isSubCategory ? <CornerDownRight size={14} strokeWidth={2.5}/> : <ShoppingBag size={14} strokeWidth={2.5} />}
+                <div className="px-5 py-1 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                            {isSubCategory ? <CornerDownRight size={14} strokeWidth={2.5} /> : <ShoppingBag size={14} strokeWidth={2.5} />}
                         </div>
-                        <div>
-                            <h2 className="text-[14px] font-bold text-slate-800 leading-tight">
+                        <div className="flex flex-col">
+                            <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
                                 {isEditing ? `Edit ${isSubCategory ? 'Sub-Category' : 'Category'}` : `New ${isSubCategory ? 'Sub-Category' : 'Category'}`}
                             </h2>
-                            <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wide flex items-center gap-1">
+                            <p className="text-[10px] font-semibold text-slate-500 mt-0.5 tracking-wide flex items-center gap-1">
                                 {isSubCategory && parentCategory && (
                                     <>
                                         Under <span className="text-slate-600 font-extrabold">{parentCategory.name}</span>
@@ -128,7 +191,7 @@ const CategoryDetailsDrawer = ({
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 overflow-y-auto px-5 py-5 no-scrollbar bg-white">
                         <div className="flex flex-col gap-5">
-                            
+
                             {/* Name */}
                             <div className="space-y-1 w-full relative">
                                 <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
@@ -161,10 +224,10 @@ const CategoryDetailsDrawer = ({
                                                 onClick={() => setFormData({ ...formData, type: typeOption })}
                                                 className={cn(
                                                     "px-3 py-1.5 rounded-md text-[12px] font-bold border transition-all text-center",
-                                                    formData.type === typeOption 
-                                                        ? (typeOption === 'Expense' ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm' : 
-                                                           typeOption === 'Income' ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' : 
-                                                           'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm')
+                                                    formData.type === typeOption
+                                                        ? (typeOption === 'Expense' ? 'bg-rose-50 border-rose-200 text-rose-600 shadow-sm' :
+                                                            typeOption === 'Income' ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' :
+                                                                'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-sm')
                                                         : 'bg-white border-slate-200 text-slate-500 hover:bg-slate-50'
                                                 )}
                                             >
@@ -181,12 +244,12 @@ const CategoryDetailsDrawer = ({
                                     <input
                                         type="checkbox"
                                         checked={formData.status === 1}
-                                        onChange={(e) => setFormData({...formData, status: e.target.checked ? 1 : 2})}
+                                        onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 1 : 2 })}
                                         className="hidden"
                                     />
                                     <div className={cn(
                                         "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner",
-                                        formData.status === 1 ? "bg-emerald-500" : "bg-slate-200"
+                                        formData.status === 1 ? "bg-[#4A8AF4]" : "bg-slate-200"
                                     )}>
                                         <div className={cn(
                                             "w-[12px] h-[12px] rounded-full bg-white shadow-sm transition-transform",

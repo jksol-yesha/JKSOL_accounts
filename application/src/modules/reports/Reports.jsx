@@ -15,7 +15,12 @@ import {
     ChevronDown,
     Download,
     X,
-    RefreshCw
+    RefreshCw,
+    ArrowUpRight,
+    ArrowDownLeft,
+    Activity,
+    FileSpreadsheet,
+    FileText
 } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -41,12 +46,11 @@ const Reports = () => {
     const { selectedOrg, loading: orgLoading } = useOrganization();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
-    
+
     const { reportId } = useParams();
-    
+
     // Convert URL slug to backend report type
     const reportTypeMapping = useMemo(() => ({
-        'summary': 'Summary',
         'detailed': 'Detailed',
         'category': 'Category-wise',
         'account': 'Account-wise',
@@ -54,7 +58,7 @@ const Reports = () => {
         'debit_credit': 'Debit/Credit',
         'pl': 'P/L'
     }), []);
-    
+
     const initialReportType = reportTypeMapping[reportId] || 'Summary';
 
     const sortedFinancialYears = useMemo(() => {
@@ -84,6 +88,16 @@ const Reports = () => {
         branch: 'All Branches',
         reportType: initialReportType
     });
+
+    const [isDesktopView, setIsDesktopView] = useState(
+        typeof window !== 'undefined' ? window.innerWidth >= 1280 : true
+    );
+
+    useEffect(() => {
+        const handleResize = () => setIsDesktopView(window.innerWidth >= 1280);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     useEffect(() => {
         if (reportId) {
@@ -382,7 +396,7 @@ const Reports = () => {
                     const d = data.data || {};
                     const incomes = Array.isArray(d.incomes) ? d.incomes : [];
                     const expenses = Array.isArray(d.expenses) ? d.expenses : [];
-                    
+
                     const flatten = (section, groups) => groups.flatMap(group =>
                         (group.items || []).map(item => ({
                             section,
@@ -514,11 +528,11 @@ const Reports = () => {
             const textResponse = await response.data.text();
             // The backend HTML includes a <script> that auto-prints. We strip it here to avoid double print dialogs.
             const cleanHtml = textResponse.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-            
+
             const iframe = document.createElement('iframe');
             iframe.style.display = 'none';
             document.body.appendChild(iframe);
-            
+
             iframe.contentDocument.open();
             iframe.contentDocument.write(cleanHtml);
             iframe.contentDocument.close();
@@ -527,7 +541,7 @@ const Reports = () => {
             setTimeout(() => {
                 iframe.contentWindow.focus();
                 iframe.contentWindow.print();
-                
+
                 // Cleanup after a delay to allow the print dialog to appear
                 setTimeout(() => {
                     document.body.removeChild(iframe);
@@ -682,6 +696,11 @@ const Reports = () => {
 
         if (reportData.type === 'categories') {
             data = data.filter(hasValidCategory);
+        } else if (reportData.type === 'accounts' || reportData.type === 'parties') {
+            data = data.filter(item => {
+                const name = (item.name || '').toString().trim();
+                return Boolean(name && name !== '-');
+            });
         }
 
         // We DO NOT filter by Type, Category, Account here anymore 
@@ -708,7 +727,7 @@ const Reports = () => {
                     return (item.description || '').toLowerCase().includes(lower) ||
                         String(categoryText).toLowerCase().includes(lower) ||
                         (item.party || item.contact || '').toLowerCase().includes(lower);
-                } else if (filteredReportData.type === 'categories' || filteredReportData.type === 'accounts') {
+                } else if (filteredReportData.type === 'categories' || filteredReportData.type === 'accounts' || filteredReportData.type === 'parties') {
                     return (item.name || '').toLowerCase().includes(lower);
                 } else if (filteredReportData.type === 'profit-loss') {
                     return (item.name || '').toLowerCase().includes(lower) ||
@@ -734,6 +753,94 @@ const Reports = () => {
         return income - expense;
     }, [reportData]);
     const displayFilters = isGenerated && appliedFilters ? appliedFilters : filters;
+
+
+    const extraFiltersNode = (
+        <>
+                                {filters.reportType === 'P/L' && (
+                                    <div className="w-full sm:w-auto mt-1 lg:mt-0 lg:ml-1 hidden xl:block">
+                                        <button 
+                                            onClick={handleExportPdf} 
+                                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-slate-800 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] no-print" 
+                                            title="Export Report"
+                                        >
+                                            <Download size={14} className="text-slate-600 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                                            <span className="hidden sm:inline">Export</span>
+                                        </button>
+                                    </div>
+                                )}
+                                {filters.reportType !== 'P/L' && (
+                                    <div className="w-full sm:w-auto hidden xl:block">
+                                        <CustomSelect
+                                            ref={typeRef}
+                                            value={filters.type}
+                                            onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+                                            onKeyDown={(e) => handleKeyDown(e, 1)}
+                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input w-full sm:w-[110px] px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                        >
+                                            <option value="All Types">All Types</option>
+                                            {typeFilterOptions.map((t) => (
+                                                <option key={t} value={t}>{t}</option>
+                                            ))}
+                                        </CustomSelect>
+                                    </div>
+                                )}
+                                {filters.reportType === 'Category-wise' && (
+                                    <div className="w-full sm:w-auto hidden xl:block">
+                                        <CustomSelect
+                                            ref={categoryRef}
+                                            value={filters.category}
+                                            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
+                                            onKeyDown={(e) => handleKeyDown(e, 2)}
+                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                        >
+                                            <option value="All Categories">All Categories</option>
+                                            {uniqueOptions.categories.length > 0 ? (
+                                                uniqueOptions.categories.map(c => <option key={c} value={c}>{c}</option>)
+                                            ) : (
+                                                categoryDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                                            )}
+                                        </CustomSelect>
+                                    </div>
+                                )}
+                                {filters.reportType === 'Account-wise' && (
+                                    <div className="w-full sm:w-auto hidden xl:block">
+                                        <CustomSelect
+                                            ref={accountRef}
+                                            value={filters.account}
+                                            onChange={(e) => setFilters({ ...filters, account: e.target.value })}
+                                            onKeyDown={(e) => handleKeyDown(e, 3)}
+                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                        >
+                                            <option value="All Accounts">All Accounts</option>
+                                            {uniqueOptions.accounts.length > 0 ? (
+                                                uniqueOptions.accounts.map(a => <option key={a} value={a}>{a}</option>)
+                                            ) : (
+                                                accounts.map(a => <option key={a.id} value={a.bankName || a.name}>{a.bankName || a.name}</option>)
+                                            )}
+                                        </CustomSelect>
+                                    </div>
+                                )}
+                                {filters.reportType === 'Party-wise' && (
+                                    <div className="w-full sm:w-auto hidden xl:block">
+                                        <CustomSelect
+                                            ref={partyRef}
+                                            value={filters.party}
+                                            onChange={(e) => setFilters({ ...filters, party: e.target.value })}
+                                            onKeyDown={(e) => handleKeyDown(e, 4)}
+                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                        >
+                                            <option value="All Parties">All Parties</option>
+                                            {uniqueOptions.parties.length > 0 ? (
+                                                uniqueOptions.parties.map(p => <option key={p} value={p}>{p}</option>)
+                                            ) : (
+                                                partyDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
+                                            )}
+                                        </CustomSelect>
+                                    </div>
+                                )}
+        </>
+    );
 
     return (
         <div className="flex flex-col min-h-full">
@@ -802,14 +909,65 @@ const Reports = () => {
                     <div className="no-print page-header flex-none">
                         <PageHeader
                             title={`${filters.reportType} Report`}
-                            breadcrumbs={['Portal', 'Reports Hub', filters.reportType]}
+                            breadcrumbs={['Portal', { label: 'Reports Hub', path: '/reports' }, filters.reportType]}
                         />
                     </div>
 
                     <div className="reports-tablet-page flex-1 p-4 md:p-4 xl:px-6 xl:pt-2 xl:pb-4 space-y-4 animate-in fade-in duration-500 print:hidden">
-                        {/* Filters Section */}
-                        <div className="no-print report-filters flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
-                            <div className="w-full sm:w-auto">
+                        {/* Filters & Inline Summary Section */}
+                        <div className="no-print report-filters flex flex-col xl:flex-row xl:justify-between items-start xl:items-center gap-4 border-b border-gray-100 xl:border-none px-5 pb-4 xl:pb-0 mb-4 xl:mb-0 w-full transition-all">
+                            
+                            {/* LEFT SIDE: Transaction Summary Metrics */}
+                            {isGenerated && reportData && reportData.summary ? (
+                                <div className="flex flex-row items-center gap-x-6 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full xl:w-auto pb-2 xl:pb-0 hide-scroll-indicator">
+                                    {/* Opening */}
+                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-slate-200/60 bg-slate-50 flex items-center justify-center shrink-0">
+                                            <Wallet size={16} className="text-slate-600" strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Opening</div>
+                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.openingBalance, preferences.currency)}</div>
+                                        </div>
+                                    </div>
+                                    {/* Debit */}
+                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-white/60 bg-rose-50 flex items-center justify-center shrink-0">
+                                            <ArrowUpRight size={16} className="text-rose-600" strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Debit</div>
+                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.expense + reportData.summary.investment, preferences.currency)}</div>
+                                        </div>
+                                    </div>
+                                    {/* Credit */}
+                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-white/60 bg-emerald-50 flex items-center justify-center shrink-0">
+                                            <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Credit</div>
+                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.income, preferences.currency)}</div>
+                                        </div>
+                                    </div>
+                                    {/* Closing */}
+                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-slate-200/60 bg-slate-100 flex items-center justify-center shrink-0">
+                                            <Activity size={16} className="text-slate-700" strokeWidth={2.5} />
+                                        </div>
+                                        <div>
+                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Closing</div>
+                                            <div className="text-[14px] lg:text-[15px] font-bold text-slate-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.closingBalance, preferences.currency)}</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="hidden xl:block flex-1" />
+                            )}
+
+                            {/* RIGHT SIDE: FILTERS */}
+                            <div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:gap-3 w-full xl:w-auto shrink-0 justify-end">
+                                <div className="w-full sm:w-auto">
                                 <DateRangePicker
                                     ref={dateRangeRef}
                                     startDate={filters.startDate}
@@ -826,97 +984,22 @@ const Reports = () => {
                                         }));
                                     }}
                                     onKeyDown={(e) => handleKeyDown(e, 0)}
-                                    className="reports-tablet-filter-input w-full min-w-[220px]"
+                                    buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input w-full min-w-[220px]"
                                 />
                             </div>
                             <div className="w-full sm:w-auto mt-1 lg:mt-0 lg:ml-1">
                                 <BranchSelector />
                             </div>
-                            {filters.reportType !== 'P/L' && (
-                            <div className="w-full sm:w-auto">
-                                <CustomSelect
-                                    ref={typeRef}
-                                    value={filters.type}
-                                    onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-                                    onKeyDown={(e) => handleKeyDown(e, 1)}
-                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                >
-                                    <option value="All Types">All Types</option>
-                                    {typeFilterOptions.map((t) => (
-                                        <option key={t} value={t}>{t}</option>
-                                    ))}
-                                </CustomSelect>
-                            </div>
-                            )}
-                            {filters.reportType === 'Category-wise' && (
-                            <div className="w-full sm:w-auto">
-                                <CustomSelect
-                                    ref={categoryRef}
-                                    value={filters.category}
-                                    onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                                    onKeyDown={(e) => handleKeyDown(e, 2)}
-                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                >
-                                    <option value="All Categories">All Categories</option>
-                                    {uniqueOptions.categories.length > 0 ? (
-                                        uniqueOptions.categories.map(c => <option key={c} value={c}>{c}</option>)
-                                    ) : (
-                                        categoryDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
-                                    )}
-                                </CustomSelect>
-                            </div>
-                            )}
-                            {filters.reportType === 'Account-wise' && (
-                            <div className="w-full sm:w-auto">
-                                <CustomSelect
-                                    ref={accountRef}
-                                    value={filters.account}
-                                    onChange={(e) => setFilters({ ...filters, account: e.target.value })}
-                                    onKeyDown={(e) => handleKeyDown(e, 3)}
-                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                >
-                                    <option value="All Accounts">All Accounts</option>
-                                    {uniqueOptions.accounts.length > 0 ? (
-                                        uniqueOptions.accounts.map(a => <option key={a} value={a}>{a}</option>)
-                                    ) : (
-                                        accounts.map(a => <option key={a.id} value={a.bankName || a.name}>{a.bankName || a.name}</option>)
-                                    )}
-                                </CustomSelect>
-                            </div>
-                            )}
-                            {filters.reportType === 'Party-wise' && (
-                            <div className="w-full sm:w-auto">
-                                <CustomSelect
-                                    ref={partyRef}
-                                    value={filters.party}
-                                    onChange={(e) => setFilters({ ...filters, party: e.target.value })}
-                                    onKeyDown={(e) => handleKeyDown(e, 4)}
-                                    className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-10 bg-[#f1f3f9] border border-transparent rounded-xl text-xs lg:text-sm font-medium focus:outline-none focus:bg-white focus:border-primary/50 focus:ring-4 focus:ring-primary/10 hover:bg-white hover:border-gray-200 hover:shadow-sm transition-all"
-                                >
-                                    <option value="All Parties">All Parties</option>
-                                    {uniqueOptions.parties.length > 0 ? (
-                                        uniqueOptions.parties.map(p => <option key={p} value={p}>{p}</option>)
-                                    ) : (
-                                        partyDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
-                                    )}
-                                </CustomSelect>
-                            </div>
-                            )}
+                            {isDesktopView && extraFiltersNode}
+                        </div>
                         </div>
 
                         {/* Report Content */}
                         {isGenerated && reportData && (
                             <div className="space-y-6">
 
-                                {/* Summary Cards */}
-                                {displayFilters.reportType === 'Summary' && reportData.summary && (
-                                    <div className="reports-tablet-summary-grid grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 xl:gap-4 no-print stat-cards">
-                                        <StatCard title="Net Profit" amount={formatCurrency(netProfit, preferences.currency)} icon={Wallet} iconBgColor="#e0e7ff" iconColor="#6366f1" compact />
-                                        <StatCard title="Total Income" amount={formatCurrency(reportData.summary.income, preferences.currency)} icon={ArrowUpCircle} iconBgColor="#dbeafe" iconColor="#3b82f6" compact />
-                                        <StatCard title="Total Expense" amount={formatCurrency(reportData.summary.expense, preferences.currency)} icon={ArrowDownCircle} iconBgColor="#ffe4e6" iconColor="#f43f5e" compact />
-                                        <StatCard title="Total Investment" amount={formatCurrency(reportData.summary.investment, preferences.currency)} icon={TrendingUp} iconBgColor="#fef3c7" iconColor="#f59e0b" compact />
-                                    </div>
-                                )}
+                                {/* Summary Cards (Legacy layout replaced by inline headers for Summary) */}
+                                {displayFilters.reportType === 'Summary' && reportData.summary ? null : null}
 
 
                                 {/* Report Table Screen */}
@@ -934,6 +1017,7 @@ const Reports = () => {
                                         onExportExcel={handleExportExcel}
                                         onExportPdf={handleExportPdf}
                                         filters={displayFilters}
+                                        renderExtraFilters={!isDesktopView ? extraFiltersNode : null}
                                     />
                                 </div>
                             </div>

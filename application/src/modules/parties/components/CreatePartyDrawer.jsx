@@ -18,13 +18,64 @@ const COUNTRY_CODES = [
 ];
 
 const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
-    const { addToast } = useToast();
+    const { showToast } = useToast();
     const isEditing = !!party;
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [errors, setErrors] = useState({});
+    
+    // Animation States
+    const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
+    const [isClosingDrawer, setIsClosingDrawer] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
+
+    useEffect(() => {
+        let openStateTimer = null;
+        if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+            openStateTimer = setTimeout(() => {
+                setShouldRenderDrawer(true);
+                setIsClosingDrawer(false);
+            }, 0);
+            return () => {
+                if (openStateTimer) clearTimeout(openStateTimer);
+            };
+        }
+
+        if (!shouldRenderDrawer) return;
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingDrawer(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderDrawer(false);
+            setIsClosingDrawer(false);
+            closeAnimationTimerRef.current = null;
+        }, 280);
+
+        return () => {
+            if (openStateTimer) clearTimeout(openStateTimer);
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderDrawer]);
+
+    useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+            }
+        };
+    }, []);
     const [showCountryDropdown, setShowCountryDropdown] = useState(false);
     const dropdownRef = useRef(null);
+    const phoneInputRef = useRef(null);
 
     const [formData, setFormData] = useState({
         companyName: '',
@@ -164,6 +215,32 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
         });
     };
 
+    const handleCountryCodeKeyDown = (e) => {
+        if (!/^\d$/.test(e.key)) return;
+
+        e.preventDefault();
+        const currentPhone = phoneInputRef.current?.value || formData.phone || '';
+        const nextPhone = `${currentPhone}${e.key}`;
+        setFormData(prev => ({ ...prev, phone: nextPhone }));
+        setErrors(prev => {
+            const nextErrors = { ...prev };
+            const fieldError = validateField('phone', nextPhone);
+            if (fieldError) nextErrors.phone = fieldError;
+            else delete nextErrors.phone;
+            return nextErrors;
+        });
+
+        setTimeout(() => {
+            const input = phoneInputRef.current;
+            if (input && typeof input.focus === 'function') {
+                input.focus({ preventScroll: true });
+                if (typeof input.setSelectionRange === 'function') {
+                    input.setSelectionRange(nextPhone.length, nextPhone.length);
+                }
+            }
+        }, 0);
+    };
+
     const validateForm = () => {
         const newErrors = {};
         const fieldsToValidate = ['companyName'];
@@ -184,7 +261,7 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
         e.preventDefault();
 
         if (!validateForm()) {
-            addToast?.('Please fix the errors in the form.', 'error');
+            showToast?.('Please fix the errors in the form.', 'error');
             return;
         }
 
@@ -193,6 +270,7 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
             const normalizedPhone = (formData.phone || '').trim();
             const phone = normalizedPhone ? `${formData.countryCode} ${normalizedPhone}`.trim() : '';
             const basePayload = { ...formData, phone };
+            delete basePayload.id;
             delete basePayload.countryCode;
             delete basePayload.taxStatus;
 
@@ -201,43 +279,82 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                 basePayload.gstName = '';
             }
 
+            let savedParty;
             if (isEditing) {
-                await apiService.parties.update(party.id, basePayload);
-                addToast?.('Party updated successfully', 'success');
+                const response = await apiService.parties.update(party.id, basePayload);
+                savedParty = response?.data || response;
+                showToast?.('Party updated successfully', 'success');
             } else {
-                await apiService.parties.create(basePayload);
-                addToast?.('Party created successfully', 'success');
+                const response = await apiService.parties.create(basePayload);
+                savedParty = response?.data || response;
+                showToast?.('Party created successfully', 'success');
             }
 
-            onSuccess?.();
+            if (savedParty) {
+                onSuccess?.({
+                    ...savedParty,
+                    isActive: savedParty.isActive !== undefined ? savedParty.isActive : savedParty.status === 1,
+                });
+            } else {
+                onSuccess?.();
+            }
             onClose();
         } catch (error) {
             console.error('Failed to save party:', error);
-            const msg = error.response?.data?.message || error.message || 'An unexpected error occurred.';
-            addToast?.(msg, 'error');
+            console.error('API VALIDATION ERROR DETAILS:', JSON.stringify(error.response?.data, null, 2));
+
+            let msg = error.message || 'An unexpected error occurred.';
+            if (error.response?.data) {
+                if (typeof error.response.data === 'string') {
+                    msg = error.response.data;
+                } else if (error.response.data.message) {
+                    msg = error.response.data.message;
+                } else if (error.response.data.errors) {
+                    try {
+                        const errs = error.response.data.errors;
+                        msg = errs.map(e => `${e.path.replace('/', '')} - ${e.message}`).join(', ');
+                    } catch (e) {
+                         msg = JSON.stringify(error.response.data);
+                    }
+                } else {
+                     msg = JSON.stringify(error.response.data);
+                }
+            }
+            showToast?.(msg, 'error');
         } finally {
             setIsSubmitting(false);
         }
     };
 
-    if (!isOpen) return null;
+    if (!shouldRenderDrawer) return null;
 
     return (
         <div className="fixed inset-0 z-[110] flex justify-end">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            <div className="bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden animate-in slide-in-from-right duration-300">
-                
+            <div 
+                className={cn(
+                    "absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity",
+                    isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
+                )} 
+                onClick={onClose} 
+            />
+            <div 
+                className={cn(
+                    "bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden",
+                    isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
+                )}
+            >
+
                 {/* Header */}
-                <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-                    <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full border border-slate-200 flex items-center justify-center bg-slate-50 text-slate-600 shadow-sm shadow-[#4A8AF4]/5">
+                <div className="px-5 py-1 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
+                    <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
                             <Building2 size={14} strokeWidth={2.5} />
                         </div>
-                        <div>
-                            <h2 className="text-[14px] font-bold text-slate-800 leading-tight">
+                        <div className="flex flex-col">
+                            <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
                                 {isEditing ? "Edit Party" : "New Party"}
                             </h2>
-                            <p className="text-[10px] font-bold text-slate-400 mt-0.5 tracking-wide">
+                            <p className="text-[10px] font-semibold text-slate-500">
                                 {isEditing ? "Update party details" : "Create a new party record"}
                             </p>
                         </div>
@@ -298,6 +415,7 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                                             type="button"
                                             className="h-full px-2 flex items-center justify-center gap-1 focus:outline-none hover:bg-slate-50 rounded-l-md border-r border-slate-200"
                                             onClick={() => setShowCountryDropdown(!showCountryDropdown)}
+                                            onKeyDown={handleCountryCodeKeyDown}
                                         >
                                             <span className="text-[13px]">{COUNTRY_CODES.find(c => c.code === formData.countryCode)?.flag || '🌍'}</span>
                                             <ChevronDown size={12} className="text-slate-400" />
@@ -305,7 +423,10 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
 
                                         <input
                                             type="tel"
+                                            inputMode="numeric"
+                                            pattern="[0-9]*"
                                             name="phone"
+                                            ref={phoneInputRef}
                                             value={formData.phone}
                                             onChange={handleChange}
                                             placeholder="0624790960"
@@ -369,8 +490,17 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                             </div>
 
                             {/* Switches Segment */}
-                            <div className="flex items-center gap-6 py-2">
-                                <label className="flex items-center gap-2 cursor-pointer group">
+                            <div className="flex items-center gap-6">
+                                <label 
+                                    className="flex items-center gap-2 cursor-pointer group outline-none"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleTaxToggle(formData.taxStatus !== 'taxable');
+                                        }
+                                    }}
+                                >
                                     <input
                                         type="checkbox"
                                         checked={formData.taxStatus === 'taxable'}
@@ -378,8 +508,8 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                                         className="hidden"
                                     />
                                     <div className={cn(
-                                        "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner",
-                                        formData.taxStatus === 'taxable' ? "bg-slate-800" : "bg-slate-200"
+                                        "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner group-focus-visible:ring-2 group-focus-visible:ring-[#4A8AF4] group-focus-visible:ring-offset-1 outline-none",
+                                        formData.taxStatus === 'taxable' ? "bg-[#4A8AF4]" : "bg-slate-200"
                                     )}>
                                         <div className={cn(
                                             "w-[12px] h-[12px] rounded-full bg-white shadow-sm transition-transform",
@@ -389,7 +519,16 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                                     <span className="text-[12px] font-bold text-slate-600 group-hover:text-slate-800 select-none">GST Registered</span>
                                 </label>
 
-                                <label className="flex items-center gap-2 cursor-pointer group">
+                                <label 
+                                    className="flex items-center gap-2 cursor-pointer group outline-none"
+                                    tabIndex={0}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            handleChange({ target: { name: 'isActive', type: 'checkbox', checked: !formData.isActive } });
+                                        }
+                                    }}
+                                >
                                     <input
                                         type="checkbox"
                                         name="isActive"
@@ -398,8 +537,8 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                                         className="hidden"
                                     />
                                     <div className={cn(
-                                        "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner",
-                                        formData.isActive ? "bg-emerald-500" : "bg-slate-200"
+                                        "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner group-focus-visible:ring-2 group-focus-visible:ring-[#4A8AF4] group-focus-visible:ring-offset-1 outline-none",
+                                        formData.isActive ? "bg-[#4A8AF4]" : "bg-slate-200"
                                     )}>
                                         <div className={cn(
                                             "w-[12px] h-[12px] rounded-full bg-white shadow-sm transition-transform",
@@ -412,7 +551,7 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
 
                             {/* GST Info */}
                             {formData.taxStatus === 'taxable' && (
-                                <div className="grid grid-cols-2 gap-3 mt-1 bg-slate-50 p-3 rounded-lg border border-slate-100">
+                                <div className="grid grid-cols-2 gap-3">
                                     <div className="space-y-1 w-full">
                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
                                             GST No. <span className="text-rose-500">*</span>

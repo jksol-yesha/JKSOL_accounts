@@ -207,7 +207,7 @@ const EnterOtp = () => {
                         <input
                             key={index}
                             type="text"
-                            className="w-11 h-12 sm:w-12 sm:h-12 text-center text-xl font-bold text-slate-900 bg-white border border-slate-300 rounded-md focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 focus:outline-none transition-colors"
+                            className="w-11 h-12 sm:w-12 sm:h-12 text-center text-xl font-bold text-slate-900 bg-white border border-slate-300 rounded-md focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none transition-colors"
                             maxLength="1"
                             value={data}
                             onChange={(e) => handleChange(e.target, index)}
@@ -220,10 +220,10 @@ const EnterOtp = () => {
 
                 <button
                     type="submit"
-                    className="w-full h-10 bg-slate-900 text-white rounded-md text-sm font-semibold hover:bg-slate-800 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
+                    className="w-full h-10 bg-[#4A8AF4] text-white rounded-md text-sm font-semibold hover:bg-[#3876e5] transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-sm"
                     disabled={isLoading || otp.join('').length !== 6}
                 >
-                    {isLoading ? <Loader className="h-5 w-5 text-emerald-400" /> : 'Verify'}
+                    {isLoading ? <Loader className="h-5 w-5 text-white" /> : 'Verify'}
                 </button>
 
                 <div className="mt-6 text-center text-sm font-medium text-slate-500">
@@ -232,7 +232,7 @@ const EnterOtp = () => {
                     ) : (
                         <button
                             type="button"
-                            className="text-slate-900 font-semibold hover:text-emerald-600 transition-colors"
+                            className="text-slate-900 font-semibold hover:text-sky-600 transition-colors"
                             onClick={handleResendOtp}
                             disabled={isLoading}
                         >

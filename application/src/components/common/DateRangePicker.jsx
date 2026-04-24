@@ -436,7 +436,7 @@ const DateRangePicker = forwardRef(({
                                                     }}
                                                     className={`group cursor-pointer w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
                                                         isSelected
-                                                            ? 'bg-[#EEF0FC]'
+                                                            ? 'hover:bg-[#EEF0FC]/60'
                                                             : isHighlighted 
                                                                 ? 'bg-[#EEF0FC]/80 ring-1 ring-inset ring-[#CBD4F7]/40'
                                                                 : 'hover:bg-[#EEF0FC]/60'

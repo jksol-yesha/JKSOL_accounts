@@ -51,6 +51,11 @@ const isUsedPartyDeleteError = (message) => {
         || /modify (the )?status to 'inactive'/i.test(value);
 };
 
+const normalizePartyRecord = (party) => ({
+    ...party,
+    isActive: party?.isActive !== undefined ? party.isActive : party?.status === 1
+});
+
 const Parties = () => {
     const navigate = useNavigate();
     const { branches, selectedBranch, getBranchFilterValue } = useBranch();
@@ -86,19 +91,6 @@ const Parties = () => {
         resizable: true,
         suppressMovable: true,
         menuTabs: []
-    }), []);
-
-    const myTheme = useMemo(() => themeQuartz.withParams({
-        headerHeight: 40,
-        rowHeight: 48,
-        headerBackgroundColor: '#ffffff',
-        headerTextColor: '#9ca3af',
-        headerFontWeight: 800,
-        headerFontSize: 11,
-        rowBorder: { style: 'solid', width: 1, color: '#f3f4f6' },
-        wrapperBorder: false,
-        wrapperBorderRadius: 0,
-        cellHorizontalPadding: 16,
     }), []);
 
     const colDefs = useMemo(() => [
@@ -190,7 +182,7 @@ const Parties = () => {
                         disabled={!canEditParty}
                         className={cn(
                             "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-colors",
-                            params.value ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-500",
+                            params.value ? "text-emerald-600" : "text-gray-500",
                             !canEditParty ? "cursor-default opacity-80" : "cursor-pointer hover:brightness-95"
                         )}
                     >
@@ -208,8 +200,8 @@ const Parties = () => {
                 <div className="flex items-center gap-1 h-full">
                     {canEditParty && (
                         <button
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
+                            onClick={(e) => {
+                                e.stopPropagation();
                                 setEditingParty(params.data);
                                 setIsDrawerOpen(true);
                             }}
@@ -299,7 +291,7 @@ const Parties = () => {
             setParties(prev => {
                 // Check if already exists to prevent duplicates
                 if (prev.some(p => p.id === data.id)) return prev;
-                const updated = [data, ...prev];
+                const updated = [normalizePartyRecord(data), ...prev];
                 localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
                 return updated;
             });
@@ -307,7 +299,7 @@ const Parties = () => {
 
         const handlePartyUpdated = (data) => {
             setParties(prev => {
-                const updated = prev.map(p => p.id === data.id ? data : p);
+                const updated = prev.map(p => p.id === data.id ? normalizePartyRecord(data) : p);
                 localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
                 return updated;
             });
@@ -394,6 +386,10 @@ const Parties = () => {
         }
     };
 
+    const gridTheme = useMemo(() => themeQuartz.withParams({
+        headerFontSize: 12,
+    }), []);
+
     const handleToggleStatus = async (party) => {
         if (!canEditParty) {
             showToast("You don't have permission to edit parties.", 'error');
@@ -421,84 +417,102 @@ const Parties = () => {
         }
     };
 
+    const handlePartySaved = (savedParty) => {
+        if (!savedParty?.id) return;
+
+        const normalizedParty = normalizePartyRecord(savedParty);
+        setParties(prev => {
+            const exists = prev.some(p => p.id === normalizedParty.id);
+            const updated = exists
+                ? prev.map(p => (p.id === normalizedParty.id ? normalizedParty : p))
+                : [normalizedParty, ...prev];
+
+            updated.sort((a, b) => b.id - a.id);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    const handleCloseDrawer = () => {
+        setIsDrawerOpen(false);
+        setEditingParty(null);
+    };
+
     return (
         <div className="flex flex-col h-full min-h-0 overflow-hidden">
             <PageContentShell
                 header={(
                     <PageHeader
                         title="Parties"
-                        breadcrumbs={['Dashboard', 'Parties']}
-                        tabs={transactionTabs}
-                        activeTab="parties"
+                        breadcrumbs={['Transactions', 'Parties']}
+                        onBack={() => navigate('/transactions')}
                     />
                 )}
+                className="!overflow-visible lg:!overflow-visible"
+                contentClassName="p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
+                cardClassName="border-none shadow-none rounded-none !overflow-visible max-h-none lg:!max-h-none bg-white"
             >
 
                 {/* Toolbar */}
-                <div className="p-4 flex flex-row items-center justify-between gap-4 border-b border-gray-50 relative print:hidden min-h-[74px]">
-                    {/* Left: Search */}
-                    <div className="flex items-center gap-3 flex-1">
-                        <div className="relative group w-full lg:w-64 max-w-sm lg:max-w-none">
-                            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors" />
+                <div className="px-5 py-3 flex flex-row items-center justify-between gap-4 relative print:hidden min-h-[60px]">
+                    {/* Left: Actions */}
+                    <div className="flex items-center gap-3">
+                        {canCreateParty && (
+                            <button
+                                onClick={() => { setEditingParty(null); setIsDrawerOpen(true); }}
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
+                                title="Add Party"
+                            >
+                                <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                                <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Party</span>
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Right: Search */}
+                    <div className="flex items-center gap-3">
+                        <div className="relative group w-[240px]">
+                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
                             <input
                                 type="text"
                                 value={searchTerm}
                                 onChange={(e) => {
                                     setSearchTerm(e.target.value);
-                                    setCurrentPage(1);
                                 }}
-                                placeholder="Search parties..."
-                                className="w-full pl-10 pr-4 py-2.5 bg-[#f1f3f9] border border-transparent rounded-xl text-xs font-medium placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-primary/10 focus:border-primary/50 outline-none transition-all"
+                                placeholder="Search"
+                                className="w-full pl-9 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 focus:bg-white focus:ring-2 focus:ring-blue-100 focus:border-[#BAE6FD] outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                             />
                         </div>
-                    </div>
-
-                    {/* Right: Actions */}
-                    <div className="flex items-center gap-3">
-                        {/* Create Button */}
-                        {canCreateParty && (
-                            <button
-                                onClick={() => { setEditingParty(null); setIsDrawerOpen(true); }}
-                                className="w-10 h-10 flex items-center justify-center rounded-xl border transition-all active:scale-95 shadow-sm bg-white border-gray-100 text-gray-400 hover:bg-gray-50 hover:text-gray-600"
-                                title="Add New Party"
-                            >
-                                <Plus size={20} strokeWidth={2.5} />
-                            </button>
-                        )}
                     </div>
                 </div>
 
                 {/* Table Section */}
-                <div className="relative flex-1 min-h-[400px] bg-white w-full overflow-hidden">
-                    <style>{`
-                        .custom-parties-grid .ag-root-wrapper { border: none !important; }
-                        .custom-parties-grid .ag-header { border-bottom: 1px solid #f3f4f6 !important; }
-                        .custom-parties-grid .ag-header-cell {
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                        }
-                    `}</style>
-                    <div className="absolute inset-0 custom-parties-grid">
-                        <AgGridReact
-                            ref={gridRef}
-                            theme={myTheme}
-                            rowData={filteredParties}
-                            columnDefs={colDefs}
-                            defaultColDef={defaultColDef}
-                            animateRows={true}
-                            suppressCellFocus={true}
-                            suppressRowClickSelection={true}
-                            overlayLoadingTemplate='<div class="flex flex-col items-center justify-center h-full text-slate-400"><Loader2 class="animate-spin mb-2" size=24/><span>Loading parties...</span></div>'
-                            overlayNoRowsTemplate='<div class="flex flex-col items-center justify-center h-full text-slate-500 text-sm">No parties found</div>'
-                        />
+                <div className="relative flex-1 min-h-[400px] w-full px-5 pb-1 flex flex-col">
+                    <div className="flex-1 w-full relative">
+                        <div className="absolute inset-0">
+                            <AgGridReact
+                                ref={gridRef}
+                                theme={gridTheme}
+                                rowData={filteredParties}
+                                columnDefs={colDefs}
+                                defaultColDef={defaultColDef}
+                                rowHeight={42}
+                                headerHeight={44}
+                                animateRows={true}
+                                suppressCellFocus={true}
+                                suppressRowClickSelection={true}
+                                overlayLoadingTemplate='<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading parties...</span>'
+                                overlayNoRowsTemplate='<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No parties found</span>'
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <CreatePartyDrawer 
-                    isOpen={isDrawerOpen} 
-                    onClose={() => setIsDrawerOpen(false)} 
+                <CreatePartyDrawer
+                    isOpen={isDrawerOpen}
+                    onClose={handleCloseDrawer}
                     party={editingParty}
-                    onSuccess={() => { }}
+                    onSuccess={handlePartySaved}
                 />
             </PageContentShell>
 

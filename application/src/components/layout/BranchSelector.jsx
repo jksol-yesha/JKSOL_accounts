@@ -5,7 +5,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { ChevronDown, Building2, Check, Plus, Settings } from 'lucide-react';
 import ManageBranchModal from './ManageBranchModal';
 
-const BranchSelector = ({ hideSettings = false }) => {
+const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
     const {
         branches,
         selectedBranch,
@@ -224,13 +224,13 @@ const BranchSelector = ({ hideSettings = false }) => {
                                                             setStagedIds(branches.map(b => Number(b.id)));
                                                         }
                                                     }}
-                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} ${highlightedIndex === 0 ? 'bg-slate-200/50' : ''}`}
+                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
                                                 >
                                                     <div className="w-4 flex justify-center shrink-0">
-                                                        <Check 
-                                                            size={14} 
-                                                            className={`${isAllStagedSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`} 
-                                                            strokeWidth={isAllStagedSelected ? 3 : 2.5} 
+                                                        <Check
+                                                            size={14}
+                                                            className={`${isAllStagedSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                                            strokeWidth={isAllStagedSelected ? 3 : 2.5}
                                                         />
                                                     </div>
                                                     Select All
@@ -238,18 +238,7 @@ const BranchSelector = ({ hideSettings = false }) => {
                                             )}
                                         </div>
                                         <div className="flex items-center">
-                                            {canManageBranches && !hideSettings && (
-                                                <button
-                                                    onClick={() => {
-                                                        setIsOpen(false);
-                                                        setShowManageModal(true);
-                                                    }}
-                                                    className="bg-slate-100 text-slate-600 hover:bg-[#EEF0FC] hover:text-[#2F5FC6] transition-colors p-1 rounded-md"
-                                                    title="Branch Settings"
-                                                >
-                                                    <Settings size={14} strokeWidth={2.5} />
-                                                </button>
-                                            )}
+                                            {/* Removed settings icon */}
                                         </div>
                                     </div>
 

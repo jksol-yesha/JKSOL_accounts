@@ -2090,3 +2090,11 @@
 .row-inactive:hover {
   background-color: #fee2e2 !important; /* light red-100 */
 }
+
+.ag-header-cell-text {
+    font-size: 11px !important;
+}
+
+.ag-header-cell-text {
+    text-transform: uppercase !important;
+}

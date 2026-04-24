@@ -1,25 +1,19 @@
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { AgGridReact } from "ag-grid-react";
 import {
-  ModuleRegistry,
-  AllCommunityModule,
-  themeQuartz,
+    ModuleRegistry,
+    AllCommunityModule,
+    themeQuartz,
 } from "ag-grid-community";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, ListMinus, ShoppingBag, Users
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, Folders
 } from 'lucide-react';
-
-const transactionTabs = [
-    { label: 'Transactions', key: 'transactions', path: '/transactions', icon: ListMinus },
-    { label: 'Categories', key: 'categories', path: '/category', icon: ShoppingBag },
-    { label: 'Parties', key: 'parties', path: '/parties', icon: Users }
-];
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
@@ -52,7 +46,6 @@ import { notifyTransactionDataChanged } from './transactionDataSync';
 const createInitialDeleteDialog = () => ({
     open: false,
     id: null,
-    ids: [],
     label: '',
     loading: false
 });
@@ -92,58 +85,33 @@ const normalizeTxnColumns = (value) => {
     return normalized;
 };
 
-const PortalTooltip = ({ content, children, maxWidth = 120 }) => {
-    const [visible, setVisible] = useState(false);
-    const [pos, setPos] = useState({ top: 0, left: 0 });
-    const ref = useRef(null);
-
-    const handleMouseEnter = () => {
-        if (!ref.current) return;
-        // Only show if the text is physically getting clipped
-        if (ref.current.scrollWidth <= ref.current.clientWidth + 1) return;
-        
-        const rect = ref.current.getBoundingClientRect();
-        let left = rect.left;
-        // Keep inside viewport if it bleeds right
-        if (left + 300 > window.innerWidth) {
-            left = window.innerWidth - 320;
-        }
-        setPos({ top: rect.bottom + 6, left });
-        setVisible(true);
-    };
-
-    return (
-        <span 
-            ref={ref} 
-            className="block truncate cursor-default transition-colors w-full"
-            style={{ maxWidth }}
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={() => setVisible(false)}
-        >
-            {children}
-            {visible && createPortal(
-                <span 
-                    style={{ top: pos.top, left: pos.left }}
-                    className="fixed z-[99999] max-w-[300px] w-max bg-slate-800 text-white text-[11px] font-medium px-3 py-2 rounded-sm shadow-md pointer-events-none whitespace-normal break-words leading-relaxed animate-in fade-in slide-in-from-top-1 duration-150"
-                >
-                    {content}
-                </span>,
-                document.body
-            )}
-        </span>
-    );
-};
-
-/** Custom tooltip that shows dark card natively escaping AG Grid map */
+/** Custom tooltip that shows white card with full branch list on hover */
 const BranchTooltip = ({ branchNames }) => {
+    const [visible, setVisible] = useState(false);
     if (!branchNames || branchNames.length === 0) return <span className="text-gray-400 text-xs">-</span>;
     const displayText = branchNames.join(', ');
+    const needsTooltip = branchNames.length > 1 || displayText.length > 18;
     return (
-        <PortalTooltip content={displayText} maxWidth={120}>
-            <span className="text-xs font-bold text-primary hover:text-primary/80 transition-colors">
+        <span
+            className="relative inline-block max-w-[120px]"
+            onMouseEnter={() => setVisible(true)}
+            onMouseLeave={() => setVisible(false)}
+        >
+            <span className="block truncate text-xs font-bold text-primary cursor-default hover:text-primary/80 transition-colors">
                 {displayText}
             </span>
-        </PortalTooltip>
+            {needsTooltip && visible && (
+                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[240px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
+                    <span className="block text-[10px] font-extrabold text-gray-400 uppercase tracking-widest mb-1.5">Branches</span>
+                    {branchNames.map((b, i) => (
+                        <span key={i} className="flex items-center gap-1.5 py-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                            <span className="text-[12px] font-semibold text-gray-700 truncate">{b}</span>
+                        </span>
+                    ))}
+                </span>
+            )}
+        </span>
     );
 };
 
@@ -159,7 +127,7 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
         if (!isOpen) return;
         const rect = buttonRef.current.getBoundingClientRect();
         setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
-        
+
         const handleClickOutside = (e) => {
             if (!buttonRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) {
                 setIsOpen(false);
@@ -244,14 +212,18 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
                                 onClick={() => toggleColumn(col.key)}
                                 onMouseEnter={() => setHighlightedIndex(idx)}
                                 onMouseLeave={() => setHighlightedIndex(-1)}
-                                className={`w-full px-3 py-1.5 flex items-center gap-2 text-[13px] font-medium transition-colors ${
-                                    isHighlighted ? 'bg-slate-100/80 ring-1 ring-inset ring-slate-200/50 text-slate-800' : 'hover:bg-gray-50 text-gray-700'
-                                }`}
+                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
                             >
-                                <div className={cn("w-4 h-4 rounded flex items-center justify-center transition-colors border", visibleColumns[col.key] ? "bg-primary border-primary" : "border-gray-300 bg-white")}>
-                                    {visibleColumns[col.key] && <Check size={12} className="text-white" strokeWidth={3} />}
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                    <div className="w-4 flex justify-center shrink-0">
+                                        {visibleColumns[col.key] && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                        <p className={`min-w-0 truncate tracking-tight text-[13px] ${visibleColumns[col.key] ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                            {col.label}
+                                        </p>
+                                    </div>
                                 </div>
-                                {col.label}
                             </button>
                         );
                     })}
@@ -263,24 +235,51 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
 };
 
 const PartyTooltip = ({ partyName }) => {
-    if (!partyName || partyName === '-') return <span className="text-[11px] font-medium text-gray-400">-</span>;
+    const [visible, setVisible] = useState(false);
+    if (!partyName || partyName === '-') return <span className="text-xs font-bold text-gray-700">-</span>;
+    const needsTooltip = partyName.length > 15;
     return (
-        <PortalTooltip content={partyName} maxWidth={130}>
-            <span className="text-[12px] font-semibold text-gray-800 hover:text-gray-900 transition-colors">
+        <span
+            className="relative inline-block max-w-[130px]"
+            onMouseEnter={() => setVisible(true)}
+            onMouseLeave={() => setVisible(false)}
+        >
+            <span className="block truncate text-xs font-bold text-gray-700 cursor-default hover:text-gray-900 transition-colors">
                 {partyName}
             </span>
-        </PortalTooltip>
+            {needsTooltip && visible && (
+                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[240px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
+                    <span className="flex items-center gap-1.5 py-0.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-gray-300 flex-shrink-0" />
+                        <span className="text-[12px] font-semibold text-gray-700 whitespace-normal break-words">{partyName}</span>
+                    </span>
+                </span>
+            )}
+        </span>
     );
 };
 
 const DescriptionTooltip = ({ description }) => {
-    if (!description || description === '-') return <span className="text-[11px] font-medium text-gray-400">-</span>;
+    const [visible, setVisible] = useState(false);
+    if (!description || description === '-') return <span className="text-[13px] font-medium text-gray-400">-</span>;
+    const needsTooltip = description.length > 25;
     return (
-        <PortalTooltip content={description} maxWidth={250}>
-            <span className="text-[11px] font-medium text-inherit hover:text-gray-900 transition-colors">
+        <span
+            className="relative inline-block w-full max-w-[250px]"
+            onMouseEnter={() => setVisible(true)}
+            onMouseLeave={() => setVisible(false)}
+        >
+            <span className="block truncate text-[13px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
                 {description}
             </span>
-        </PortalTooltip>
+            {needsTooltip && visible && (
+                <span className="absolute left-0 top-full mt-1.5 z-[9999] min-w-[150px] max-w-[280px] bg-white border border-gray-100 rounded-xl shadow-xl p-2.5 animate-in fade-in duration-150 pointer-events-none">
+                    <span className="flex items-center gap-1.5 py-0.5">
+                        <span className="text-[12px] font-semibold text-gray-700 whitespace-normal break-words leading-relaxed">{description}</span>
+                    </span>
+                </span>
+            )}
+        </span>
     );
 };
 
@@ -338,213 +337,405 @@ const FilterDropdown = ({
     selectAllLabel = "Select All",
     allDisplayLabel = selectAllLabel,
     allValue = "all",
-    darkActiveState = false,
-  }) => {
+    isMultiSelect = false,
+    hideApplyButton = false,
+    buttonClassName = "",
+    showOptionTicksWhenAllSelected = false,
+    flatSelectAll = false,
+    showApplyFooter = false,
+}) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [stagedValues, setStagedValues] = useState([]);
+    const [stagedSingleValue, setStagedSingleValue] = useState(value);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
     const dropdownMenuRef = useRef(null);
     const [dropdownPosition, setDropdownPosition] = useState(null);
-  
-    useLayoutEffect(() => {
-      if (!isOpen) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setDropdownPosition(null);
-        return;
-      }
-      const updatePosition = () => {
-        if (!buttonRef.current) return;
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + 8,
-          left: rect.left,
-          minWidth: Math.max(160, rect.width),
-        });
-      };
-      updatePosition();
-      window.addEventListener("resize", updatePosition);
-      window.addEventListener("scroll", updatePosition, true);
-      return () => {
-        window.removeEventListener("resize", updatePosition);
-        window.removeEventListener("scroll", updatePosition, true);
-      };
-    }, [isOpen]);
-  
+
     useEffect(() => {
-      const handleClickOutside = (event) => {
-        if (
-          !dropdownRef.current?.contains(event.target) &&
-          !dropdownMenuRef.current?.contains(event.target)
-        ) {
-          setIsOpen(false);
-          setHighlightedIndex(-1);
+        if (!isOpen) return;
+
+        if (isMultiSelect) {
+            if (value === allValue) setStagedValues([allValue]);
+            else setStagedValues(Array.isArray(value) ? value : [value]);
+            return;
         }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
+
+        if (showApplyFooter) {
+            setStagedSingleValue(value);
+        }
+    }, [isOpen, value, isMultiSelect, allValue, showApplyFooter]);
+
+    useLayoutEffect(() => {
+        if (!isOpen) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect
+            setDropdownPosition(null);
+            return;
+        }
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            setDropdownPosition({
+                top: rect.bottom + 8,
+                left: rect.left,
+                minWidth: Math.max(160, rect.width),
+            });
+        };
+        updatePosition();
+        window.addEventListener("resize", updatePosition);
+        window.addEventListener("scroll", updatePosition, true);
+        return () => {
+            window.removeEventListener("resize", updatePosition);
+            window.removeEventListener("scroll", updatePosition, true);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            if (
+                !dropdownRef.current?.contains(event.target) &&
+                !dropdownMenuRef.current?.contains(event.target)
+            ) {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }
+        };
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
-  
-    const selectedOption =
-      options.find((opt) => opt.value === value) ||
-      (showSelectAll && value === allValue
-        ? { label: allDisplayLabel }
-        : {
-            label: placeholder || options[0]?.label,
-          });
+
+    const isSelectAllActive = isMultiSelect ? (value === allValue || (Array.isArray(value) && value.length === options.length)) : value === allValue;
+
+    let displayLabel = placeholder || options[0]?.label;
+    let remainingCount = 0;
+
+    if (isMultiSelect) {
+        if (isSelectAllActive) {
+            displayLabel = allDisplayLabel;
+        } else if (Array.isArray(value) && value.length > 0) {
+            const activeOptions = value.map(v => options.find(o => o.value === v)).filter(Boolean);
+            if (activeOptions.length > 0) {
+                displayLabel = activeOptions.slice(0, 1).map(o => o.label).join(', ');
+                remainingCount = activeOptions.length - 1;
+            }
+        }
+    } else {
+        const found = options.find((opt) => opt.value === value);
+        if (found) displayLabel = found.label;
+        else if (showSelectAll && value === allValue) displayLabel = allDisplayLabel;
+    }
+
+    const selectedOption = { label: displayLabel, remainingCount };
     const isTitleVar = variant === "title";
-    const isSelectAllActive = value === allValue;
-    const internalOptions = showSelectAll ? [{ isSelectAll: true }, ...options] : options;
+    const internalOptions = isMultiSelect ? options : (showSelectAll ? [{ isSelectAll: true }, ...options] : options);
+    const isStagedAll = isMultiSelect && (stagedValues.includes(allValue) || stagedValues.length === options.length);
+    const renderedSingleValue = showApplyFooter ? stagedSingleValue : value;
+    const isRenderedSelectAllActive = !isMultiSelect && renderedSingleValue === allValue;
+
+    const handleApply = () => {
+        if (isMultiSelect) {
+            let toApply = stagedValues;
+            if (stagedValues.length === 0 || isStagedAll || stagedValues.includes(allValue)) {
+                toApply = allValue;
+            }
+            onChange(toApply);
+            setIsOpen(false);
+            return;
+        }
+
+        onChange(stagedSingleValue ?? allValue);
+        setIsOpen(false);
+    };
+
+    const toggleStagedValue = (val) => {
+        let nextVal;
+        if (stagedValues.includes(allValue)) {
+            nextVal = [val];
+        } else {
+            const exists = stagedValues.includes(val);
+            nextVal = exists ? stagedValues.filter(x => x !== val) : [...stagedValues, val];
+        }
+
+        if (nextVal.length === 0 || nextVal.length === options.length) {
+            nextVal = [allValue];
+        }
+
+        setStagedValues(nextVal);
+        if (hideApplyButton) {
+            onChange(nextVal.includes(allValue) ? allValue : nextVal);
+        }
+    };
 
     const handleKeyDown = (e) => {
-      if (!isOpen) {
-        if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
-          e.preventDefault();
-          setIsOpen(true);
-          const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
-          setHighlightedIndex(idx >= 0 ? idx : 0);
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
+                e.preventDefault();
+                setIsOpen(true);
+                const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
+                setHighlightedIndex(idx >= 0 ? idx : 0);
+            }
+            return;
         }
-        return;
-      }
 
-      switch (e.key) {
-        case 'ArrowDown':
-          e.preventDefault();
-          setHighlightedIndex(prev => (prev + 1) % internalOptions.length);
-          break;
-        case 'ArrowUp':
-          e.preventDefault();
-          setHighlightedIndex(prev => (prev - 1 + internalOptions.length) % internalOptions.length);
-          break;
-        case 'Enter':
-          e.preventDefault();
-          if (highlightedIndex >= 0 && internalOptions[highlightedIndex]) {
-            const opt = internalOptions[highlightedIndex];
-            onChange(opt.isSelectAll ? allValue : opt.value);
-          }
-          setIsOpen(false);
-          setHighlightedIndex(-1);
-          break;
-        case 'Escape':
-          e.preventDefault();
-          setIsOpen(false);
-          setHighlightedIndex(-1);
-          buttonRef.current?.focus();
-          break;
-        case 'Tab':
-          setIsOpen(false);
-          setHighlightedIndex(-1);
-          break;
-      }
+        switch (e.key) {
+            case 'ArrowDown':
+                e.preventDefault();
+                const totalItems = isMultiSelect ? options.length + 2 : internalOptions.length + (showApplyFooter ? 1 : 0);
+                setHighlightedIndex(prev => (prev + 1) % totalItems);
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                const itemsCount = isMultiSelect ? options.length + 2 : internalOptions.length + (showApplyFooter ? 1 : 0);
+                setHighlightedIndex(prev => (prev - 1 + itemsCount) % itemsCount);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (isMultiSelect) {
+                    if (highlightedIndex === 0 && showSelectAll) {
+                        const nextVal = isStagedAll ? [] : [allValue];
+                        setStagedValues(nextVal);
+                        if (hideApplyButton) {
+                            onChange(nextVal.length === 0 ? allValue : nextVal);
+                        }
+                    } else if (highlightedIndex > 0 && highlightedIndex <= options.length) {
+                        const opt = options[highlightedIndex - 1];
+                        toggleStagedValue(opt.value);
+                    } else if (highlightedIndex === options.length + 1 && !hideApplyButton) {
+                        handleApply();
+                    }
+                } else {
+                    if (highlightedIndex >= 0 && highlightedIndex < internalOptions.length && internalOptions[highlightedIndex]) {
+                        const opt = internalOptions[highlightedIndex];
+                        if (showApplyFooter) {
+                            setStagedSingleValue(opt.isSelectAll ? allValue : opt.value);
+                        } else {
+                            onChange(opt.isSelectAll ? allValue : opt.value);
+                            setIsOpen(false);
+                            setHighlightedIndex(-1);
+                        }
+                    } else if (showApplyFooter && highlightedIndex === internalOptions.length) {
+                        handleApply();
+                        setHighlightedIndex(-1);
+                    }
+                }
+                if (isMultiSelect) {
+                    setHighlightedIndex(-1);
+                }
+                break;
+            case 'Escape':
+                e.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                if (isMultiSelect || showApplyFooter) handleApply();
+                else setIsOpen(false);
+                setHighlightedIndex(-1);
+                break;
+        }
     };
-  
-    return (
-      <div className="relative" ref={dropdownRef}>
-        <button
-          ref={buttonRef}
-          onClick={() => {
-              const nextIsOpen = !isOpen;
-              setIsOpen(nextIsOpen);
-              if (nextIsOpen) {
-                  const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
-                  setHighlightedIndex(idx >= 0 ? idx : 0);
-              } else {
-                  setHighlightedIndex(-1);
-              }
-          }}
-          onKeyDown={handleKeyDown}
-          className={`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : `h-[32px] px-3 text-[13px] rounded-md transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] border focus-visible:ring-2 focus-visible:ring-blue-100 ${!isSelectAllActive ? "bg-[#F0F9FF] border-[#BAE6FD] text-[#4A8AF4] font-medium hover:bg-blue-50" : darkActiveState ? "bg-white text-slate-800 font-semibold border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]" : "bg-white text-gray-600 font-medium border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"}`}`}
-        >
-          <div
-            className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
-          >
-            <span className={!isTitleVar ? "transition-colors text-inherit" : ""}>{selectedOption?.label}</span>
-          </div>
-          {!hideIcon && (
-            <ChevronDown
-              size={isTitleVar ? 16 : 14}
-              className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-primary" : "text-slate-500 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]"} ${!isSelectAllActive && !isTitleVar ? "text-[#4A8AF4]" : ""}`}
-            />
-          )}
-        </button>
-  
-        {isOpen &&
-          dropdownPosition &&
-          typeof document !== "undefined" &&
-          createPortal(
-            <div
-              ref={dropdownMenuRef}
-              className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
-              style={{
-                top: dropdownPosition.top,
-                left: dropdownPosition.left,
-                minWidth: dropdownPosition.minWidth,
-              }}
-            >
-              {internalOptions.map((option, idx) => {
-                  const isHighlighted = idx === highlightedIndex;
-                  if (option.isSelectAll) {
-                      return (
-                        <div key="select-all" className="px-3 py-1.5 border-b border-slate-100">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              onChange(allValue);
-                              setIsOpen(false);
-                            }}
-                            className={`group flex w-full items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isSelectAllActive ? (darkActiveState ? "text-[#2F5FC6]" : "text-[#4A8AF4]") : "text-slate-500 hover:text-slate-800"} ${isHighlighted ? 'bg-slate-200/50' : ''}`}
-                          >
-                            <div className="w-4 flex justify-center shrink-0">
-                              <Check
-                                size={14}
-                                className={`${isSelectAllActive ? "text-[#4A8AF4]" : "text-slate-200 group-hover:text-slate-300"} transition-colors`}
-                                strokeWidth={isSelectAllActive ? 3 : 2.5}
-                              />
-                            </div>
-                            {selectAllLabel}
-                          </button>
-                        </div>
-                      );
-                  }
 
-                  return (
-                    <button
-                      key={option.value}
-                      onClick={() => {
-                        onChange(option.value);
-                        setIsOpen(false);
-                      }}
-                      className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value || isHighlighted ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"}`}
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                ref={buttonRef}
+                onClick={() => {
+                    const nextIsOpen = !isOpen;
+                    setIsOpen(nextIsOpen);
+                    if (nextIsOpen) {
+                        const activeValue = value;
+                        const activeSelectAll = showApplyFooter ? value === allValue : isSelectAllActive;
+                        const idx = internalOptions.findIndex(o => o.isSelectAll ? activeSelectAll : o.value === activeValue);
+                        setHighlightedIndex(idx >= 0 ? idx : 0);
+                    } else {
+                        setHighlightedIndex(-1);
+                    }
+                }}
+                onKeyDown={handleKeyDown}
+                className={cn(`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : `h-[32px] px-3 text-[13px] font-medium rounded-md transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] border focus-visible:ring-2 focus-visible:ring-blue-100 ${!isSelectAllActive ? "bg-white border-[#BAE6FD] text-[#4A8AF4] hover:bg-[#F0F9FF]" : "bg-white text-gray-600 border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"}`}`, buttonClassName)}
+            >
+                <div
+                    className={`flex items-center gap-1.5 min-w-0 ${!isTitleVar ? "" : "font-extrabold"}`}
+                >
+                    <span className={`max-w-[120px] truncate ${!isTitleVar ? "transition-colors text-inherit" : ""}`}>{selectedOption?.label}</span>
+                    {selectedOption?.remainingCount > 0 && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100/50 text-[10px] font-bold text-[#4A8AF4] leading-none shrink-0 group-hover:bg-blue-100/80 transition-colors">
+                            <span>{selectedOption.remainingCount}</span>
+                            <Plus size={9} strokeWidth={3} />
+                        </span>
+                    )}
+                </div>
+                {!hideIcon && (
+                    <ChevronDown
+                        size={isTitleVar ? 16 : 14}
+                        className={`transition-transform duration-200 ml-1 ${isOpen ? "rotate-180" : ""} ${isTitleVar ? "text-slate-400 group-hover:text-primary" : "text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]"} ${!isSelectAllActive && !isTitleVar ? "text-[#4A8AF4]" : ""}`}
+                    />
+                )}
+            </button>
+
+            {isOpen &&
+                dropdownPosition &&
+                typeof document !== "undefined" &&
+                createPortal(
+                    <div
+                        ref={dropdownMenuRef}
+                        className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
+                        style={{
+                            top: dropdownPosition.top,
+                            left: dropdownPosition.left,
+                            minWidth: dropdownPosition.minWidth,
+                        }}
                     >
-                      <span
-                        className={`text-[13px] w-full flex items-center gap-2 ${value === option.value ? (darkActiveState ? "font-bold text-[#2F5FC6]" : "font-bold text-[#4A8AF4]") : isHighlighted ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
-                      >
-                        <div className="w-4 flex justify-center shrink-0">
-                          {value === option.value && (
-                            <Check
-                              size={14}
-                              className="text-[#4A8AF4]"
-                              strokeWidth={2.5}
-                            />
-                          )}
-                        </div>
-                        {option.label}
-                      </span>
-                    </button>
-                  );
-              })}
-            </div>,
-            document.body,
-          )}
-      </div>
+                        {isMultiSelect ? (
+                            <>
+                                {showSelectAll && (
+                                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                                        <button
+                                            onClick={() => {
+                                                const nextVal = isStagedAll ? [] : [allValue];
+                                                setStagedValues(nextVal);
+                                                if (hideApplyButton) {
+                                                    onChange(nextVal.length === 0 ? allValue : nextVal);
+                                                }
+                                            }}
+                                            className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isStagedAll ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} ${!flatSelectAll && highlightedIndex === 0 ? 'bg-slate-200/50' : ''}`}
+                                        >
+                                            <div className="w-4 flex justify-center shrink-0">
+                                                <Check
+                                                    size={14}
+                                                    className={`${isStagedAll ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                                    strokeWidth={isStagedAll ? 3 : 2.5}
+                                                />
+                                            </div>
+                                            {selectAllLabel}
+                                        </button>
+                                    </div>
+                                )}
+                                <div className="max-h-[160px] overflow-y-auto custom-scrollbar py-1">
+                                    {options.map((option, idx) => {
+                                        const isStaged = stagedValues.includes(option.value);
+                                        const isHighlighted = highlightedIndex === idx + 1;
+                                        return (
+                                            <button
+                                                key={option.value}
+                                                onClick={() => toggleStagedValue(option.value)}
+                                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                            >
+                                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                                    <div className="w-4 flex justify-center shrink-0">
+                                                        {isStaged && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                                        <p className={`min-w-0 truncate tracking-tight text-[13px] ${isStaged ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                            {option.label}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </button>
+                                        );
+                                    })}
+                                </div>
+                                {!hideApplyButton && (
+                                    <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
+                                        <button
+                                            onClick={handleApply}
+                                            className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === options.length + 1 ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                                        >
+                                            Apply
+                                        </button>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            internalOptions.map((option, idx) => {
+                                const isHighlighted = idx === highlightedIndex;
+                                if (option.isSelectAll) {
+                                    return (
+                                        <div key="select-all" className={`px-3 py-1.5 border-b border-slate-100 ${flatSelectAll ? '' : 'bg-slate-50/50'}`}>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (showApplyFooter) {
+                                                        setStagedSingleValue(allValue);
+                                                    } else {
+                                                        onChange(allValue);
+                                                        setIsOpen(false);
+                                                    }
+                                                }}
+                                                className={`group flex w-full items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isRenderedSelectAllActive ? "text-[#2F5FC6]" : "text-slate-500 hover:text-slate-800"} ${!flatSelectAll && isHighlighted ? 'bg-slate-200/50' : ''}`}
+                                            >
+                                                <div className="w-4 flex justify-center shrink-0">
+                                                    <Check
+                                                        size={14}
+                                                        className={`${isRenderedSelectAllActive ? "text-[#4A8AF4]" : "text-slate-200 group-hover:text-slate-300"} transition-colors`}
+                                                        strokeWidth={isRenderedSelectAllActive ? 3 : 2.5}
+                                                    />
+                                                </div>
+                                                {selectAllLabel}
+                                            </button>
+                                        </div>
+                                    );
+                                }
+
+                                const isOptionVisuallySelected =
+                                    renderedSingleValue === option.value ||
+                                    (showOptionTicksWhenAllSelected && isRenderedSelectAllActive);
+
+                                return (
+                                    <button
+                                        key={option.value}
+                                        onClick={() => {
+                                            if (showApplyFooter) {
+                                                setStagedSingleValue(option.value);
+                                            } else {
+                                                onChange(option.value);
+                                                setIsOpen(false);
+                                            }
+                                        }}
+                                        className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${isHighlighted ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"} group`}
+                                    >
+                                        <span
+                                            className={`text-[13px] w-full flex items-center gap-2 ${(renderedSingleValue === option.value && !isRenderedSelectAllActive) || isHighlighted ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                                        >
+                                            <div className="w-4 flex justify-center shrink-0">
+                                                {isOptionVisuallySelected && (
+                                                    <Check
+                                                        size={14}
+                                                        className="text-[#4A8AF4]"
+                                                        strokeWidth={2.5}
+                                                    />
+                                                )}
+                                            </div>
+                                            {option.label}
+                                        </span>
+                                    </button>
+                                );
+                            })
+                        )}
+                        {!isMultiSelect && showApplyFooter && (
+                            <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
+                                <button
+                                    onClick={handleApply}
+                                    className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === internalOptions.length ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                                >
+                                    Apply
+                                </button>
+                            </div>
+                        )}
+                    </div>,
+                    document.body,
+                )}
+        </div>
     );
-  };
-      
+};
+
 const DateCellRenderer = (props) => {
     const { value, data, context } = props;
     if (!value) return null;
     return (
-        <span className="font-medium text-inherit">
+        <span className="text-[11px] font-medium text-gray-600">
             {context.formatDate ? context.formatDate(value) : value}
         </span>
     );
@@ -555,7 +746,7 @@ const AmountCellRenderer = (props) => {
     if (!data) return null;
     const isIncome = data.txnType === 'income' || data.transactionType?.name === 'income';
     const isExpense = data.txnType === 'expense' || data.transactionType?.name === 'expense';
-    
+
     const parseAmount = (val) => {
         if (!val) return 0;
         const parsed = parseFloat(String(val).replace(/,/g, ''));
@@ -563,33 +754,15 @@ const AmountCellRenderer = (props) => {
     };
 
     let amountVal = parseAmount(data.amountBaseCurrency ?? data.amountBase ?? data.finalAmountLocal ?? data.amountLocal);
-    
+
     // Natively prioritize the backend-converted dynamic reporting currency (`amountBaseCurrency` / `amountBase`)
     let displayAmount = amountVal;
-
-    const isOutlier = context.outliers && amountVal > 0 && 
-                      (amountVal >= context.outliers.upper || amountVal <= context.outliers.lower) && 
-                      context.outliers.upper !== Infinity;
-
-    // Detect if this specific transaction is part of a frequency anomaly or a duplicate collision
-    const isDuplicate = context.duplicateTransactions && context.duplicateTransactions.has(data.id);
-    const isFrequencyAnomaly = !isDuplicate && context.anomalousPartyDays && context.anomalousPartyDays.has(data.id);
 
     const baseColor = isIncome ? "text-emerald-600" : isExpense ? "text-rose-600" : "text-gray-900";
 
     return (
         <div className={cn(props.className, "flex items-center justify-end gap-2.5 w-full h-full")}>
-            {(isOutlier || isFrequencyAnomaly || isDuplicate) && (
-                <div className="group relative flex shrink-0 items-center cursor-pointer">
-                    <Activity size={14} strokeWidth={2.5} className={isDuplicate ? "text-purple-500" : isFrequencyAnomaly ? "text-rose-500" : "text-amber-500"} />
-                    <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2 opacity-0 group-hover:opacity-100 pointer-events-none transition-all duration-200 z-[50] scale-95 group-hover:scale-100">
-                        <div className="bg-slate-800 text-white text-[10px] sm:text-[11px] font-medium px-2 py-1 rounded-md shadow-md whitespace-nowrap">
-                            {isDuplicate ? "Duplicate Detected" : isFrequencyAnomaly ? "High Frequency" : (amountVal >= context.outliers?.upper ? "Highest Amount" : "Lowest Amount")}
-                        </div>
-                    </div>
-                </div>
-            )}
-            <span className={cn(baseColor, "font-semibold shrink-0 tabular-nums relative text-[12px]")}>
+            <span className={cn(baseColor, "font-bold shrink-0 tabular-nums relative text-[13px]")}>
                 {context.formatCurrency ? context.formatCurrency(displayAmount) : displayAmount}
             </span>
         </div>
@@ -610,11 +783,10 @@ const ActionCellRenderer = (props) => {
                             context.setFullScreenAttachment({ isOpen: true, path: data.attachmentPath });
                         }
                     }}
-                    className={`p-1.5 rounded-lg transition-all ${
-                        data.attachmentPath
-                            ? "text-gray-400 hover:text-primary hover:bg-primary/5 active:scale-95"
-                            : "text-gray-200 cursor-not-allowed"
-                    }`}
+                    className={`p-1.5 rounded-lg transition-all ${data.attachmentPath
+                        ? "text-gray-400 hover:text-primary active:scale-95"
+                        : "text-gray-200 cursor-not-allowed"
+                        }`}
                     title={data.attachmentPath ? "View Attachment" : "No Attachment"}
                     disabled={!data.attachmentPath}
                 >
@@ -624,9 +796,8 @@ const ActionCellRenderer = (props) => {
             <button
                 onClick={() => context.handleEdit && context.handleEdit(data)}
                 disabled={!context.canEditTxn || !context.canEditTxn(data)}
-                className={`p-1.5 rounded-lg transition-colors ${
-                    (context.canEditTxn && context.canEditTxn(data)) ? "text-gray-400 hover:text-blue-600 hover:bg-blue-50" : "text-gray-200 cursor-not-allowed"
-                }`}
+                className={`p-1.5 rounded-lg transition-colors ${(context.canEditTxn && context.canEditTxn(data)) ? "text-gray-400 hover:text-blue-600" : "text-gray-200 cursor-not-allowed"
+                    }`}
                 title={(context.canEditTxn && context.canEditTxn(data)) ? "Edit" : "You do not have access to edit this transaction"}
             >
                 <Edit size={14} />
@@ -634,7 +805,7 @@ const ActionCellRenderer = (props) => {
             <button
                 type="button"
                 onClick={(e) => context.handleDelete && context.handleDelete(e, data)}
-                className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg transition-colors"
                 title="Delete"
             >
                 <Trash2 size={14} />
@@ -645,12 +816,11 @@ const ActionCellRenderer = (props) => {
 
 const Transactions = () => {
     const navigate = useNavigate();
-    const [searchParams] = useSearchParams();
+    const location = useLocation();
     const { selectedBranch, selectedBranchIds, branches } = useBranch();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
     const { preferences, formatCurrency, formatDate, updatePreferences } = usePreferences();
-    const gridRef = useRef(null);
 
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -665,7 +835,7 @@ const Transactions = () => {
     const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_TXN_COLUMNS);
 
 
-    
+
     const colDefs = useMemo(() => {
         return [
             {
@@ -678,13 +848,13 @@ const Transactions = () => {
             },
             { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1.5, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
             { field: 'date', headerName: 'Date', hide: !visibleColumns.date, valueGetter: params => params.data?.txnDate, cellRenderer: DateCellRenderer, minWidth: 120, flex: 1, sort: 'desc' },
-            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, flex: 1, cellRenderer: (params) => <span className="block truncate text-[11px] font-semibold uppercase tracking-wider text-gray-500">{params.value}</span> },
+            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, flex: 1, cellRenderer: (params) => <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{params.value}</span> },
             { field: 'branch', headerName: 'Branch', hide: !visibleColumns.branch, cellRenderer: (params) => <BranchTooltip branchNames={params.data?.branchNames} />, minWidth: 140, flex: 1 },
             { field: 'account', headerName: 'Account', hide: !visibleColumns.account, valueGetter: params => params.data?.account?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
-            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
+            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} textClassName="text-[11px] font-medium text-gray-700" /> },
             { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 2, minWidth: 200 },
-            { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned', headerClass: 'text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB] ag-right-aligned-header' },
-            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', minWidth: 130, cellClass: 'text-[11px] font-medium text-gray-400 truncate' },
+            { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned' },
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[11px] font-medium text-gray-400', minWidth: 130 },
             { headerName: 'Actions', field: 'actions', minWidth: 100, maxWidth: 100, cellRenderer: ActionCellRenderer, sortable: false, filter: false }
         ];
     }, [visibleColumns]);
@@ -694,46 +864,55 @@ const Transactions = () => {
         filter: true,
         resizable: true,
         suppressMovable: true,
-        menuTabs: [],
-        cellClass: "text-[11px] font-medium text-gray-600 truncate",
-        headerClass: "text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB]"
+        menuTabs: []
     }), []);
-    
+
 
     // Original state:
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
-    const importBtnRef = useRef(null);
-    const previousImportModalState = useRef(isImportModalOpen);
-
-    useEffect(() => {
-        if (previousImportModalState.current && !isImportModalOpen) {
-            // Wait slightly for the modal's unmount cycle to clear out before regaining focus
-            setTimeout(() => {
-                importBtnRef.current?.focus({ preventScroll: true });
-            }, 10);
-        }
-        previousImportModalState.current = isImportModalOpen;
-    }, [isImportModalOpen]);
     const [activeAttachmentTxnId, setActiveAttachmentTxnId] = useState(null); // Keep for legacy if needed, but we use object now
     const [attachmentViewer, setAttachmentViewer] = useState({ isOpen: false, txnId: null, path: null, position: { top: 0, right: 0 } });
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
     const isPrinting = false;
     const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
-    
+    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+    const exportDropdownRef = useRef(null);
+    const gridRef = useRef(null);
+
+    useEffect(() => {
+        const handleClickOutside = (e) => {
+            if (exportDropdownRef.current && !exportDropdownRef.current.contains(e.target)) {
+                setIsExportDropdownOpen(false);
+            }
+        };
+        window.addEventListener('mousedown', handleClickOutside);
+        return () => window.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
     // CreateTransaction Drawer State
     const [drawerState, setDrawerState] = useState({ open: false, transaction: null });
 
     // Filter Logic State
-    const [appliedFilters, setAppliedFilters] = useState({
-        type: 'all',
-        dateRange: null,
-        currency: preferences?.currency || 'INR',
-        party: 'all',
-        accountId: searchParams.get('accountId') || null
+    const [appliedFilters, setAppliedFilters] = useState(() => {
+        const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        return {
+            type: 'all',
+            dateRange: null,
+            currency: preferences?.currency || 'INR',
+            party: 'all',
+            accountId: params.get('accountId') || 'all'
+        };
     });
-    
+
+    // Listen for URL param changes (like navigating from Accounts page)
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const accountId = params.get('accountId') || 'all';
+        setAppliedFilters(prev => ({ ...prev, accountId }));
+    }, [location.search]);
+
     // Date Presets Generation
     const datePresets = useMemo(() => {
         const sortedFinancialYears = [...(financialYears || [])].sort((a, b) => new Date(a.startDate || 0).getTime() - new Date(b.startDate || 0).getTime());
@@ -800,9 +979,9 @@ const Transactions = () => {
         }
     }, [columnSettingsKey, user?.id, visibleColumns]);
 
-    
 
-    
+
+
 
     const canEditTxn = (txn) => {
         if (user?.role === 'owner') return true;
@@ -824,13 +1003,18 @@ const Transactions = () => {
 
         setLoading(true);
         try {
-            const response = await apiService.transactions.getAll({
+            // Bypass global branch filter: Always fetch 'all' branches
+            const payload = {
                 branchId: 'all',
                 financialYearId: selectedYear.id,
-                targetCurrency: appliedFilters.currency,
-                limit: -1,
-                ...(appliedFilters.accountId ? { accountId: Number(appliedFilters.accountId) } : {})
-            }, { signal });
+                targetCurrency: appliedFilters.currency
+            };
+            if (appliedFilters.dateRange?.startDate) {
+                payload.startDate = appliedFilters.dateRange.startDate;
+                payload.endDate = appliedFilters.dateRange.endDate || appliedFilters.dateRange.startDate;
+            }
+
+            const response = await apiService.transactions.getAll(payload, { signal });
 
             // Ensure we always have an array
             let data = [];
@@ -855,7 +1039,7 @@ const Transactions = () => {
                 setHasFetchedOnce(true);
             }
         }
-    }, [appliedFilters.currency, appliedFilters.accountId, cacheKey, user, selectedYear?.id]);
+    }, [appliedFilters.currency, cacheKey, user, selectedYear?.id, appliedFilters.dateRange?.startDate, appliedFilters.dateRange?.endDate]);
 
 
     useEffect(() => {
@@ -889,7 +1073,7 @@ const Transactions = () => {
     }, [fetchTransactions, on]); // Only depend on stable fetcher and listener binder
 
     // Sorting Handlers
-    
+
 
 
 
@@ -906,14 +1090,13 @@ const Transactions = () => {
             const party = (txn.contact || txn.payee || txn.counterpartyName || '').trim().toLowerCase();
             const type = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
             const notes = (txn.notes || txn.description || '').trim().toLowerCase();
-            
+
             const dataKey = `${date}|${amountKey}|${party}|${type}|${notes}`;
             const branchName = txn.branch?.name || (branches || []).find(b => String(b.id) === String(txn.branchId))?.name || 'Unknown';
             const branchId = Number(txn.branchId || 0);
 
             const baseKey = `${dataKey}`;
-            // Find a group with the same baseKey WHERE this branch hasn't already contributed a row
-            let foundGroup = groups.find(g => g.baseKey === baseKey && !(g.groupBranchIds || []).includes(branchId));
+            let foundGroup = groups.find(g => g.baseKey === baseKey);
 
             if (foundGroup) {
                 if (!foundGroup.branchNames.includes(branchName)) {
@@ -955,28 +1138,47 @@ const Transactions = () => {
                 (txn.transactionType?.name || txn.txnType || '').toLowerCase().includes(term) ||
                 String(txn.status || '').toLowerCase().includes(term) ||
                 (txn.txnDate || '').toLowerCase().includes(term) ||
-                (txn.amountBase || '').toString().includes(term)
+                String(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal ?? '').includes(term.replace(/,/g, '').trim())
             );
         }
 
         // 2. Toolbar Macro Filters
-        if (appliedFilters.type !== 'all') {
-            result = result.filter(t => (t.transactionType?.name || t.txnType || '').toLowerCase() === appliedFilters.type);
+        if (Array.isArray(appliedFilters.type) ? appliedFilters.type.length > 0 : appliedFilters.type !== 'all') {
+            const types = Array.isArray(appliedFilters.type) ? appliedFilters.type : [appliedFilters.type];
+            if (!types.includes('all')) {
+                result = result.filter(t => {
+                    const typeName = (t.transactionType?.name || t.txnType || '').toLowerCase();
+                    return types.includes(typeName);
+                });
+            }
         }
 
         // Time Period via DateRange
         if (appliedFilters.dateRange?.startDate) {
             const startStr = appliedFilters.dateRange.startDate;
             const endStr = appliedFilters.dateRange.endDate || startStr;
-            const start = new Date(startStr).getTime();
-            const end = new Date(endStr).setHours(23, 59, 59, 999);
 
             result = result.filter(t => {
-                const tzDate = t.txnDate ? new Date(t.txnDate).getTime() : 0;
-                return tzDate >= start && tzDate <= end;
+                if (!t.txnDate) return false;
+                
+                let txnDateStr = String(t.txnDate);
+                // Standardize to YYYY-MM-DD
+                if (txnDateStr.includes('T')) {
+                    const d = new Date(t.txnDate);
+                    if (!isNaN(d)) {
+                        const year = d.getFullYear();
+                        const month = String(d.getMonth() + 1).padStart(2, '0');
+                        const day = String(d.getDate()).padStart(2, '0');
+                        txnDateStr = `${year}-${month}-${day}`;
+                    }
+                } else if (txnDateStr.includes(' ')) {
+                    txnDateStr = txnDateStr.split(' ')[0];
+                }
+
+                return txnDateStr >= startStr && (endStr === startStr ? txnDateStr <= endStr : txnDateStr <= endStr);
             });
         }
-        
+
         // Branch Context filtering
         if (selectedBranch?.id || (Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0)) {
             const allowed = Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0
@@ -993,31 +1195,31 @@ const Transactions = () => {
         }
 
         // Party Filter
-        if (appliedFilters.party !== 'all') {
-            result = result.filter(txn => {
-                const p = (txn.contact || txn.payee || txn.counterpartyName || txn.party || '').trim();
-                return p === appliedFilters.party;
-            });
+        if (Array.isArray(appliedFilters.party) ? appliedFilters.party.length > 0 : appliedFilters.party !== 'all') {
+            const parties = Array.isArray(appliedFilters.party) ? appliedFilters.party : [appliedFilters.party];
+            if (!parties.includes('all')) {
+                result = result.filter(txn => {
+                    const p = (txn.contact || txn.payee || txn.counterpartyName || txn.party || '').trim();
+                    return parties.includes(p);
+                });
+            }
         }
 
-        // 6. Explicit Account Drill-down Filter
-        if (appliedFilters.accountId) {
-            const isolateId = String(appliedFilters.accountId);
+        // Account Filter
+        if (appliedFilters.accountId !== 'all') {
+            const targetId = String(appliedFilters.accountId);
             result = result.filter(txn => {
-                // If it explicitly maps to the primary UI fields
-                if (String(txn.accountId) === isolateId || 
-                    (txn.account?.id && String(txn.account.id) === isolateId) ||
-                    (txn.fromAccountId && String(txn.fromAccountId) === isolateId) ||
-                    (txn.toAccountId && String(txn.toAccountId) === isolateId)) {
-                    return true;
+                const accountsAssociated = [];
+                if (txn.accountId) accountsAssociated.push(String(txn.accountId));
+                if (txn.fromAccountId) accountsAssociated.push(String(txn.fromAccountId));
+                if (txn.toAccountId) accountsAssociated.push(String(txn.toAccountId));
+                if (txn.account?.id) accountsAssociated.push(String(txn.account.id));
+
+                if (txn.entries && txn.entries.length > 0) {
+                    txn.entries.forEach(e => accountsAssociated.push(String(e.accountId)));
                 }
-                
-                // Deep-check the double-entry accounting array
-                if (txn.entries && Array.isArray(txn.entries)) {
-                    return txn.entries.some(entry => String(entry.accountId) === isolateId || String(entry.account?.id) === isolateId);
-                }
-                
-                return false;
+
+                return accountsAssociated.includes(targetId);
             });
         }
 
@@ -1026,7 +1228,7 @@ const Transactions = () => {
     }, [groupedTransactions, searchTerm, appliedFilters]);
 
     const insightsData = useMemo(() => {
-        const trendMap = {}; 
+        const trendMap = {};
         const gstTrendMap = {};
         const categoryMap = {};
         let totalIncome = 0;
@@ -1040,13 +1242,9 @@ const Transactions = () => {
         filteredTransactions.forEach(t => {
             const rawDate = new Date(t.txnDate || new Date());
             const dateStr = !isNaN(rawDate) ? rawDate.toISOString().split('T')[0] : 'Unknown';
-            const baseAmountVal = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
+            const amount = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
             const localDisplayAmount = Number(t.finalAmountLocal ?? t.amountLocal ?? t.amountBase ?? 0);
-            
-            const rowCount = Array.isArray(t.originalTxnIds) && t.originalTxnIds.length > 0 ? t.originalTxnIds.length : 1;
-            const amount = baseAmountVal * rowCount;
-            
-            const displayRate = localDisplayAmount > 0 ? baseAmountVal / localDisplayAmount : 1;
+            const displayRate = localDisplayAmount > 0 ? amount / localDisplayAmount : 1;
             const type = (t.transactionType?.name || t.txnType || '').toLowerCase();
 
             if (!trendMap[dateStr]) trendMap[dateStr] = { date: dateStr, income: 0, expense: 0 };
@@ -1058,16 +1256,16 @@ const Transactions = () => {
             } else if (type === 'expense') {
                 trendMap[dateStr].expense += amount;
                 totalExpense += amount;
-                
+
                 const catName = t.category?.name || 'Uncategorized';
                 if (!categoryMap[catName]) categoryMap[catName] = 0;
                 categoryMap[catName] += amount;
 
                 const safeDisplayRate = Number.isFinite(displayRate) && displayRate > 0 ? displayRate : 1;
-                const gstTotal = Number(t.gstTotal ?? 0) * safeDisplayRate * rowCount;
-                const cgstAmount = Number(t.cgstAmount ?? 0) * safeDisplayRate * rowCount;
-                const sgstAmount = Number(t.sgstAmount ?? 0) * safeDisplayRate * rowCount;
-                const igstAmount = Number(t.igstAmount ?? 0) * safeDisplayRate * rowCount;
+                const gstTotal = Number(t.gstTotal ?? 0) * safeDisplayRate;
+                const cgstAmount = Number(t.cgstAmount ?? 0) * safeDisplayRate;
+                const sgstAmount = Number(t.sgstAmount ?? 0) * safeDisplayRate;
+                const igstAmount = Number(t.igstAmount ?? 0) * safeDisplayRate;
 
                 if (gstTotal > 0 || cgstAmount > 0 || sgstAmount > 0 || igstAmount > 0) {
                     taxableExpenseCount += 1;
@@ -1082,7 +1280,7 @@ const Transactions = () => {
         });
 
         const trendData = Object.values(trendMap)
-            .sort((a,b) => new Date(a.date) - new Date(b.date))
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
             .map(d => ({
                 ...d,
                 displayDate: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
@@ -1094,11 +1292,11 @@ const Transactions = () => {
                 ...d,
                 displayDate: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
             }));
-            
+
         const categoryData = Object.entries(categoryMap)
             .map(([name, value]) => ({ name, value }))
             .sort((a, b) => b.value - a.value)
-            .slice(0, 5); 
+            .slice(0, 5);
 
         const gstBreakdownData = [
             { name: 'CGST', value: totalCgstPaid, color: '#4A8AF4' },
@@ -1106,94 +1304,7 @@ const Transactions = () => {
             { name: 'IGST', value: totalIgstPaid, color: '#F59E0B' }
         ].filter((entry) => entry.value > 0);
 
-        // Outlier Detection (Z-Score Method for better small-N support)
-        const parseAmount = (val) => {
-            if (!val) return 0;
-            const parsed = parseFloat(String(val).replace(/,/g, ''));
-            return isNaN(parsed) ? 0 : Math.abs(parsed);
-        };
-
-        const amounts = filteredTransactions
-            .map(t => parseAmount(t.amountBaseCurrency ?? t.amountBase ?? t.finalAmountLocal ?? t.amountLocal))
-            .filter(a => a > 0);
-            
-        let outliers = { lower: -1, upper: Infinity }; // default to impossible bounds
-        if (amounts.length >= 2) {
-            const maxVal = Math.max(...amounts);
-            const minVal = Math.min(...amounts);
-            
-            // Only flag if there is a distinct difference between values
-            if (maxVal > minVal) {
-                outliers = { 
-                    lower: minVal, 
-                    upper: maxVal 
-                };
-            }
-        }
-
-        // --- Frequency Anomaly Logic ---
-        const partyDayCounts = {};
-        filteredTransactions.forEach(t => {
-            const categoryName = typeof t.category === 'object' ? t.category?.name : String(t.category || t.categoryId || '');
-            const groupingKey = (t.contact || t.payee || t.counterpartyName || t.party || categoryName || '').trim();
-            if (!groupingKey) return;
-            const dateStr = t.date ? String(t.date).split('T')[0] : null;
-            if (!dateStr) return;
-            
-            if (!partyDayCounts[groupingKey]) partyDayCounts[groupingKey] = { totalTx: 0, days: {} };
-            if (!partyDayCounts[groupingKey].days[dateStr]) partyDayCounts[groupingKey].days[dateStr] = 0;
-            partyDayCounts[groupingKey].days[dateStr]++;
-            partyDayCounts[groupingKey].totalTx++;
-        });
-
-        const anomalousPartyDays = new Set();
-        Object.entries(partyDayCounts).forEach(([party, data]) => {
-            const uniqueDays = Object.keys(data.days).length;
-            if (uniqueDays > 0) { 
-                const avgPerDay = data.totalTx / uniqueDays;
-                Object.entries(data.days).forEach(([day, count]) => {
-                    // Flag as anomaly if there are 3+ transactions on a single day,
-                    // AND it's strictly > 2.5x the average daily rate.
-                    if (count >= 3 && count > 2.5 * avgPerDay) {
-                        anomalousPartyDays.add(`${party}|${day}`);
-                    }
-                });
-            }
-        });
-        // -------------------------------
-
-        // --- Duplicate Transaction Anomaly ---
-        const duplicateTransactions = new Set();
-        const transactionFingerprints = new Map();
-        
-        filteredTransactions.forEach(t => {
-            const categoryName = typeof t.category === 'object' ? t.category?.name : String(t.category || t.categoryId || '');
-            const partyKey = (t.contact || t.payee || t.counterpartyName || t.party || '').trim();
-            
-            const rawDate = t.txnDate || t.date;
-            const dateStr = rawDate ? new Date(rawDate).toISOString().split('T')[0] : null;
-            
-            const amountVal = parseAmount(t.amountBaseCurrency ?? t.amountBase ?? t.finalAmountLocal ?? t.amountLocal);
-            const branchName = Array.isArray(t.branchNames) && t.branchNames.length > 0 
-                ? t.branchNames[0] 
-                : (typeof t.branch === 'object' ? t.branch?.name : String(t.branch || ''));
-            
-            if (dateStr && amountVal > 0) {
-                const fingerprint = `${dateStr}|${amountVal}|${partyKey}|${categoryName}|${branchName}`;
-                if (!transactionFingerprints.has(fingerprint)) {
-                    transactionFingerprints.set(fingerprint, [t.id]);
-                } else {
-                    transactionFingerprints.get(fingerprint).push(t.id);
-                }
-            }
-        });
-
-        transactionFingerprints.forEach((ids) => {
-            if (ids.length > 1) {
-                ids.forEach(id => duplicateTransactions.add(id));
-            }
-        });
-        // ------------------------------------
+        // Anomalies logic removed-----
 
         return {
             trendData,
@@ -1207,9 +1318,6 @@ const Transactions = () => {
             totalSgstPaid,
             totalIgstPaid,
             taxableExpenseCount,
-            outliers,
-            anomalousPartyDays,
-            duplicateTransactions,
             netFlow: totalIncome - totalExpense
         };
     }, [filteredTransactions]);
@@ -1232,7 +1340,7 @@ const Transactions = () => {
             const p = (txn.contact || txn.payee || txn.counterpartyName || txn.party || '').trim();
             if (p) uniqueSet.add(p);
         });
-        const arr = Array.from(uniqueSet).sort((a,b) => a.localeCompare(b));
+        const arr = Array.from(uniqueSet).sort((a, b) => a.localeCompare(b));
         return arr.map(p => ({ label: p, value: p }));
     }, [transactions]);
 
@@ -1248,32 +1356,6 @@ const Transactions = () => {
                 : selectedBranch?.id
                     ? Number(selectedBranch.id)
                     : 'all';
-
-        let mappedRows = undefined;
-        if (gridRef.current?.api) {
-            mappedRows = [];
-            gridRef.current.api.forEachNodeAfterFilterAndSort(node => {
-                const d = node.data;
-                if (!d) return;
-
-                mappedRows.push({
-                    id: d.id,
-                    name: d.name || '',
-                    txnDate: d.txnDate || null,
-                    txnType: (d.transactionType?.name || d.txnType || '').toLowerCase(),
-                    status: d.status ?? null,
-                    contact: d.contact || d.payee || d.counterpartyName || d.party || '',
-                    accountName: d.account?.name || '-',
-                    categoryName: d.category?.name || '-',
-                    notes: d.notes || d.description || '',
-                    amount: Number(d.amountLocal ?? d.amountBaseCurrency ?? d.finalAmountLocal ?? d.amountBase ?? 0),
-                    branchNames: Array.isArray(d.groupBranchIds) 
-                        ? d.groupBranchIds.map(id => branches?.find(b => String(b.id) === String(id))?.name || 'Unknown')
-                        : (d.branch?.name ? [d.branch.name] : ['Unknown']),
-                    createdByName: d.createdByName || d.createdByDisplayName || d.creatorName || '-'
-                });
-            });
-        }
 
         const normalizedAppliedFilters = {
             ...(appliedFilters.type !== 'all' ? { scope: appliedFilters.type } : {}),
@@ -1293,9 +1375,7 @@ const Transactions = () => {
             searchTerm,
             format,
             targetCurrency: appliedFilters.currency,
-            appliedFilters: normalizedAppliedFilters,
-            mappedRows,
-            visibleColumns: Object.keys(visibleColumns).filter(k => visibleColumns[k])
+            appliedFilters: normalizedAppliedFilters
         };
     };
 
@@ -1313,15 +1393,126 @@ const Transactions = () => {
     };
 
     // Export Handlers
+    const handleClientExportExcel = () => {
+        if (!gridRef.current || !gridRef.current.api) return;
+        
+        // Dynamically load xlsx from CDN to generate native .xlsx without backend
+        if (!window.XLSX) {
+            const script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+            script.onload = () => executeExcelExport();
+            document.head.appendChild(script);
+        } else {
+            executeExcelExport();
+        }
+    };
+
+    const executeExcelExport = () => {
+        if (!gridRef.current || !gridRef.current.api) return;
+        const now = new Date();
+        const yyyy = now.getFullYear();
+        const mm = String(now.getMonth() + 1).padStart(2, '0');
+        const dd = String(now.getDate()).padStart(2, '0');
+        const fileName = `transactions_export_${yyyy}-${mm}-${dd}.xlsx`;
+
+        let rowData = [];
+        
+        // Push Header Row
+        const headers = TXN_TABLE_COLUMNS.filter(col => visibleColumns[col.key]).map(col => col.label);
+        rowData.push(headers);
+
+        // Push Data Rows
+        let count = 0;
+        gridRef.current.api.forEachNodeAfterFilterAndSort(node => {
+            if (!node.data) return;
+            const txn = node.data;
+            let row = [];
+            
+            TXN_TABLE_COLUMNS.forEach(col => {
+                if (!visibleColumns[col.key]) return;
+                
+                let val = '-';
+                if (col.key === 'date') val = formatDate(txn.txnDate);
+                if (col.key === 'party') val = txn.contact || txn.payee || txn.counterpartyName || txn.party || '-';
+                if (col.key === 'type') val = txn.transactionType?.name || txn.txnType || '-';
+                if (col.key === 'branch') val = txn.branchNames?.length > 0 ? txn.branchNames.join(', ') : '-';
+                if (col.key === 'account') val = txn.account?.name || '-';
+                if (col.key === 'category') val = txn.category?.name || '-';
+                if (col.key === 'notes') val = txn.notes || txn.description || '-';
+                if (col.key === 'amount') val = Number(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal) || 0;
+                if (col.key === 'createdBy') val = txn.createdByName || txn.createdByDisplayName || txn.creatorName || '-';
+                if (col.key === 'id') val = count + 1;
+                
+                row.push(val);
+            });
+            rowData.push(row);
+            count++;
+        });
+
+        const ws = window.XLSX.utils.aoa_to_sheet(rowData);
+        const wb = window.XLSX.utils.book_new();
+        window.XLSX.utils.book_append_sheet(wb, ws, "Transactions");
+        window.XLSX.writeFile(wb, fileName);
+    };
+
+    const handleClientExportPDF = () => {
+        const printContainer = document.getElementById('txn-print-container');
+        if (printContainer && gridRef.current && gridRef.current.api) {
+            let html = '<h1 style="font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 15px; color: #000; text-transform: uppercase; letter-spacing: 1px;">JKSOL</h1><table><thead><tr>';
+            TXN_TABLE_COLUMNS.forEach(col => {
+                if (visibleColumns[col.key]) {
+                    html += `<th class="${col.key === 'amount' ? 'text-right' : 'text-left'}">${col.label}</th>`;
+                }
+            });
+            html += '</tr></thead><tbody>';
+
+            let count = 0;
+            gridRef.current.api.forEachNodeAfterFilterAndSort(node => {
+                if (!node.data) return;
+                const txn = node.data;
+                html += '<tr>';
+                TXN_TABLE_COLUMNS.forEach(col => {
+                    if (!visibleColumns[col.key]) return;
+                    
+                    let val = '-';
+                    if (col.key === 'date') val = formatDate(txn.txnDate);
+                    if (col.key === 'party') val = `<span class="truncate block max-w-[200px]">${txn.contact || txn.payee || txn.counterpartyName || txn.party || '-'}</span>`;
+                    if (col.key === 'type') val = txn.transactionType?.name || txn.txnType || '-';
+                    if (col.key === 'branch') val = txn.branchNames?.length > 0 ? txn.branchNames.join(', ') : '-';
+                    if (col.key === 'account') val = txn.account?.name || '-';
+                    if (col.key === 'category') val = txn.category?.name || '-';
+                    if (col.key === 'notes') val = `<span class="truncate block max-w-[200px]">${txn.notes || txn.description || '-'}</span>`;
+                    if (col.key === 'amount') val = `<span class="font-medium">${formatCurrency(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal)}</span>`;
+                    if (col.key === 'createdBy') val = txn.createdByName || txn.createdByDisplayName || txn.creatorName || '-';
+                    if (col.key === 'id') val = count + 1;
+                    
+                    html += `<td class="${col.key === 'amount' ? 'text-right' : ''}">${val}</td>`;
+                });
+                html += '</tr>';
+                count++;
+            });
+
+            if (count === 0) {
+                 const colCount = Object.values(visibleColumns).filter(Boolean).length || 1;
+                 html += `<tr><td colspan="${colCount}" class="text-center py-4">No transactions found</td></tr>`;
+            }
+            html += '</tbody></table>';
+            printContainer.innerHTML = html;
+        }
+        window.print();
+    };
+
     const handleExportExcel = async () => {
         try {
-            const response = await apiService.transactions.export(buildExportPayload('xlsx'));
+            const response = await apiService.transactions.export(buildExportPayload('csv'));
             const exportData = response?.data || response;
             const base64Content = exportData?.fileContent;
-            const fileName = exportData?.fileName || `transactions-${new Date().toISOString().split('T')[0]}.xlsx`;
-            const mimeType = exportData?.mimeType || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            const fileName = exportData?.fileName || 'transactions-export.csv';
+            const mimeType = exportData?.mimeType || 'text/csv;charset=utf-8';
 
-            if (!base64Content) throw new Error('Missing export file content');
+            if (!base64Content) {
+                throw new Error('Missing export file content');
+            }
 
             const binaryString = window.atob(base64Content);
             const fileBytes = new Uint8Array(binaryString.length);
@@ -1331,9 +1522,8 @@ const Transactions = () => {
 
             downloadExportFile(fileBytes, fileName, mimeType);
         } catch (error) {
-            const message = error?.response?.data?.message || error?.message || 'Failed to export to Excel';
-            console.error('Excel export failed:', error);
-            alert(message);
+            console.error('Failed to export transactions to Excel:', error);
+            alert('Failed to export transactions');
         }
     };
 
@@ -1343,28 +1533,10 @@ const Transactions = () => {
                 responseType: 'blob'
             });
 
-            const textResponse = await response.data.text();
-            // The backend HTML includes a <script> that auto-prints. We strip it here to avoid double print dialogs.
-            const cleanHtml = textResponse.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
-            
-            const iframe = document.createElement('iframe');
-            iframe.style.display = 'none';
-            document.body.appendChild(iframe);
-            
-            iframe.contentDocument.open();
-            iframe.contentDocument.write(cleanHtml);
-            iframe.contentDocument.close();
-
-            // Wait a tiny bit for the browser to render the written HTML
-            setTimeout(() => {
-                iframe.contentWindow.focus();
-                iframe.contentWindow.print();
-                
-                // Cleanup after a delay to allow the print dialog to appear
-                setTimeout(() => {
-                    document.body.removeChild(iframe);
-                }, 10000);
-            }, 500);
+            const htmlBlob = new Blob([response.data], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(htmlBlob);
+            window.open(url, '_blank', 'noopener,noreferrer');
+            setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (error) {
             console.error('Failed to export transactions to PDF:', error);
             alert('Failed to export transactions');
@@ -1408,7 +1580,6 @@ const Transactions = () => {
         setDeleteDialog({
             open: true,
             id: txn.id,
-            ids: txn.originalTxnIds?.length > 0 ? txn.originalTxnIds : [txn.id],
             label: String(txn.contact || txn.payee || txn.counterpartyName || txn.name || '').trim(),
             loading: false
         });
@@ -1421,19 +1592,18 @@ const Transactions = () => {
     };
 
     const handleConfirmDelete = async () => {
-        if (!deleteDialog.id && (!deleteDialog.ids || deleteDialog.ids.length === 0)) return;
+        if (!deleteDialog.id) return;
 
         setDeleteDialog((current) => ({ ...current, loading: true }));
 
         try {
-            const idsToDelete = deleteDialog.ids?.length > 0 ? deleteDialog.ids : [deleteDialog.id];
-            await Promise.all(idsToDelete.map(id => apiService.transactions.delete(id)));
+            await apiService.transactions.delete(deleteDialog.id);
             notifyTransactionDataChanged();
             await fetchTransactions();
             setDeleteDialog(createInitialDeleteDialog());
         } catch (error) {
-            console.error("Failed to delete transaction(s):", error);
-            const msg = error.response?.data?.message || error.message || "Failed to delete transaction(s)";
+            console.error("Failed to delete transaction:", error);
+            const msg = error.response?.data?.message || error.message || "Failed to delete transaction";
             alert(msg);
             setDeleteDialog((current) => ({ ...current, loading: false }));
         }
@@ -1447,7 +1617,7 @@ const Transactions = () => {
                 if (isImportModalOpen || deleteDialog.open || drawerState.open || attachmentViewer.isOpen || fullScreenAttachment.isOpen) {
                     return;
                 }
-                
+
                 const sidebar = document.getElementById('app-main-sidebar');
                 if (sidebar) {
                     sidebar.focus({ preventScroll: true });
@@ -1481,19 +1651,20 @@ const Transactions = () => {
     }, [filteredTransactions]);
 
     const hasBranchColumn = selectedBranch?.id === 'all' || selectedBranch?.id === 'multi';
-    
+
 
     return (
-        <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="transactions-tablet-page flex flex-col min-h-full overflow-visible">
 
             <style>{`
                 @media print {
-                    @page { margin: 12mm; size: landscape; }
+                    @page { margin: 0; size: landscape; }
                     html, body {
                         background-color: #ffffff !important;
                         color: #000000 !important;
                         -webkit-print-color-adjust: exact !important;
                         print-color-adjust: exact !important;
+                        padding: 12mm !important;
                     }
                     /* Hide unnecessary elements */
                     nav, aside, header, footer, .sidebar, .print\\:hidden, button {
@@ -1551,7 +1722,8 @@ const Transactions = () => {
                         border-bottom: 1px solid #000000 !important;
                         border-left: 1px solid #000000 !important;
                         border-right: 1px solid #000000 !important;
-                        padding: 8px !important;
+                        padding: 4px 6px !important;
+                        font-size: 10px !important;
                         color: #000000 !important;
                         background: #ffffff !important;
                     }
@@ -1586,187 +1758,143 @@ const Transactions = () => {
                     <PageHeader
                         title="Transactions"
                         breadcrumbs={['Transactions', 'List']}
-                        tabs={transactionTabs}
-                        activeTab="transactions"
                     />
                 )}
-                className="flex-1 flex flex-col min-h-0 lg:overflow-y-auto"
-                contentClassName="p-0 lg:p-0 lg:overflow-visible"
-                cardClassName="border-none shadow-none rounded-none overflow-visible lg:overflow-visible bg-transparent lg:max-h-none"
+                className="!overflow-visible lg:!overflow-visible"
+                contentClassName="p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
+                cardClassName="border-none shadow-none rounded-none !overflow-visible max-h-none lg:!max-h-none bg-white"
             >
                 <div className="flex flex-col min-h-full h-auto">
 
-                {/* Print Only Header */}
-                <div className="hidden print:block text-center py-6 mb-4">
-                    <h1 className="text-2xl font-bold text-gray-900 uppercase tracking-widest">Transactions List</h1>
-                </div>
-
-                {/* Global Filters Row */}
-                <div className="px-5 pt-3 pb-1.5 flex flex-wrap items-center gap-3 print:hidden relative z-20 w-full bg-transparent">
-                    <DateRangePicker 
-                        startDate={appliedFilters.dateRange?.startDate}
-                        endDate={appliedFilters.dateRange?.endDate}
-                        selectedPreset={appliedFilters.dateRange?.preset}
-                        presetOptions={datePresets}
-                        onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
-                        className="h-[32px]"
-                    />
-                    
-                    <BranchSelector hideSettings={true} />
-
-                    <CurrencySelector 
-                        value={appliedFilters.currency}
-                        onChange={(val) => {
-                            setAppliedFilters(prev => ({ ...prev, currency: val }));
-                            updatePreferences({ currency: val });
-                        }}
-                    />
-
-                    <FilterDropdown
-                        value={appliedFilters.party}
-                        onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
-                        placeholder="Party"
-                        options={availableParties}
-                        showSelectAll
-                        selectAllLabel="Select All"
-                        allDisplayLabel="All Parties"
-                        darkActiveState={true}
-                    />
-                </div>
-
-                {appliedFilters.accountId && (
-                    <div className="px-5 pb-2 text-xs print:hidden animate-in fade-in duration-300">
-                        <span className="inline-flex items-center gap-1.5 bg-[#EEF0FC] text-[#4A8AF4] px-2.5 py-1 rounded-md font-semibold border border-[#D5DDFB]">
-                            Isolated Account View
-                            <button 
-                                onClick={() => {
-                                    setAppliedFilters(p => ({ ...p, accountId: null }));
-                                    // Remove from URL gracefully
-                                    const params = new URLSearchParams(searchParams);
-                                    params.delete('accountId');
-                                    navigate(`?${params.toString()}`, { replace: true });
-                                }} 
-                                className="hover:text-blue-900 ml-1 focus:outline-none"
-                            >
-                                <X size={12} className="stroke-[3px]" />
-                            </button>
-                        </span>
+                    {/* Print Only Header */}
+                    <div className="hidden text-center py-6 mb-4">
+                        <h1 className="text-2xl font-bold text-gray-900 uppercase tracking-widest">Transactions List</h1>
                     </div>
-                )}
 
-                {/* Always-Visible KPI Strip & Conditionally Visible Charts */}
-                <div className="px-5 pt-2 pb-0 w-full animate-in fade-in duration-300 relative z-10">
-                    <div className="px-2 py-2">
-                        {/* Metrics Row */}
-                        <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-lg border border-white/60 bg-emerald-50 flex items-center justify-center shrink-0">
-                                    <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
+                    {/* Global Filters Row */}
+                    <div className="px-5 pt-3 pb-1.5 flex flex-col md:flex-row justify-between md:items-center gap-3 print:hidden relative z-20 w-full bg-transparent">
+                        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                            <DateRangePicker
+                                startDate={appliedFilters.dateRange?.startDate}
+                                endDate={appliedFilters.dateRange?.endDate}
+                                selectedPreset={appliedFilters.dateRange?.preset}
+                                presetOptions={datePresets}
+                                onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
+                                className="h-[32px]"
+                            />
+
+                            <BranchSelector flatSelectAll />
+
+                            <CurrencySelector
+                                value={appliedFilters.currency}
+                                onChange={(val) => {
+                                    setAppliedFilters(prev => ({ ...prev, currency: val }));
+                                    updatePreferences({ currency: val });
+                                }}
+                            />
+
+                            <FilterDropdown
+                                value={appliedFilters.party}
+                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
+                                placeholder="Party"
+                                options={availableParties}
+                                showSelectAll
+                                showOptionTicksWhenAllSelected
+                                flatSelectAll
+                                showApplyFooter
+                                selectAllLabel="All Parties"
+                                allDisplayLabel="All Parties"
+                                buttonClassName="w-[120px] text-slate-800 font-semibold"
+                            />
+                        </div>
+                        <div className="shrink-0 flex items-center justify-start md:justify-end gap-1 flex-none mt-2 md:mt-0">
+                            <button
+                                onClick={() => navigate('/parties')}
+                                className="group flex items-center gap-1.5 px-3 py-1.5 outline-none"
+                            >
+                                <Users size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" /> 
+                                <span className="hidden sm:inline text-[13px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Parties</span>
+                            </button>
+                            <button
+                                onClick={() => navigate('/category')}
+                                className="group flex items-center gap-1.5 px-3 py-1.5 outline-none ml-1"
+                            >
+                                <Folders size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" /> 
+                                <span className="hidden sm:inline text-[13px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Categories</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Always-Visible KPI Strip & Conditionally Visible Charts */}
+                    <div className="px-5 pt-4 pb-2 w-full animate-in fade-in duration-300 print:hidden">
+                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
+                            <div className="flex flex-wrap items-center gap-8">
+                                <div className="flex items-center gap-3 min-w-fit">
+                                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
+                                        <ArrowDownLeft size={18} className="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Inflow</div>
+                                        <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
+                                    </div>
                                 </div>
-                                <div>
-                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Inflow</div>
-                                    <div className="text-[17px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
+                                <div className="flex items-center gap-3 min-w-fit">
+                                    <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
+                                        <ArrowUpRight size={18} className="text-rose-600" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Outflow</div>
+                                        <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
+                                    </div>
                                 </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className="w-9 h-9 rounded-lg border border-white/60 bg-rose-50 flex items-center justify-center shrink-0">
-                                    <ArrowUpRight size={16} className="text-rose-600" strokeWidth={2.5} />
-                                </div>
-                                <div>
-                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Outflow</div>
-                                    <div className="text-[17px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-3">
-                                <div className={cn("w-9 h-9 rounded-lg border border-white/60 flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
-                                    <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} strokeWidth={2.5} />
-                                </div>
-                                <div>
-                                    <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Net Flow</div>
-                                    <div className={cn("text-[17px] font-bold tracking-tight whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
-                                        {formatCurrency(insightsData.netFlow)}
+                                <div className="flex items-center gap-3 min-w-fit pl-6 border-l border-gray-100">
+                                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
+                                        <Activity size={18} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Net Flow</div>
+                                        <div className={cn("text-[15px] font-extrabold whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                            {formatCurrency(insightsData.netFlow)}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-
-                        {/* Chart Toggle */}
-                        <div className="mt-4 border-t border-gray-50 flex justify-between items-center">
+                        <div className="mt-4 flex justify-between items-center">
                             <button
                                 type="button"
                                 onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus:bg-[#F0F9FF] focus:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
                             >
                                 <TrendingUp size={14} />
-                                {isInsightsExpanded ? "Hide Charts" : "Show Charts"}
+                                {isInsightsExpanded ? "Hide Chart" : "Show Chart"}
                                 {isInsightsExpanded ? (
                                     <ChevronUp size={14} />
                                 ) : (
                                     <ChevronDown size={14} />
                                 )}
                             </button>
-                        </div>
-                    </div>
-
-                    {/* Charts Area */}
-                    {isInsightsExpanded && (
-                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
-                            <div className="lg:col-span-4">
-                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                    <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
-                                </h3>
-                                <div className="h-[220px] w-full">
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                            <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
-                                            <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} 
-                                                tickFormatter={(val) => {
-                                                    if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-                                                    if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
-                                                    return val;
-                                                }}
-                                            />
-                                            <Tooltip
-                                                cursor={{ fill: 'transparent' }}
-                                                content={({ active, payload, label }) => {
-                                                    if (active && payload && payload.length) {
-                                                        return (
-                                                            <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
-                                                                <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
-                                                                {payload.map((entry, index) => (
-                                                                    <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
-                                                                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                        <span className="text-gray-600 w-16">{entry.name}:</span>
-                                                                        <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
-                                                                            {formatCurrency(entry.value)}
-                                                                        </span>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                }}
-                                            />
-                                            <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                            <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                                        </BarChart>
-                                    </ResponsiveContainer>
+                            {isInsightsExpanded && (
+                                <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold">
+                                    <Calendar size={13} />
+                                    <span>Last 30 days</span>
                                 </div>
-                            </div>
+                            )}
+                        </div>
 
-                            <div className="lg:col-span-4">
-                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                    <FileText size={14} className="text-indigo-600" /> GST Paid Trend
-                                </h3>
-                                <div className="h-[220px] w-full">
-                                    {insightsData.totalGstPaid > 0 ? (
+                        {/* Charts Area */}
+                        {isInsightsExpanded && (
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
+                                <div className="lg:col-span-6">
+                                    <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                        <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
+                                    </h3>
+                                    <div className="h-[220px] w-full">
                                         <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+                                            <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
                                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                                 <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} 
+                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
                                                     tickFormatter={(val) => {
                                                         if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
                                                         if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
@@ -1778,111 +1906,96 @@ const Transactions = () => {
                                                     content={({ active, payload, label }) => {
                                                         if (active && payload && payload.length) {
                                                             return (
-                                                                <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
-                                                                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
-                                                                    <div className="flex items-center justify-between gap-4">
-                                                                        <span className="text-[13px] font-medium text-gray-600">GST Paid:</span>
-                                                                        <span className="text-[14px] font-bold text-indigo-600">{formatCurrency(payload[0].value)}</span>
-                                                                    </div>
+                                                                <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
+                                                                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
+                                                                    {payload.map((entry, index) => (
+                                                                        <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
+                                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                            <span className="text-gray-600 w-16">{entry.name}:</span>
+                                                                            <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
+                                                                                {formatCurrency(entry.value)}
+                                                                            </span>
+                                                                        </div>
+                                                                    ))}
                                                                 </div>
                                                             );
                                                         }
                                                         return null;
                                                     }}
                                                 />
-                                                <Bar dataKey="gstPaid" name="GST Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                                             </BarChart>
                                         </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
-                                            <FileText size={24} className="text-gray-200" />
-                                            <span>No GST paid in this view</span>
-                                        </div>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                            
-                            <div className="lg:col-span-4">
-                                <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                    <PieChartIcon size={14} className="text-primary" /> Top Expense Categories
-                                </h3>
-                                <div className="h-[220px] w-full flex items-center justify-center relative">
-                                    {insightsData.categoryData.length > 0 ? (
-                                        <React.Fragment>
+
+                                <div className="lg:col-span-6">
+                                    <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                        <FileText size={14} className="text-black" /> Tax Paid
+                                    </h3>
+                                    <div className="h-[220px] w-full">
+                                        {insightsData.totalGstPaid > 0 ? (
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <PieChart>
-                                                    <Pie
-                                                        data={insightsData.categoryData}
-                                                        cx="50%"
-                                                        cy="50%"
-                                                        innerRadius={60}
-                                                        outerRadius={80}
-                                                        paddingAngle={5}
-                                                        dataKey="value"
-                                                        stroke="none"
-                                                    >
-                                                        {insightsData.categoryData.map((entry, index) => (
-                                                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                                                        ))}
-                                                    </Pie>
-                                                    <Tooltip 
-                                                        content={({ active, payload }) => {
+                                                <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+                                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                                    <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
+                                                    <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
+                                                        tickFormatter={(val) => {
+                                                            if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                                            if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                            return val;
+                                                        }}
+                                                    />
+                                                    <Tooltip
+                                                        cursor={{ fill: 'transparent' }}
+                                                        content={({ active, payload, label }) => {
                                                             if (active && payload && payload.length) {
                                                                 return (
-                                                                    <div className="bg-white border border-gray-100 px-3 py-2 rounded-lg shadow-xl shadow-gray-200/50">
-                                                                        <div className="text-[11px] font-bold text-gray-500 mb-1">{payload[0].name}</div>
-                                                                        <div className="text-[13px] font-bold text-rose-600">{formatCurrency(payload[0].value)}</div>
+                                                                    <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
+                                                                        <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
+                                                                        <div className="flex items-center justify-between gap-4">
+                                                                            <span className="text-[13px] font-medium text-gray-600">Tax Paid:</span>
+                                                                            <span className="text-[14px] font-bold text-black">{formatCurrency(payload[0].value)}</span>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             }
                                                             return null;
                                                         }}
                                                     />
-                                                </PieChart>
+                                                    <Bar dataKey="gstPaid" name="Tax Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                                </BarChart>
                                             </ResponsiveContainer>
-                                            
-                                            {/* Custom Legend / Summary */}
-                                            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center pointer-events-none">
-                                                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Top 5</div>
-                                                <div className="text-[14px] font-extrabold text-gray-900 leading-tight">
-                                                    {formatCurrency(insightsData.categoryData.reduce((acc, curr) => acc + curr.value, 0))}
-                                                </div>
+                                        ) : (
+                                            <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
+                                                <FileText size={24} className="text-gray-200" />
+                                                <span>No tax paid in this view</span>
                                             </div>
-                                        </React.Fragment>
-                                    ) : (
-                                        <div className="text-[12px] font-medium text-gray-400 text-center flex flex-col items-center gap-2">
-                                            <PieChartIcon size={24} className="text-gray-200" />
-                                            <span>No expenses logged for this view</span>
-                                        </div>
-                                    )}
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    )}
-                </div>
 
-                {/* Custom List Header (Table Actions) */}
-                <div className="px-5 pb-4 pt-1.5 flex flex-col xl:flex-row xl:items-center justify-between print:hidden gap-4 relative z-10 w-full">
-                    {/* LEFT SIDE: Search & Primary Action */}
-                    <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
-                        <div className="flex items-center gap-2">
-                            <div className="relative group w-full sm:w-[240px]">
-                                <Search
-                                    size={14}
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
-                                />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search"
-                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                />
                             </div>
+                        )}
+                    </div>
+
+                    {/* Custom List Header (Table Actions) */}
+                    <div className="px-5 pb-4 pt-1.5 flex flex-col xl:flex-row xl:items-center justify-between print:hidden gap-4 relative z-10 w-full">
+                        {/* LEFT SIDE: Actions */}
+                        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
+                            <button
+                                onClick={() => setDrawerState({ open: true, transaction: null })}
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px]"
+                                title="Add Transaction"
+                            >
+                                <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
+                                <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Transaction</span>
+                            </button>
 
                             <button
                                 onClick={() => fetchTransactions()}
-                                className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                                className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
                                 title="Refresh table data"
                             >
                                 <RefreshCcw
@@ -1891,75 +2004,97 @@ const Transactions = () => {
                                     className={cn(loading && "animate-spin text-primary")}
                                 />
                             </button>
-
-                        </div>
-                    </div>
-
-                    {/* RIGHT SIDE: Import / Export / View Controls */}
-                    <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2 w-full xl:w-auto">
-                        <button
-                            ref={importBtnRef}
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                        >
-                            <FileSpreadsheet size={14} className="text-emerald-600" />
-                            <span className="hidden sm:inline">Import</span>
-                        </button>
-
-                        <div className="flex border border-gray-200 rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)] bg-white divide-x divide-gray-200 shrink-0">
-                            <button
-                                onClick={handleExportExcel}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] rounded-l-md"
-                                title="Export to Excel"
-                            >
-                                <Download size={14} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                                <span className="hidden sm:inline">Excel</span>
-                            </button>
-                            <button
-                                onClick={handleExportPDF}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center text-gray-600 hover:text-rose-600 hover:bg-rose-50 focus:outline-none focus-visible:bg-rose-50 focus-visible:text-rose-600 focus-visible:ring-2 focus-visible:ring-rose-100 transition-all font-medium text-[13px] rounded-r-md"
-                                title="Export to PDF"
-                            >
-                                <FileText size={14} className="group-hover:text-rose-500 group-focus-visible:text-rose-500 transition-colors" />
-                                <span className="hidden sm:inline">PDF</span>
-                            </button>
                         </div>
 
-                        
+                        {/* RIGHT SIDE: Filters & View Controls */}
+                        <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2 w-full xl:w-auto">
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={() => setIsImportModalOpen(true)}
+                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                >
+                                    <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                    <span className="hidden sm:inline">Import</span>
+                                </button>
+
+                            <div className="relative" ref={exportDropdownRef}>
+                                <button
+                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                >
+                                    <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                    <span className="hidden sm:inline">Export</span>
+                                </button>
+
+                                {isExportDropdownOpen && (
+                                    <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <button
+                                            onClick={() => {
+                                                setIsExportDropdownOpen(false);
+                                                handleClientExportExcel();
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                        >
+                                            <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                            Export as Excel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsExportDropdownOpen(false);
+                                                handleClientExportPDF();
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                        >
+                                            <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                            Export as PDF
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
                         <FilterDropdown
                             value={appliedFilters.type}
                             onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
                             placeholder="Type"
                             options={[
-                                { label: "All Types", value: "all" },
                                 { label: "Income", value: "income" },
                                 { label: "Expense", value: "expense" },
                                 { label: "Transfer", value: "transfer" },
                                 { label: "Investment", value: "investment" },
                             ]}
+                            isMultiSelect={true}
+                            showSelectAll={false}
+                            hideApplyButton={true}
+                            allDisplayLabel="All Types"
+                            buttonClassName="w-[110px]"
                         />
-                        
-                        <ColumnVisibilityDropdown 
+
+                        <ColumnVisibilityDropdown
                             columns={TXN_TABLE_COLUMNS}
                             visibleColumns={visibleColumns}
                             setVisibleColumns={setVisibleColumns}
                         />
 
-                        <button
-                            onClick={() => setDrawerState({ open: true, transaction: null })}
-                            className="group w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-                            title="Add Transaction"
-                        >
-                            <Plus size={16} strokeWidth={2.5} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                        </button>
+                        <div className="relative group w-full xl:w-[240px] max-w-[300px]">
+                            <Search
+                                size={14}
+                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
+                            />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search"
+                                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <div className="w-full px-5 pb-8 relative" aria-busy={loading}>
-                    <div 
-                        style={{ height: "600px", width: "100%" }} 
-                        className={`border border-gray-200 rounded-lg overflow-hidden transition-opacity duration-300 ${loading ? 'opacity-50' : 'opacity-100'}`}
-                    >
+                <div className="w-full px-5 pb-1 relative flex-1 min-h-[400px] flex flex-col print:hidden" aria-busy={loading}>
+                    <div className="flex-1 w-full relative">
+                        <div className="absolute inset-0">
                             <AgGridReact
                                 ref={gridRef}
                                 theme={themeQuartz}
@@ -1979,19 +2114,20 @@ const Transactions = () => {
                                     canEditTxn,
                                     setFullScreenAttachment,
                                     formatCurrency,
-                                    formatDate,
-                                    outliers: insightsData.outliers,
-                                    anomalousPartyDays: insightsData.anomalousPartyDays,
-                                    duplicateTransactions: insightsData.duplicateTransactions
-                                }}
-                                overlayNoRowsTemplate={
-                                    loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'
-                                }
-                            />
+                                        formatDate
+                                    }}
+                                    overlayNoRowsTemplate={
+                                        loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'
+                                    }
+                                />
+                            </div>
+                        </div>
                     </div>
+
+                    {/* Print Only Simple HTML Table (Dynamically Built) */}
+                    <div id="txn-print-container" className="hidden print:block txn-print-surface w-full"></div>
                 </div>
-            </div>
-        </PageContentShell>
+            </PageContentShell>
 
 
             <ConfirmDialog
@@ -2027,8 +2163,8 @@ const Transactions = () => {
                 }}
             />
             */}
-            
-            <CreateTransaction 
+
+            <CreateTransaction
                 isOpen={drawerState.open}
                 onClose={() => setDrawerState({ open: false, transaction: null })}
                 transactionToEdit={drawerState.transaction}
@@ -2041,11 +2177,11 @@ const Transactions = () => {
 
             {/* Full Screen Attachment Viewer */}
             {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(
-                <div 
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" 
+                <div
+                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
                     onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
                 >
-                    <div 
+                    <div
                         className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
                         onClick={(e) => e.stopPropagation()}
                     >

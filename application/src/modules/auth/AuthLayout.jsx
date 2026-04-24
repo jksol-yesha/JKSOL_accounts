@@ -3,7 +3,7 @@ import React from 'react';
 const AuthLayout = ({ children, title, subtitle }) => {
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans text-slate-900 relative">
-            <div className="-translate-y-8 bg-white w-full max-w-[400px] p-6 md:p-8 rounded-lg shadow-sm border border-slate-200 border-t-4 border-t-emerald-600 z-10">
+            <div className="-translate-y-8 bg-white w-full max-w-[400px] p-6 md:p-8 rounded-lg shadow-sm border border-slate-200 border-t-4 border-t-sky-600 z-10">
                 <div className="flex flex-col items-center mb-6 text-center">
                     {/* Logo & Brand Name */}
                     <div className="flex flex-col items-center justify-center mb-6">

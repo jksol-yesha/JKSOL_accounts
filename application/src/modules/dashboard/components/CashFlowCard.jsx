@@ -117,58 +117,58 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
 
             {/* Body */}
             <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-white">
-                
+
                 {/* Left Side: Graph */}
                 <div className="flex-1 p-5 relative min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 8 }}>
                             <defs>
                                 <linearGradient id="colorIncome" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
+                                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
                                 </linearGradient>
                                 <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.15}/>
-                                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0}/>
+                                    <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.15} />
+                                    <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
                                 </linearGradient>
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                            <XAxis 
-                                dataKey="label" 
-                                axisLine={false} 
-                                tickLine={false} 
+                            <XAxis
+                                dataKey="label"
+                                axisLine={false}
+                                tickLine={false}
                                 tick={<CashFlowAxisTick />}
                                 height={46}
                                 tickMargin={8}
                                 minTickGap={showAllMonthTicks ? 0 : 24}
                                 interval={showAllMonthTicks ? 0 : 'preserveStartEnd'}
                             />
-                            <YAxis 
-                                axisLine={false} 
-                                tickLine={false} 
+                            <YAxis
+                                axisLine={false}
+                                tickLine={false}
                                 tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
                                 tickFormatter={formatYAxis}
                             />
                             <Tooltip content={<CustomTooltip formatCurrency={formatCurrency} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
-                            <Area 
-                                type="monotone" 
+                            <Area
+                                type="monotone"
                                 name="Income"
-                                dataKey="income" 
-                                stroke="#10b981" 
+                                dataKey="income"
+                                stroke="#10b981"
                                 strokeWidth={2.5}
-                                fillOpacity={1} 
-                                fill="url(#colorIncome)" 
+                                fillOpacity={1}
+                                fill="url(#colorIncome)"
                                 activeDot={{ r: 4, fill: "#10b981", stroke: "#fff", strokeWidth: 2 }}
                                 dot={{ r: 3, fill: "#10b981", stroke: "#fff", strokeWidth: 1.5 }}
                             />
-                            <Area 
-                                type="monotone" 
+                            <Area
+                                type="monotone"
                                 name="Expense"
-                                dataKey="expense" 
-                                stroke="#f43f5e" 
+                                dataKey="expense"
+                                stroke="#f43f5e"
                                 strokeWidth={2.5}
-                                fillOpacity={1} 
-                                fill="url(#colorExpense)" 
+                                fillOpacity={1}
+                                fill="url(#colorExpense)"
                                 activeDot={{ r: 4, fill: "#f43f5e", stroke: "#fff", strokeWidth: 2 }}
                                 dot={{ r: 3, fill: "#f43f5e", stroke: "#fff", strokeWidth: 1.5 }}
                             />
@@ -178,7 +178,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
 
                 {/* Right Side: Summary Stats block */}
                 <div className="lg:w-[196px] border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-center px-4 py-6 lg:py-0 shrink-0 gap-6">
-                    
+
                     {/* Opening Balance */}
                     <div className="flex flex-col items-end text-right">
                         <span className="text-[12px] font-medium text-slate-500 mb-1">
@@ -207,26 +207,13 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                     {/* Outgoing */}
                     <div className="flex flex-col items-end text-right">
                         <span className="text-[12px] font-medium text-rose-500 mb-1">
-                            Outgoing (Expenses)
+                            Outgoing
                         </span>
                         <div className="flex items-center gap-2">
                             <span className="text-[15px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.totalExpense || 0)}
                             </span>
                             <span className="text-[13px] font-bold text-rose-500">-</span>
-                        </div>
-                    </div>
-
-                    {/* Investments */}
-                    <div className="flex flex-col items-end text-right">
-                        <span className="text-[12px] font-medium text-purple-600 mb-1">
-                            Investments
-                        </span>
-                        <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-bold text-[#111827] tracking-tight">
-                                {formatCurrency(stats.totalInvestment || 0)}
-                            </span>
-                            <span className="text-[13px] font-bold text-purple-600">-</span>
                         </div>
                     </div>
 

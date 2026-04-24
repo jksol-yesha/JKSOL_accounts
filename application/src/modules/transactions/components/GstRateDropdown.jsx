@@ -242,13 +242,13 @@ const GstRateDropdown = React.forwardRef(({
                 }}
                 onKeyDown={handleTriggerKeyDown}
                 className={cn(
-                    "w-full px-4 py-2.5 bg-gray-50 border rounded-xl text-[14px] font-bold text-slate-700 flex items-center justify-between transition-all outline-none focus:border-black",
-                    error ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100",
+                    "w-full h-[32px] px-3 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm flex items-center justify-between outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all",
+                    error ? "border-rose-500 ring-2 ring-rose-500/20" : "",
                     className
                 )}
             >
-                <span className={cn(!value && "text-slate-400")}>{displayValue}</span>
-                <ChevronDown size={18} className={cn("text-slate-400 transition-transform", isOpen && "rotate-180")} />
+                <span className={cn("leading-tight truncate", !value && "text-slate-400")}>{displayValue}</span>
+                <ChevronDown size={16} className={cn("text-gray-500 shrink-0 transition-transform", isOpen && "rotate-180")} />
             </button>
 
             {isOpen && createPortal(

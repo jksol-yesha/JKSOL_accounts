@@ -131,7 +131,7 @@ const ReportTablePrint = ({ reportData, filters }) => {
                                                                 {(group.items || []).map((item, iIdx) => (
                                                                     <div key={iIdx} className="grid grid-cols-[1fr,70px,70px] w-full items-end">
                                                                         <div className="px-5 py-0.5 text-[10px] text-slate-600 italic">{item.subCategory}</div>
-                                                                        <div className={cn("px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600", iIdx === group.items.length - 1 && "border-b border-slate-400")}>
+                                                                        <div className="px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600">
                                                                             {formatCurrency(item.amount, preferences.currency)}
                                                                         </div>
                                                                         <div></div>
@@ -168,7 +168,7 @@ const ReportTablePrint = ({ reportData, filters }) => {
                                                                 {(group.items || []).map((item, iIdx) => (
                                                                     <div key={iIdx} className="grid grid-cols-[1fr,70px,70px] w-full items-end">
                                                                         <div className="px-5 py-0.5 text-[10px] text-slate-600 italic">{item.subCategory}</div>
-                                                                        <div className={cn("px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600", iIdx === group.items.length - 1 && "border-b border-slate-400")}>
+                                                                        <div className="px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600">
                                                                             {formatCurrency(item.amount, preferences.currency)}
                                                                         </div>
                                                                         <div></div>
@@ -191,15 +191,13 @@ const ReportTablePrint = ({ reportData, filters }) => {
                                         </tr>
                                     </tbody>
                                     <tfoot>
-                                        <tr className="bg-slate-50 border-t border-slate-400 font-bold uppercase tracking-tight">
-                                            <td className="px-2 py-1.5 text-[11px] text-slate-900 border-r border-gray-200">Total</td>
-                                            <td className="border-r border-gray-200"></td>
-                                            <td className="px-2 py-1.5 text-[12px] text-right text-slate-900 border-r border-gray-400 tabular-nums underline decoration-double decoration-slate-400">
+                                        <tr className="border-y border-gray-300 bg-white font-bold tracking-tight">
+                                            <td colSpan={2} className="px-2 py-1.5 text-[11px] text-slate-900 text-left">Total</td>
+                                            <td className="px-2 py-1.5 text-[11px] text-right text-slate-900 border-r border-gray-400 tabular-nums">
                                                 {formatCurrency(d.totalLeft, preferences.currency)}
                                             </td>
-                                            <td className="px-2 py-1.5 text-[11px] text-slate-900 border-r border-gray-200">Total</td>
-                                            <td className="border-r border-gray-200"></td>
-                                            <td className="px-2 py-1.5 text-[12px] text-right text-slate-900 tabular-nums underline decoration-double decoration-slate-400">
+                                            <td colSpan={2} className="px-2 py-1.5 text-[11px] text-slate-900 text-left">Total</td>
+                                            <td className="px-2 py-1.5 text-[11px] text-right text-slate-900 tabular-nums">
                                                 {formatCurrency(d.totalRight, preferences.currency)}
                                             </td>
                                         </tr>

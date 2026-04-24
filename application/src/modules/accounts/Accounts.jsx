@@ -140,7 +140,7 @@ const FilterDropdown = React.forwardRef(
     const isTitleVar = variant === "title";
     const openDropdown = () => {
       const selectedIndex = options.findIndex((option) => option.value === value);
-      setHighlightedIndex(selectedIndex >= 0 ? selectedIndex : 0);
+      setHighlightedIndex(selectedIndex);
       setIsOpen(true);
     };
 
@@ -272,16 +272,30 @@ const FilterDropdown = React.forwardRef(
                   type="button"
                   onMouseEnter={() => setHighlightedIndex(index)}
                   onClick={() => handleSelect(option.value)}
-                  className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${value === option.value || highlightedIndex === index ? "bg-[#F0F9FF]" : "hover:bg-[#F0F9FF]"}`}
+                  className={cn(
+                    "flex items-center gap-2 w-full text-left px-3 py-2 transition-colors",
+                    value === option.value
+                      ? "bg-transparent hover:bg-transparent"
+                      : highlightedIndex === index
+                        ? "bg-[#EEF0FC]"
+                        : "hover:bg-[#EEF0FC]",
+                  )}
                 >
                   <span
-                    className={`text-[13px] w-full flex items-center gap-2 ${value === option.value || highlightedIndex === index ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                    className={cn(
+                      "text-[13px] w-full flex items-center gap-2",
+                      value === option.value
+                        ? "font-bold text-[#2F5FC6]"
+                        : highlightedIndex === index
+                          ? "font-medium text-slate-800"
+                          : "font-medium text-slate-700",
+                    )}
                   >
                     <div className="w-4 flex justify-center shrink-0">
                       {value === option.value && (
                         <Check
                           size={14}
-                          className="text-[#4A8AF4]"
+                          className="text-[#2F5FC6]"
                           strokeWidth={2.5}
                         />
                       )}
@@ -346,7 +360,7 @@ const SummaryItem = ({
         <p className="text-[11px] font-semibold text-gray-500 mb-0.5">
           {title}
         </p>
-        <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">
+        <h3 className="text-[15px] font-bold text-gray-800 tracking-tight">
           {formatCurrency(amount, currency)}
         </h3>
       </div>
@@ -590,10 +604,14 @@ const buildAccountSearchText = (account) => {
 // Stable AG Grid pure functions (Hoist completely out to prevent structural Redraw loops)
 const genericIsFullWidthRow = (params) =>
   params.rowNode.data && params.rowNode.data.isGroupHeader;
-const genericGetRowHeight = () => 42;
-const GenericFullWidthGroupCellRenderer = () => {
-  // Completely removing the category header "total row" as requested
-  return null;
+const genericGetRowHeight = (params) => (params.node?.data?.isGroupHeader ? 36 : 42);
+const GenericFullWidthGroupCellRenderer = (props) => {
+  if (!props.data || !props.data.isGroupHeader) return null;
+  return (
+    <div className="flex items-center w-full h-full bg-[#f8fafc] px-4 border-y border-slate-200">
+      <span className="text-[11px] font-bold text-slate-600 tracking-wider uppercase">{props.data.groupName}</span>
+    </div>
+  );
 };
 
 const getDisplayBalance = (account) => {
@@ -875,6 +893,7 @@ const MobileAccountField = ({
 
 const Accounts = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { selectedBranch } = useBranch();
   const { selectedYear } = useYear();
   const { showToast } = useToast();
@@ -887,6 +906,7 @@ const Accounts = () => {
   const [loading, setLoading] = useState(false);
   const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
   const [dataRefreshTick, setDataRefreshTick] = useState(0);
+  const [tableRefreshTick, setTableRefreshTick] = useState(0);
   const [copiedBankDetailsId, setCopiedBankDetailsId] = useState(null);
   const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
   const [drawerState, setDrawerState] = useState({
@@ -930,7 +950,13 @@ const Accounts = () => {
   const addAccountButtonRef = useRef(null);
   const chartEnterStepRef = useRef("idle");
 
-  const [groupBy, setGroupBy] = useState("none");
+  const [groupBy, setGroupBy] = useState(() => {
+    return localStorage.getItem("accounts_groupBy_preset") || "none";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("accounts_groupBy_preset", groupBy);
+  }, [groupBy]);
   const [activeRowPopover, setActiveRowPopover] = useState(null);
 
   const focusAccountsControl = (controlName) => {
@@ -954,7 +980,7 @@ const Accounts = () => {
   };
 
   const focusNextAccountsControl = (currentControl) => {
-    const orderedControls = ["chart", "search", "refresh", "group", "add"];
+    const orderedControls = ["chart", "add", "refresh", "group", "search"];
     const currentIndex = orderedControls.indexOf(currentControl);
     if (currentIndex === -1) return false;
 
@@ -1003,7 +1029,7 @@ const Accounts = () => {
   };
 
   const handleRefresh = () => {
-    setDataRefreshTick((tick) => tick + 1);
+    setTableRefreshTick((tick) => tick + 1);
   };
 
   const handleRefreshKeyDown = (event) => {
@@ -1213,6 +1239,7 @@ const Accounts = () => {
     preferences.currency,
     selectedYear?.id,
     dataRefreshTick,
+    tableRefreshTick,
   ]);
 
   useEffect(() => {
@@ -1339,13 +1366,31 @@ const Accounts = () => {
     });
 
     if (groupBy !== "none") {
-      // Sort the list by the grouping field first to ensure cohesive groups
+      // Sort the list by the grouped label first
       result.sort((a, b) => {
-        const valA = String((groupBy === "type" ? a.accountType : a.subtype) ?? "");
-        const valB = String((groupBy === "type" ? b.accountType : b.subtype) ?? "");
+        const valA = String((groupBy === "type" ? a.typeLabel : a.subtypeLabel) || "Unknown").trim();
+        const valB = String((groupBy === "type" ? b.typeLabel : b.subtypeLabel) || "Unknown").trim();
         return valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
       });
-      return result;
+      
+      const withHeaders = [];
+      let currentGroup = null;
+
+      for (const account of result) {
+        const groupValue = groupBy === "type" ? account.typeLabel : account.subtypeLabel;
+        const mappedGroup = String(groupValue || "Unknown").trim();
+
+        if (mappedGroup !== currentGroup) {
+          currentGroup = mappedGroup;
+          withHeaders.push({
+            id: `__group_${groupBy}_${mappedGroup}`,
+            isGroupHeader: true,
+            groupName: mappedGroup
+          });
+        }
+        withHeaders.push(account);
+      }
+      return withHeaders;
     }
 
     return result;
@@ -1450,16 +1495,33 @@ const Accounts = () => {
     else if (account.type === 4 || account.type === "4")
       IconComponent = Activity;
 
+    const txns = account.totalTransactions || 0;
+
     return (
-      <div className="flex items-center gap-2 h-full w-full group">
-        <div className="flex items-center justify-center shrink-0 w-4 h-4 text-gray-400">
-          <IconComponent size={14} strokeWidth={2} />
+      <div className="flex items-center gap-2 h-full w-full group justify-between pr-2">
+        <div className="flex items-center gap-2 flex-1 min-w-0">
+          <div className="flex items-center justify-center shrink-0 w-4 h-4 text-gray-400">
+            <IconComponent size={14} strokeWidth={2} />
+          </div>
+          <AccountNameTooltip
+            name={account.name}
+            className="flex-1 min-w-0"
+            textClassName="text-[12px] font-semibold text-gray-800 text-left cursor-default leading-snug"
+          />
         </div>
-        <AccountNameTooltip
-          name={account.name}
-          className="flex-1 min-w-0"
-          textClassName="text-[12px] font-semibold text-gray-800 text-left cursor-default leading-snug"
-        />
+        {txns > 0 ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              navigate(`/transactions?accountId=${account.id}`);
+            }}
+            className="shrink-0 text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm text-[11px] font-medium whitespace-nowrap"
+            title={`View ${txns} transactions`}
+          >
+            {txns} txn{txns !== 1 ? 's' : ''}
+          </button>
+        ) : null}
       </div>
     );
   };
@@ -1563,7 +1625,7 @@ const Accounts = () => {
           "text-rose-600": (params) => params.value < 0,
           "text-emerald-700": (params) => params.value >= 0,
         },
-        cellClass: "tabular-nums font-semibold text-[12px] text-right",
+        cellClass: "tabular-nums font-semibold text-[13px] text-right",
       },
       {
         field: "closingBalance",
@@ -1579,15 +1641,7 @@ const Accounts = () => {
           "text-rose-600": (params) => params.value < 0,
           "text-emerald-700": (params) => params.value >= 0,
         },
-        cellClass: "tabular-nums font-semibold text-[12px] text-right",
-      },
-      {
-        field: "totalTransactions",
-        headerName: "Txns",
-        width: 100,
-        cellClass: "flex items-center justify-center",
-        cellRenderer: TxnCountCellRenderer,
-        headerClass: "ag-center-aligned-header",
+        cellClass: "tabular-nums font-semibold text-[13px] text-right",
       },
 
       {
@@ -1762,7 +1816,7 @@ const Accounts = () => {
                 onKeyDown={handleChartToggleKeyDown}
                 onFocus={() => syncChartEnterStep(chartVisible)}
                 onBlur={() => syncChartEnterStep(chartVisible)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus:bg-[#F0F9FF] focus:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
+                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
               >
                 <TrendingUp size={14} />
                 {chartVisible ? "Hide Chart" : "Show Chart"}
@@ -1870,8 +1924,52 @@ const Accounts = () => {
         <hr className="mx-5 mt-3 mb-1 border-t border-gray-200/70" />
         {/* Custom List Header */}
         <div className="px-5 pb-3 pt-1 flex flex-wrap items-center justify-between gap-2 print:hidden relative z-10 w-full">
-          {/* LEFT SIDE: Search */}
+          {/* LEFT SIDE: Add & Refresh */}
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            <button
+              ref={addAccountButtonRef}
+              type="button"
+              onClick={handleCreateAccount}
+              onKeyDown={handleAddAccountKeyDown}
+              className={cn(
+                "group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium",
+                drawerState.open && "bg-[#F0F9FF] border-[#BAE6FD]"
+              )}
+            >
+              <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
+              <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Account</span>
+            </button>
+
+            <button
+              ref={refreshButtonRef}
+              type="button"
+              onClick={handleRefresh}
+              onKeyDown={handleRefreshKeyDown}
+              className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+            >
+              <RefreshCcw
+                size={14}
+                strokeWidth={2}
+                className={cn(loading && "animate-spin text-primary")}
+              />
+            </button>
+          </div>
+
+          {/* RIGHT SIDE: Group & Search */}
+          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+            <FilterDropdown
+              ref={groupFilterRef}
+              value={groupBy}
+              onChange={(val) => setGroupBy(val === groupBy ? "none" : val)}
+              onFocusNext={() => {
+                focusNextAccountsControl("group");
+              }}
+              placeholder="Group"
+              options={[
+                { label: "Type", value: "type" },
+                { label: "Subtype", value: "subtype" },
+              ]}
+            />
             <div className="relative group w-full sm:w-[240px]">
               <Search
                 size={14}
@@ -1888,52 +1986,6 @@ const Accounts = () => {
                 className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
               />
             </div>
-
-            <button
-              ref={refreshButtonRef}
-              type="button"
-              onClick={handleRefresh}
-              onKeyDown={handleRefreshKeyDown}
-              className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus:bg-[#F0F9FF] focus:border-[#BAE6FD] focus:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-              title="Refresh table data"
-            >
-              <RefreshCcw
-                size={14}
-                strokeWidth={2}
-                className={cn(loading && "animate-spin text-primary")}
-              />
-            </button>
-          </div>
-
-          {/* RIGHT SIDE: Group & Add */}
-          <div className="flex items-center gap-1.5">
-            <FilterDropdown
-              ref={groupFilterRef}
-              value={groupBy}
-              onChange={(val) => setGroupBy(val === groupBy ? "none" : val)}
-              onFocusNext={() => {
-                focusNextAccountsControl("group");
-              }}
-              placeholder="Group"
-              options={[
-                { label: "Type", value: "type" },
-                { label: "Subtype", value: "subtype" },
-              ]}
-            />
-
-            <button
-              ref={addAccountButtonRef}
-              type="button"
-              onClick={handleCreateAccount}
-              onKeyDown={handleAddAccountKeyDown}
-              className={cn(
-                "w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all outline-none",
-                !drawerState.open && "hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"
-              )}
-              title="Add Account"
-            >
-              <Plus size={16} strokeWidth={2.5} />
-            </button>
           </div>
         </div>
         {/* Table View (AG Grid) */}

@@ -1,30 +1,22 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
-import * as echarts from 'echarts';
 import { Loader2, RefreshCw } from 'lucide-react';
 import apiService from '../../../services/api';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
 import { usePreferences } from '../../../context/PreferenceContext';
 
-const COLORS = ['#347CF0', '#59C96B', '#FF962E', '#8D59E8'];
-const MAX_VISIBLE_SEGMENTS = 4;
+const COLORS = ['#2dd4bf', '#fb923c', '#3b82f6', '#fcd34d', '#818cf8', '#38bdf8', '#fb7185'];
+const MAX_VISIBLE_SEGMENTS = 8;
 const TOP_CATEGORY_COUNT = MAX_VISIBLE_SEGMENTS - 1;
 
-const formatCompactAmount = (amount, currency) => {
-    const numericAmount = Math.abs(Number(amount) || 0);
-    const parts = new Intl.NumberFormat('en-IN', {
+const formatFullAmount = (amount, currency) => {
+    return new Intl.NumberFormat('en-US', {
         style: 'currency',
-        currency: currency || 'INR',
+        currency: currency || 'USD',
+        minimumFractionDigits: 2,
         maximumFractionDigits: 2
-    }).formatToParts(numericAmount);
-    
-    const symbol = parts.find(p => p.type === 'currency')?.value || '';
-    
-    if (numericAmount >= 10000000) return `${symbol}${(numericAmount / 10000000).toFixed(1)}Cr`;
-    if (numericAmount >= 100000) return `${symbol}${(numericAmount / 100000).toFixed(1)}L`;
-    if (numericAmount >= 1000) return `${symbol}${(numericAmount / 1000).toFixed(1)}K`;
-    return `${symbol}${numericAmount.toFixed(0)}`;
+    }).format(Math.abs(Number(amount) || 0));
 };
 
 const DashboardPieChart = ({ dashboardFilters }) => {
@@ -33,27 +25,13 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const { preferences } = usePreferences();
 
     const [selectedType, setSelectedType] = useState('expense');
-    const [categories, setCategories] = useState([]);
+    const [categories, setCategories] = React.useState([]);
     const [loading, setLoading] = useState(false);
-    const [hoveredIndex, setHoveredIndex] = useState(null);
-    const [chartSize, setChartSize] = useState({ width: 0, height: 0 });
-    
     const echartsRef = useRef(null);
-    const chartFrameRef = useRef(null);
+
     const contextReady = Boolean(!branchLoading && !yearLoading && selectedYear?.id);
 
-    useEffect(() => {
-        const node = chartFrameRef.current;
-        if (!node) return undefined;
-        const observer = new ResizeObserver((entries) => {
-            const { width, height } = entries[0].contentRect;
-            setChartSize({ width, height });
-        });
-        observer.observe(node);
-        return () => observer.disconnect();
-    }, []);
-
-    useEffect(() => {
+    React.useEffect(() => {
         const fetchCategories = async () => {
             if (!contextReady) return;
             setLoading(true);
@@ -100,45 +78,16 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             items = [...filtered];
         }
 
-        // Reorder to put the medium-sized "Green" segment between tiny Orange and Purple
-        // This acts as a physical buffer to prevent card overlapping.
-        // Logic: [Largest, 3rd Largest, 2nd Largest, 4th Largest]
-        const reordered = [];
-        if (items[0]) reordered.push(items[0]); // Blue (Largest)
-        if (items[2]) reordered.push(items[2]); // Orange (3rd)
-        if (items[1]) reordered.push(items[1]); // Green (Buffer - 2nd)
-        if (items[3]) reordered.push(items[3]); // Purple (4th)
-        
-        const finalItems = reordered.length === items.length ? reordered : items;
-
-        // Calculate rotation for RHS centering
-        let currentAngle = 320; 
-        return finalItems.map((item, idx) => {
+        return items.map((item, idx) => {
             const percent = total > 0 ? (Math.abs(item.amount) / total) * 100 : 0;
-            const angleSpan = (percent / 100) * 360;
-            const midAngle = currentAngle - (angleSpan / 2);
-            currentAngle -= angleSpan;
             return {
                 ...item,
                 value: item.amount,
-                percent: percent.toFixed(1),
-                color: COLORS[idx % COLORS.length],
-                midAngle
+                percent: percent.toFixed(2),
+                color: COLORS[idx % COLORS.length]
             };
         });
     }, [categories, selectedType]);
-
-    const getRadialPos = (angle, index) => {
-        // Reduced base radius to heavily pull boxes inward to overlap the chart
-        const radius = 26 + (index === 0 ? 0 : (index % 2 === 0 ? 3 : -3)); 
-        const rad = (angle * Math.PI) / 180;
-        const aspect = chartSize.width / chartSize.height || 1;
-        
-        return {
-            x: 50 + (radius * Math.cos(rad) / aspect * 1.02), 
-            y: 50 - (radius * Math.sin(rad) * 1.02)
-        };
-    };
 
     const echartsOption = {
         animationDuration: 500,
@@ -147,31 +96,51 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             type: 'pie',
             radius: ['0%', '60%'],
             center: ['50%', '50%'],
-            startAngle: 320, 
+            startAngle: 90, 
             clockwise: true,
             avoidLabelOverlap: true,
             itemStyle: {
-                borderWidth: 0,
-                borderRadius: 0,
+                borderWidth: 2,
+                borderColor: '#fff',
                 color: (params) => chartData[params.dataIndex]?.color
             },
             label: {
                 show: true,
                 position: 'outside',
-                // Keep the label empty to avoid duplicate text with React cards
-                // but keep it active so labelLine (the connector) shows up
-                formatter: () => ' ', 
-                fontSize: 0
+                backgroundColor: '#ffffff',
+                borderColor: '#e2e8f0',
+                borderWidth: 1,
+                borderRadius: 6,
+                padding: [10, 14],
+                shadowColor: 'rgba(0, 0, 0, 0.08)',
+                shadowBlur: 8,
+                shadowOffsetX: 0,
+                shadowOffsetY: 4,
+                formatter: (params) => {
+                    const amountStr = formatFullAmount(params.data.value, dashboardFilters?.currency || preferences.currency);
+                    return `{amount|${amountStr}}\n{name|${params.data.name} (${params.data.percent}%)}`;
+                },
+                rich: {
+                    amount: {
+                        fontSize: 16,
+                        fontWeight: 500,
+                        color: '#0f172a',
+                        padding: [0, 0, 6, 0]
+                    },
+                    name: {
+                        fontSize: 12,
+                        color: '#475569'
+                    }
+                }
             },
             labelLine: {
                 show: true,
-                length: 20,
-                length2: 45,
-                smooth: true,
+                length: 25,
+                length2: 35,
+                smooth: false,
                 lineStyle: {
-                    width: 1.8,
-                    cap: 'round',
-                    color: 'rgba(0,0,0,0.1)'
+                    width: 1.5,
+                    color: '#cbd5e1'
                 }
             },
             emphasis: {
@@ -189,25 +158,27 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const headerTitle = `Top ${selectedType === 'income' ? 'Income' : 'Expenses'}`;
 
     return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 overflow-hidden min-h-[460px]">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 min-h-[460px]">
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
                 <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
                     {headerTitle}
                 </h3>
 
-                <button
-                    type="button"
-                    onClick={() => setSelectedType(prev => prev === 'expense' ? 'income' : 'expense')}
-                    className="animate-rotate-hover group flex h-7 items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-1 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50"
-                >
-                    <RefreshCw size={13} className="text-slate-500 group-hover:text-indigo-500 transition-colors" />
-                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 group-hover:text-indigo-600">
-                        {selectedType === 'expense' ? 'Income' : 'Expense'}
-                    </span>
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setSelectedType(prev => prev === 'expense' ? 'income' : 'expense')}
+                        className="animate-rotate-hover group flex h-6 items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-0.5 transition-all duration-200 hover:border-slate-300 hover:bg-slate-50"
+                    >
+                        <RefreshCw size={13} className="text-slate-500 group-hover:text-indigo-500 transition-colors" />
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-700 group-hover:text-indigo-600">
+                            {selectedType === 'expense' ? 'Income' : 'Expense'}
+                        </span>
+                    </button>
+                </div>
             </div>
 
-            <div className="flex-1 relative bg-white" ref={chartFrameRef}>
+            <div className="flex-1 relative bg-white flex flex-col items-center justify-center p-4">
                 {loading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white z-20">
                         <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
@@ -217,67 +188,13 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                         No {selectedType} data found
                     </div>
                 ) : (
-                    <>
+                    <div className="w-full h-[350px] md:h-[400px]">
                         <ReactECharts
                             ref={echartsRef}
                             option={echartsOption}
                             style={{ height: '100%', width: '100%' }}
-                            onEvents={{
-                                'mouseover': (params) => setHoveredIndex(params.dataIndex),
-                                'mouseout': () => setHoveredIndex(null)
-                            }}
                         />
-                        
-                        {/* Radial Indicator Cards */}
-                        <div className="absolute inset-0 pointer-events-none overflow-hidden hidden sm:block">
-                            {chartData.map((item, idx) => {
-                                const pos = getRadialPos(item.midAngle, 38); // Base distance
-                                const isHovered = hoveredIndex === idx;
-                                
-                                return (
-                                    <div
-                                        key={`card-${idx}`}
-                                        className={`floating-legend-card absolute p-3 rounded-xl border border-slate-100 shadow-sm flex flex-col gap-1 min-w-[140px] pointer-events-auto ${isHovered ? 'scale-105 border-indigo-200 shadow-md ring-4 ring-indigo-50' : 'opacity-90'}`}
-                                        style={{
-                                            left: `${pos.x}%`,
-                                            top: `${pos.y}%`,
-                                            transform: `translate(-50%, -50%) ${isHovered ? 'scale(1.05)' : 'scale(1)'}`,
-                                            zIndex: isHovered ? 30 : 10
-                                        }}
-                                        onMouseEnter={() => {
-                                            setHoveredIndex(idx);
-                                            echartsRef.current?.getEchartsInstance().dispatchAction({
-                                                type: 'highlight',
-                                                seriesIndex: 0,
-                                                dataIndex: idx
-                                            });
-                                        }}
-                                        onMouseLeave={() => {
-                                            setHoveredIndex(null);
-                                            echartsRef.current?.getEchartsInstance().dispatchAction({
-                                                type: 'downplay',
-                                                seriesIndex: 0,
-                                                dataIndex: idx
-                                            });
-                                        }}
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
-                                            <span className="text-[12px] font-bold text-slate-800 truncate max-w-[80px]">
-                                                {item.name}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between items-baseline mt-0.5">
-                                            <span className="text-[11px] font-medium text-slate-400">{item.percent}%</span>
-                                            <span className="text-[13px] font-bold text-slate-900 tracking-tight">
-                                                {formatCompactAmount(item.amount, dashboardFilters?.currency || preferences.currency)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </>
+                    </div>
                 )}
             </div>
         </div>

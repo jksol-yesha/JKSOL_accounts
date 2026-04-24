@@ -108,7 +108,7 @@ const Login = () => {
                             setEmail(e.target.value.toLowerCase());
                             if (emailError) setEmailError('');
                         }}
-                        className={`w-full h-10 px-3 text-[13px] bg-white border ${emailError ? 'border-red-500' : 'border-slate-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 transition-colors placeholder:text-slate-400`}
+                        className={`w-full h-10 px-3 text-[13px] bg-white border ${emailError ? 'border-red-500' : 'border-slate-300'} rounded-md focus:outline-none focus:ring-1 focus:ring-sky-500 focus:border-sky-500 transition-colors placeholder:text-slate-400`}
                         placeholder="name@company.com"
                         disabled={loading}
                     />
@@ -117,10 +117,10 @@ const Login = () => {
 
                 <button
                     type="submit"
-                    className="w-full h-10 bg-slate-900 text-white rounded-md text-[13px] font-semibold hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
+                    className="w-full h-10 bg-[#4A8AF4] text-white rounded-md text-[13px] font-semibold hover:bg-[#3876e5] transition-colors cursor-pointer disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center shadow-sm"
                     disabled={loading}
                 >
-                    {loading ? <Loader className="text-emerald-400 h-5 w-5" /> : 'Continue'}
+                    {loading ? <Loader className="text-white h-5 w-5" /> : 'Continue'}
                 </button>
             </form>
         </AuthLayout>

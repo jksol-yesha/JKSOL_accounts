@@ -354,7 +354,8 @@ export const getTransactions = async ({ body, set, user, orgId, branchId, header
         }
 
         const accountId = body.accountId ? Number(body.accountId) : undefined;
-        const items = await TransactionService.getAll(orgId, effectiveBranchId, financialYearId, limit, targetCurrency, user, accountId);
+        const dateRange = body.startDate ? { startDate: body.startDate, endDate: body.endDate } : undefined;
+        const items = await TransactionService.getAll(orgId, effectiveBranchId, financialYearId, limit, targetCurrency, user, accountId, dateRange);
         return { success: true, data: items };
     } catch (error: any) {
         console.error('Get Transactions Error:', error);

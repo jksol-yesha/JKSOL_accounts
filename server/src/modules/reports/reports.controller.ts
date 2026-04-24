@@ -108,34 +108,44 @@ export const generateReport = async ({ body, set, headers, user, orgId, branchId
             }
         }
 
-        let data;
+        const globalSummary = await ReportsService.getSummary(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+        let data: any;
 
         switch (reportType) {
             case 'Summary':
-                const summary = await ReportsService.getSummary(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
                 const list = await ReportsService.getDetailed(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
-                data = { summary, tableData: list.tableData, type: 'transactions', currency: list.currency };
+                data = { summary: globalSummary, tableData: list.tableData, type: 'transactions', currency: list.currency };
                 break;
 
             case 'Detailed':
                 data = await ReportsService.getDetailed(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                data.summary = globalSummary;
                 break;
 
             case 'Category-wise':
                 data = await ReportsService.getCategoryWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                data.summary = globalSummary;
+                break;
+
+            case 'Party-wise':
+                data = await ReportsService.getPartyWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                data.summary = globalSummary;
                 break;
 
             case 'Account-wise':
                 data = await ReportsService.getAccountWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                data.summary = globalSummary;
                 break;
 
             case 'Debit/Credit':
                 data = await ReportsService.getLedger(orgId, branchId, startDate, endDate, targetCurrency, user, filters);
+                data.summary = globalSummary;
                 break;
 
             case 'Profit/Loss':
             case 'Profit & Loss':
                 data = await ReportsService.getProfitLoss(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                data.summary = globalSummary;
                 break;
 
             default:
@@ -209,6 +219,9 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
                 break;
             case 'Category-wise':
                 data = await ReportsService.getCategoryWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
+                break;
+            case 'Party-wise':
+                data = await ReportsService.getPartyWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
                 break;
             case 'Account-wise':
                 data = await ReportsService.getAccountWise(orgId, branchId, startDate, endDate, filters, targetCurrency, user);

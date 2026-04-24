@@ -103,7 +103,8 @@ export class TransactionService {
         }
 
         if (appliedFilters.payee && appliedFilters.payee !== 'All') {
-            result = result.filter((txn) => txn.contact === appliedFilters.payee);
+            const payees = appliedFilters.payee.split(',').map(p => p.trim());
+            result = result.filter((txn) => payees.includes(txn.contact!));
         }
 
         if (appliedFilters.timePeriod && appliedFilters.timePeriod !== 'All Time') {
@@ -244,7 +245,7 @@ export class TransactionService {
         user?: any,
         filters: TransactionExportFilters = {}
     ) {
-        let transactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user);
+        let transactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user, undefined, filters.appliedFilters?.dateRange);
         
         if (filters.appliedFilters && filters.appliedFilters.activeIds && Array.isArray(filters.appliedFilters.activeIds)) {
             const allowedIds = new Set(filters.appliedFilters.activeIds.map(Number));
@@ -1421,12 +1422,20 @@ export class TransactionService {
         });
     }
 
-    static async getAll(orgId: number, branchId: number | number[] | 'all' | null, financialYearId: number, limit?: number, targetCurrency?: string, user?: any, accountId?: number) {
+    static async getAll(orgId: number, branchId: number | number[] | 'all' | null, financialYearId: number, limit?: number, targetCurrency?: string, user?: any, accountId?: number, dateRange?: { startDate?: string; endDate?: string }) {
         const filters = [
             eq(transactions.orgId, orgId),
-            eq(transactions.financialYearId, financialYearId),
             isNotDeleted(transactions)
         ];
+
+        if (dateRange?.startDate) {
+            filters.push(gte(transactions.txnDate, dateRange.startDate as any));
+            if (dateRange.endDate) {
+                filters.push(lte(transactions.txnDate, dateRange.endDate as any));
+            }
+        } else {
+            filters.push(eq(transactions.financialYearId, financialYearId));
+        }
 
         if (Array.isArray(branchId)) {
             filters.push(inArray(transactions.branchId, branchId.length ? branchId : [-1]));
