@@ -35,6 +35,35 @@ const appendBranchFilter = (conditions: any[], branchColumn: any, branchId: numb
 
 const normKey = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
+type ReportTxnTypeFilter = string | string[];
+type ReportFilters = {
+    txnType?: ReportTxnTypeFilter,
+    txnTypeId?: number,
+    categoryId?: number,
+    accountId?: number,
+    party?: string
+};
+
+const normalizeTxnTypeFilters = (txnType?: ReportTxnTypeFilter): string[] => {
+    if (!txnType) return [];
+
+    const values = Array.isArray(txnType) ? txnType : [txnType];
+    const seen = new Set<string>();
+
+    return values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((value) => value !== 'All Types')
+        .filter((value) => {
+            const key = value.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+};
+
+const hasActiveTxnTypeFilters = (txnType?: ReportTxnTypeFilter) => normalizeTxnTypeFilters(txnType).length > 0;
+
 const pickAccountName = (
     txnType: string,
     entries: Array<{ accountId?: number | null, description: string | null, accountName: string | null }>,
@@ -60,11 +89,23 @@ const pickAccountName = (
 const appendTxnAndCategoryFilters = (
     conditions: any[],
     types: any[],
-    filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }
+    filters?: ReportFilters
 ) => {
-    if (filters?.txnType && filters.txnType !== 'All Types') {
-        const typeId = types.find(t => t.name.toLowerCase() === filters.txnType?.toLowerCase())?.id;
-        if (typeId) conditions.push(eq(transactions.txnTypeId, typeId));
+    const txnTypeFilters = normalizeTxnTypeFilters(filters?.txnType);
+
+    if (txnTypeFilters.length > 0) {
+        const typeIds = types
+            .filter((type) => txnTypeFilters.some((txnType) => type.name.toLowerCase() === txnType.toLowerCase()))
+            .map((type) => Number(type.id))
+            .filter(Boolean);
+
+        const firstTypeId = typeIds[0];
+
+        if (typeIds.length === 1 && firstTypeId !== undefined) {
+            conditions.push(eq(transactions.txnTypeId, firstTypeId));
+        } else if (typeIds.length > 1) {
+            conditions.push(inArray(transactions.txnTypeId, typeIds));
+        }
     }
     if (filters?.categoryId) {
         conditions.push(eq(transactions.categoryId, filters.categoryId));
@@ -85,7 +126,7 @@ const fetchDetailedRows = async (
     branchId: number | number[] | 'all',
     startDate: string,
     endDate: string,
-    filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string },
+    filters?: ReportFilters,
     targetCurrency?: string,
     user?: any
 ) => {
@@ -738,7 +779,7 @@ export const ReportsService = {
     },
 
     // 1. Summary Report
-    getSummary: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+    getSummary: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         // Fetch Types
         const types = await db.select().from(transactionTypes);
         const incomeId = types.find(t => t.name === 'Income')?.id;
@@ -755,7 +796,7 @@ export const ReportsService = {
             (!branchId || branchId === 'all') && 
             !filters?.categoryId && 
             !filters?.party && 
-            (!filters?.txnType || filters.txnType === 'All Types');
+            !hasActiveTxnTypeFilters(filters?.txnType);
 
         if (shouldIncludeInitialBalance) {
             const accountConditions: any[] = [
@@ -866,7 +907,7 @@ export const ReportsService = {
     },
 
     // 2. Category-wise Report (Enhanced with Opening/Closing Balance)
-    getCategoryWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+    getCategoryWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         const { rows, currency } = await fetchDetailedRows(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
 
         const map = new Map<string, any>();
@@ -902,7 +943,7 @@ export const ReportsService = {
     },
 
     // 2b. Party-wise Report
-    getPartyWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+    getPartyWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         const { rows, currency } = await fetchDetailedRows(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
 
         const map = new Map<string, any>();
@@ -938,7 +979,7 @@ export const ReportsService = {
     },
 
     // 3. Account-wise Report (Enhanced with Opening/Closing Balance)
-    getAccountWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+    getAccountWise: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         const types = await db.select().from(transactionTypes);
         const orgList = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
         const finalCurrency = targetCurrency || orgList[0]?.baseCurrency || 'USD';
@@ -1103,7 +1144,7 @@ export const ReportsService = {
     },
 
     // 4. Detailed Report (Transactions List)
-    getDetailed: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }, targetCurrency?: string, user?: any) => {
+    getDetailed: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         const { rows, currency } = await fetchDetailedRows(orgId, branchId, startDate, endDate, filters, targetCurrency, user);
 
         return {
@@ -1121,7 +1162,7 @@ export const ReportsService = {
         endDate: string,
         targetCurrency?: string,
         user?: any,
-        filters?: { txnType?: string, categoryId?: number, accountId?: number, party?: string }
+        filters?: ReportFilters
     ) => {
         const types = await db.select().from(transactionTypes);
         const incomeId = types.find(t => t.name === 'Income')?.id;
@@ -1296,7 +1337,7 @@ export const ReportsService = {
             (!branchId || branchId === 'all') && 
             !filters?.categoryId && 
             !filters?.party && 
-            (!filters?.txnType || filters.txnType === 'All Types');
+            !hasActiveTxnTypeFilters(filters?.txnType);
 
         if (shouldIncludeLedgerInitialBalance) {
             const accountConditions: any[] = [
@@ -1432,7 +1473,7 @@ export const ReportsService = {
         branchId: number | number[] | 'all',
         startDate: string,
         endDate: string,
-        filters?: { txnType?: string, txnTypeId?: number, categoryId?: number, accountId?: number, party?: string },
+        filters?: ReportFilters,
         targetCurrency?: string,
         user?: any
     ) => {
@@ -1452,9 +1493,19 @@ export const ReportsService = {
         // Apply optional filters
         if (filters?.txnTypeId) {
             baseConditions.push(eq(transactions.txnTypeId, filters.txnTypeId));
-        } else if (filters?.txnType && filters.txnType !== 'All Types') {
-            const typeId = types.find(t => t.name.toLowerCase() === filters.txnType?.toLowerCase())?.id;
-            if (typeId) baseConditions.push(eq(transactions.txnTypeId, typeId));
+        } else if (hasActiveTxnTypeFilters(filters?.txnType)) {
+            const typeIds = types
+                .filter((type) => normalizeTxnTypeFilters(filters?.txnType).some((txnType) => type.name.toLowerCase() === txnType.toLowerCase()))
+                .map((type) => Number(type.id))
+                .filter(Boolean);
+
+            const firstTypeId = typeIds[0];
+
+            if (typeIds.length === 1 && firstTypeId !== undefined) {
+                baseConditions.push(eq(transactions.txnTypeId, firstTypeId));
+            } else if (typeIds.length > 1) {
+                baseConditions.push(inArray(transactions.txnTypeId, typeIds));
+            }
         } else if (incomeTypeId && expenseTypeId) {
             baseConditions.push(inArray(transactions.txnTypeId, [incomeTypeId, expenseTypeId]));
         }

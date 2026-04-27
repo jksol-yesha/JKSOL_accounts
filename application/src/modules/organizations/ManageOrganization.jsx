@@ -5,7 +5,6 @@ import {
     ChevronDown,
     Clock3,
     Edit,
-    Loader2,
     Plus,
     Search,
     Trash2,
@@ -15,6 +14,7 @@ import {
 import PageContentShell from '../../components/layout/PageContentShell';
 import ManageOrganizationModal from '../../components/layout/ManageOrganizationModal';
 import apiService from '../../services/api';
+import { Loader } from '../../components/common/Loader';
 import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
 import { cn } from '../../utils/cn';
@@ -1140,7 +1140,7 @@ const ManageOrganization = () => {
                                 <tr>
                                     <td colSpan={6} className="px-5 py-12">
                                         <div className="flex items-center justify-center">
-                                            <Loader2 size={24} className="animate-spin text-gray-500" />
+                                            <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                         </div>
                                     </td>
                                 </tr>
@@ -1236,7 +1236,7 @@ const ManageOrganization = () => {
                                                             title="Remove user"
                                                         >
                                                             {removingMemberId === member.id ? (
-                                                                <Loader2 size={14} className="animate-spin" />
+                                                                <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
                                                             ) : (
                                                                 <Trash2 size={14} />
                                                             )}
@@ -1456,7 +1456,7 @@ const ManageOrganization = () => {
                                 disabled={creatingOrg}
                                 className="inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-3.5 py-2 text-[12px] font-bold text-white transition-colors hover:bg-[#2F5FC6] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {creatingOrg && <Loader2 size={14} className="animate-spin" />}
+                                {creatingOrg && <Loader className="h-3.5 w-3.5 text-white" />}
                                 <span>Create</span>
                             </button>
                         </div>
@@ -1750,7 +1750,7 @@ const ManageOrganization = () => {
                                 disabled={updatingOrg}
                                 className="inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-3.5 py-2 text-[12px] font-bold text-white transition-colors hover:bg-[#2F5FC6] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {updatingOrg && <Loader2 size={14} className="animate-spin" />}
+                                {updatingOrg && <Loader className="h-3.5 w-3.5 text-white" />}
                                 <span>Save</span>
                             </button>
                         </div>
@@ -1955,7 +1955,7 @@ const ManageOrganization = () => {
                                 disabled={savingMemberAccess || (editingAccessData.roleId === 3 && selectedEditBranchIds.length === 0)}
                                 className="inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-4 py-2 text-[12px] font-bold text-white transition-colors hover:bg-[#2F5FC6] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {savingMemberAccess && <Loader2 size={14} className="animate-spin" />}
+                                {savingMemberAccess && <Loader className="h-3.5 w-3.5 text-white" />}
                                 <span>Save Access</span>
                             </button>
                         </div>
@@ -2094,7 +2094,7 @@ const ManageOrganization = () => {
                                 disabled={inviteLoading}
                                 className="inline-flex items-center gap-2 rounded-lg bg-[#4A8AF4] px-3.5 py-2 text-[12px] font-bold text-white transition-colors hover:bg-[#2F5FC6] disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {inviteLoading && <Loader2 size={14} className="animate-spin" />}
+                                {inviteLoading && <Loader className="h-3.5 w-3.5 text-white" />}
                                 <span>Send Invite</span>
                             </button>
                         </div>

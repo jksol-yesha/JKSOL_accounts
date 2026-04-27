@@ -445,7 +445,7 @@ const Dashboard = () => {
             tertiaryTone: expenseChange.tone
         },
         {
-            title: 'Investment Balance',
+            title: 'Total Investment',
             amount: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.investmentBalance || metricSeries.totalInvestment || [],
             comparisonLabels,

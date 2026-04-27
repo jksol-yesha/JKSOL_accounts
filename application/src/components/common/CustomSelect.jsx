@@ -36,6 +36,7 @@ const CustomSelect = React.forwardRef(
       dropdownClassName = "",
       dropdownContentClassName = "",
       optionLabelClassName = "",
+      dropdownItemClassName = "",
       dropdownWidth,
       matchTriggerWidth = false,
       maxVisibleOptions = DEFAULT_MAX_VISIBLE_OPTIONS,
@@ -49,8 +50,11 @@ const CustomSelect = React.forwardRef(
       searchPlaceholder = "Search...",
       searchInInput = false,
       showSelectedCheck = true,
+      showSelectedBackground = true,
+      highlightSelectedOptionOnOpen = true,
       openOnArrowKeys = true,
       openOnFocus = true,
+      placeholder = "Select",
       ...rest
     },
     ref,
@@ -105,7 +109,7 @@ const CustomSelect = React.forwardRef(
     );
     const fallbackOption = options.find((option) => option.value === "");
     const buttonLabel =
-      selectedOption?.label || fallbackOption?.label || "Select";
+      selectedOption?.label || fallbackOption?.label || placeholder;
     const selectedLabel = selectedOption?.label || "";
     const usesEmptyValuePlaceholder =
       searchInInput &&
@@ -169,7 +173,9 @@ const CustomSelect = React.forwardRef(
         setHighlightedIndex(-1);
       } else {
         const idx = filteredOptions.findIndex((opt) => opt.value === currentValue);
-        setHighlightedIndex(idx >= 0 ? idx : 0);
+        setHighlightedIndex(
+          idx >= 0 ? (highlightSelectedOptionOnOpen ? idx : -1) : 0,
+        );
 
         if (isSearchable && !searchInInput) {
           const timer = setTimeout(() => {
@@ -674,9 +680,14 @@ const CustomSelect = React.forwardRef(
                           "flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1 text-left transition-colors",
                           option.disabled
                             ? "text-gray-300 cursor-not-allowed"
-                            : (isSelected || isHighlighted)
+                            : isSelected
+                              ? showSelectedBackground
+                                ? "bg-[#EEF0FC]"
+                                : "bg-transparent hover:bg-transparent"
+                              : isHighlighted
                               ? "bg-[#EEF0FC]"
                               : "hover:bg-[#EEF0FC]",
+                            dropdownItemClassName,
                         )}
                       >
                         <div className="w-4 flex justify-center shrink-0">

@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Building2, Globe, Clock, Loader2, Upload, Plus, Edit2, Power, Check, ArrowLeft, AlertCircle, Users, Mail, UserPlus, Trash2, GitBranch, Shield, ChevronDown } from 'lucide-react';
+import { X, Building2, Globe, Clock, Upload, Plus, Edit2, Power, Check, ArrowLeft, AlertCircle, Users, Mail, UserPlus, Trash2, GitBranch, Shield, ChevronDown } from 'lucide-react';
 import { useOrganization } from '../../context/OrganizationContext';
 import apiService from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import CustomSelect from '../common/CustomSelect';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
+import { Loader } from '../common/Loader';
 
 const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBackToManage = null }) => {
     const { organizations, createOrganization, refreshOrganizations, selectedOrg, switchOrganization } = useOrganization();
@@ -578,7 +579,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                                             disabled={loading}
                                             className="flex-1 bg-black text-white text-[13px] font-extrabold py-3 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                                         >
-                                            {loading && <Loader2 size={16} className="animate-spin" />}
+                                            {loading && <Loader className="h-4 w-4 text-white" />}
                                             <span>{editingId ? 'Update' : 'Create'}</span>
                                         </button>
                                     </div>
@@ -700,7 +701,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                                                     disabled={inviteLoading || !inviteEmail || (selectedOrgRole === 3 && selectedBranchIds.length === 0)}
                                                     className="w-full bg-black text-white py-2.5 rounded-xl font-bold text-sm hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                                                 >
-                                                    {inviteLoading ? <Loader2 size={16} className="animate-spin" /> : <UserPlus size={16} />}
+                                                    {inviteLoading ? <Loader className="h-4 w-4 text-white" /> : <UserPlus size={16} />}
                                                     Send Invitation
                                                 </button>
                                             </form>
@@ -720,7 +721,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
 
                                             {loadingMembers ? (
                                                 <div className="flex justify-center py-8">
-                                                    <Loader2 size={24} className="animate-spin text-gray-300" />
+                                                    <Loader className="h-6 w-6 text-gray-300" />
                                                 </div>
                                             ) : members.length === 0 ? (
                                                 <div className="text-center py-8 text-gray-400 text-sm">No members found</div>
@@ -933,7 +934,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                                     disabled={loading || (editingAccessData.roleId === 3 && editingAccessData.branchIds.length === 0)}
                                     className="flex-1 bg-black text-white text-[13px] font-extrabold py-3 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    {loading && <Loader2 size={16} className="animate-spin" />}
+                                    {loading && <Loader className="h-4 w-4 text-white" />}
                                     <span>Update Access</span>
                                 </button>
                             </div>

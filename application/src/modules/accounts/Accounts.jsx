@@ -15,7 +15,6 @@ import {
   Copy,
   Check,
   ChevronDown,
-  Loader2,
   Landmark,
   CreditCard,
   Banknote,
@@ -40,6 +39,7 @@ import PageHeader from "../../components/layout/PageHeader";
 import PageContentShell from "../../components/layout/PageContentShell";
 import CustomSelect from "../../components/common/CustomSelect";
 import apiService from "../../services/api";
+import { Loader } from "../../components/common/Loader";
 import { cn } from "../../utils/cn";
 import {
   ACCOUNT_TYPE_LABELS,
@@ -87,16 +87,25 @@ const FilterDropdown = React.forwardRef(
       placeholder = "",
       onKeyDown,
       onFocusNext,
+      showApplyFooter = false,
+      defaultValue = "",
     },
     ref,
   ) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const [stagedValue, setStagedValue] = useState(value);
     const dropdownRef = useRef(null);
     const buttonRef = useRef(null);
     const dropdownMenuRef = useRef(null);
     const optionRefs = useRef([]);
     const [dropdownPosition, setDropdownPosition] = useState(null);
+
+    useEffect(() => {
+      if (showApplyFooter && isOpen) {
+        setStagedValue(value);
+      }
+    }, [showApplyFooter, isOpen, value]);
 
     useLayoutEffect(() => {
       if (!isOpen) {
@@ -139,7 +148,8 @@ const FilterDropdown = React.forwardRef(
     };
     const isTitleVar = variant === "title";
     const openDropdown = () => {
-      const selectedIndex = options.findIndex((option) => option.value === value);
+      const activeValue = value;
+      const selectedIndex = options.findIndex((option) => option.value === activeValue);
       setHighlightedIndex(selectedIndex);
       setIsOpen(true);
     };
@@ -157,6 +167,14 @@ const FilterDropdown = React.forwardRef(
           onFocusNext?.();
         }, 0);
       }
+    };
+
+    const handleApply = (shouldFocusNext = false) => {
+      handleSelect(stagedValue, shouldFocusNext);
+    };
+
+    const handleReset = () => {
+      setStagedValue(defaultValue);
     };
 
     const handleInternalKeyDown = (event) => {
@@ -179,18 +197,33 @@ const FilterDropdown = React.forwardRef(
       switch (event.key) {
         case "ArrowDown":
           event.preventDefault();
-          setHighlightedIndex((current) => (current + 1) % options.length);
+          setHighlightedIndex((current) => {
+            const totalItems = options.length + (showApplyFooter ? 2 : 0);
+            return (current + 1) % totalItems;
+          });
           break;
         case "ArrowUp":
           event.preventDefault();
-          setHighlightedIndex((current) =>
-            (current - 1 + options.length) % options.length,
-          );
+          setHighlightedIndex((current) => {
+            const totalItems = options.length + (showApplyFooter ? 2 : 0);
+            return (current - 1 + totalItems) % totalItems;
+          });
           break;
         case "Enter":
           event.preventDefault();
           if (highlightedIndex >= 0 && options[highlightedIndex]) {
-            handleSelect(options[highlightedIndex].value, true);
+            if (showApplyFooter) {
+              setStagedValue(options[highlightedIndex].value);
+            } else {
+              handleSelect(options[highlightedIndex].value, true);
+            }
+          } else if (showApplyFooter && highlightedIndex === options.length) {
+            handleReset();
+          } else if (
+            showApplyFooter &&
+            highlightedIndex === options.length + 1
+          ) {
+            handleApply(true);
           } else {
             closeDropdown();
           }
@@ -208,12 +241,15 @@ const FilterDropdown = React.forwardRef(
 
     useEffect(() => {
       if (!isOpen || highlightedIndex < 0) return;
+      if (highlightedIndex >= options.length) return;
       optionRefs.current[highlightedIndex]?.scrollIntoView?.({
         block: "nearest",
       });
     }, [highlightedIndex, isOpen]);
 
     React.useImperativeHandle(ref, () => buttonRef.current);
+
+    const renderedValue = showApplyFooter ? stagedValue : value;
 
     return (
       <div className="relative" ref={dropdownRef}>
@@ -232,15 +268,15 @@ const FilterDropdown = React.forwardRef(
             "group relative flex items-center justify-between gap-1 transition-colors outline-none",
             isTitleVar
               ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary"
-              : "h-[32px] px-2 bg-white text-gray-600 border border-gray-200 text-[13px] font-medium rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
+              : "h-[32px] px-2 bg-white text-gray-600 border border-gray-200 text-[12px] font-medium rounded-md shadow-[0_1px_2px_rgba(0,0,0,0.05)]",
             !isOpen && !isTitleVar && "hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-slate-700 focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD]"
           )}
         >
           <div
             className={`flex items-center gap-1.5 ${!isTitleVar ? "" : "font-extrabold"}`}
           >
-            <span className="group-hover:text-blue-500 transition-colors uppercase text-[11px] tracking-tight">{label && `${label}: `}</span>
-            <span className="group-hover:text-blue-600 font-medium transition-colors">{selectedOption?.label}</span>
+            <span className="group-hover:text-blue-500 transition-colors uppercase text-[12px] tracking-tight">{label && `${label}: `}</span>
+            <span className="group-hover:text-blue-600 font-medium transition-colors text-[12px]">{selectedOption?.label}</span>
           </div>
           {!hideIcon && (
             <ChevronDown
@@ -271,10 +307,16 @@ const FilterDropdown = React.forwardRef(
                   }}
                   type="button"
                   onMouseEnter={() => setHighlightedIndex(index)}
-                  onClick={() => handleSelect(option.value)}
+                  onClick={() => {
+                    if (showApplyFooter) {
+                      setStagedValue(option.value);
+                    } else {
+                      handleSelect(option.value);
+                    }
+                  }}
                   className={cn(
                     "flex items-center gap-2 w-full text-left px-3 py-2 transition-colors",
-                    value === option.value
+                    renderedValue === option.value
                       ? "bg-transparent hover:bg-transparent"
                       : highlightedIndex === index
                         ? "bg-[#EEF0FC]"
@@ -283,8 +325,8 @@ const FilterDropdown = React.forwardRef(
                 >
                   <span
                     className={cn(
-                      "text-[13px] w-full flex items-center gap-2",
-                      value === option.value
+                      "text-[12px] w-full flex items-center gap-2",
+                      renderedValue === option.value
                         ? "font-bold text-[#2F5FC6]"
                         : highlightedIndex === index
                           ? "font-medium text-slate-800"
@@ -292,7 +334,7 @@ const FilterDropdown = React.forwardRef(
                     )}
                   >
                     <div className="w-4 flex justify-center shrink-0">
-                      {value === option.value && (
+                      {renderedValue === option.value && (
                         <Check
                           size={14}
                           className="text-[#2F5FC6]"
@@ -304,6 +346,35 @@ const FilterDropdown = React.forwardRef(
                   </span>
                 </button>
               ))}
+              {showApplyFooter && (
+                <div className="mt-1 pt-1 border-t border-slate-100 flex justify-end gap-1.5 px-1 pb-0.5">
+                  <button
+                    type="button"
+                    onMouseEnter={() => setHighlightedIndex(options.length)}
+                    onClick={handleReset}
+                    className={cn(
+                      "h-6 rounded-md px-4 text-[11px] font-semibold shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]",
+                      highlightedIndex === options.length
+                        ? "bg-slate-100 text-slate-700 ring-1 ring-slate-200"
+                        : "bg-slate-50 text-slate-600 hover:bg-slate-100",
+                    )}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    onMouseEnter={() => setHighlightedIndex(options.length + 1)}
+                    onClick={() => handleApply()}
+                    className={cn(
+                      "h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98]",
+                      highlightedIndex === options.length + 1 &&
+                        "ring-2 ring-[#4A8AF4]/20 ring-offset-1",
+                    )}
+                  >
+                    Apply
+                  </button>
+                </div>
+              )}
             </div>,
             document.body,
           )}
@@ -439,6 +510,7 @@ const normalizeAccount = (account) => ({
     account.zip_code ??
     null,
   bankBranchName: account.bankBranchName ?? account.bank_branch_name ?? null,
+  openingBalance: account.openingBalance ?? account.opening_balance ?? null,
   createdAt: account.createdAt ?? account.created_at ?? null,
   branchNames:
     account.branchNames ??
@@ -609,14 +681,14 @@ const GenericFullWidthGroupCellRenderer = (props) => {
   if (!props.data || !props.data.isGroupHeader) return null;
   return (
     <div className="flex items-center w-full h-full bg-[#f8fafc] px-4 border-y border-slate-200">
-      <span className="text-[11px] font-bold text-slate-600 tracking-wider uppercase">{props.data.groupName}</span>
+      <span className="text-[12px] font-bold text-slate-600 tracking-wider uppercase">{props.data.groupName}</span>
     </div>
   );
 };
 
 const getDisplayBalance = (account) => {
   // API returns convertedBalance in target/base currency; fallback to raw openingBalance.
-  const value = account?.convertedBalance ?? account?.openingBalance ?? 0;
+  const value = account?.convertedBalance ?? account?.openingBalance ?? account?.opening_balance ?? 0;
   return Number(value) || 0;
 };
 
@@ -626,6 +698,7 @@ const getDisplayClosingBalance = (account) => {
     account?.convertedClosingBalance ??
     account?.closing_balance ??
     account?.openingBalance ??
+    account?.opening_balance ??
     0;
   return Number(value) || 0;
 };
@@ -917,7 +990,7 @@ const Accounts = () => {
     typeof window !== "undefined" ? window.innerWidth >= 1280 : true,
   );
 
-  const cacheKey = `accounts:list:${selectedYear?.id || "fy"}:${preferences.currency || "currency"}`;
+  const cacheKey = `accounts:list:${preferences.currency || "currency"}`;
 
   const computedBalances = useMemo(() => {
     let bank = 0,
@@ -1193,9 +1266,7 @@ const Accounts = () => {
       setLoading(true);
       try {
         const accountsResponse = await apiService.accounts.getAll(
-          {
-            financialYearId: selectedYear?.id,
-          },
+          {},
           { signal: controller.signal },
         );
 
@@ -1516,7 +1587,7 @@ const Accounts = () => {
               e.preventDefault();
               navigate(`/transactions?accountId=${account.id}`);
             }}
-            className="shrink-0 text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm text-[11px] font-medium whitespace-nowrap"
+            className="shrink-0 text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm text-[12px] font-medium whitespace-nowrap"
             title={`View ${txns} transactions`}
           >
             {txns} txn{txns !== 1 ? 's' : ''}
@@ -1625,7 +1696,7 @@ const Accounts = () => {
           "text-rose-600": (params) => params.value < 0,
           "text-emerald-700": (params) => params.value >= 0,
         },
-        cellClass: "tabular-nums font-semibold text-[13px] text-right",
+        cellClass: "tabular-nums font-semibold text-[12px] text-right",
       },
       {
         field: "closingBalance",
@@ -1641,14 +1712,14 @@ const Accounts = () => {
           "text-rose-600": (params) => params.value < 0,
           "text-emerald-700": (params) => params.value >= 0,
         },
-        cellClass: "tabular-nums font-semibold text-[13px] text-right",
+        cellClass: "tabular-nums font-semibold text-[12px] text-right",
       },
 
       {
         field: "createdByDisplayName",
         headerName: "Created By",
         minWidth: 90,
-        cellClass: "text-gray-400",
+        cellClass: "text-[12px] text-gray-400",
       },
       {
         headerName: "Action",
@@ -1667,7 +1738,8 @@ const Accounts = () => {
       sortable: true,
       filter: true,
       resizable: true,
-      cellClass: "text-[11px] font-medium text-gray-600",
+      cellClass: "font-medium text-gray-600",
+      cellStyle: { fontSize: "12px" },
       headerClass:
         "text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB]",
       comparator: (valueA, valueB, nodeA, nodeB, isDescending) => {
@@ -1839,7 +1911,7 @@ const Accounts = () => {
               <div className="h-[220px] w-full mt-6 transition-all relative">
                 {isTrendLoading && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-xl">
-                    <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                    <Loader className="h-6 w-6 text-[#4A8AF4]" />
                   </div>
                 )}
                 <ResponsiveContainer width="100%" height="100%">
@@ -1932,7 +2004,7 @@ const Accounts = () => {
               onClick={handleCreateAccount}
               onKeyDown={handleAddAccountKeyDown}
               className={cn(
-                "group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium",
+                "group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium",
                 drawerState.open && "bg-[#F0F9FF] border-[#BAE6FD]"
               )}
             >
@@ -1947,11 +2019,11 @@ const Accounts = () => {
               onKeyDown={handleRefreshKeyDown}
               className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
             >
-              <RefreshCcw
-                size={14}
-                strokeWidth={2}
-                className={cn(loading && "animate-spin text-primary")}
-              />
+              {loading ? (
+                <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
+              ) : (
+                <RefreshCcw size={14} strokeWidth={2} />
+              )}
             </button>
           </div>
 
@@ -1960,7 +2032,7 @@ const Accounts = () => {
             <FilterDropdown
               ref={groupFilterRef}
               value={groupBy}
-              onChange={(val) => setGroupBy(val === groupBy ? "none" : val)}
+              onChange={setGroupBy}
               onFocusNext={() => {
                 focusNextAccountsControl("group");
               }}

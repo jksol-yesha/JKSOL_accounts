@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Save, ChevronDown, Check, X, Building2 } from 'lucide-react';
+import { Loader } from '../../../components/common/Loader';
 import apiService from '../../../services/api';
 import { useToast } from '../../../context/ToastContext';
 import { cn } from '../../../utils/cn';
@@ -345,27 +346,29 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
             >
 
                 {/* Header */}
-                <div className="px-5 py-1 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
-                    <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
-                            <Building2 size={14} strokeWidth={2.5} />
+                <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                <Building2 size={14} strokeWidth={2.5} />
+                            </div>
+                            <div className="flex flex-col">
+                                <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                                    {isEditing ? "Edit Party" : "New Party"}
+                                </h2>
+                                <p className="text-[10px] font-semibold text-slate-500">
+                                    {isEditing ? "Update party details" : "Create a new party record"}
+                                </p>
+                            </div>
                         </div>
-                        <div className="flex flex-col">
-                            <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
-                                {isEditing ? "Edit Party" : "New Party"}
-                            </h2>
-                            <p className="text-[10px] font-semibold text-slate-500">
-                                {isEditing ? "Update party details" : "Create a new party record"}
-                            </p>
-                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
+                        >
+                            <X size={14} strokeWidth={2.5} />
+                        </button>
                     </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="p-1.5 hover:bg-slate-100 rounded-md text-slate-400 hover:text-slate-600 transition-colors"
-                    >
-                        <X size={16} />
-                    </button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
@@ -519,34 +522,6 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                                     <span className="text-[12px] font-bold text-slate-600 group-hover:text-slate-800 select-none">GST Registered</span>
                                 </label>
 
-                                <label 
-                                    className="flex items-center gap-2 cursor-pointer group outline-none"
-                                    tabIndex={0}
-                                    onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                            e.preventDefault();
-                                            handleChange({ target: { name: 'isActive', type: 'checkbox', checked: !formData.isActive } });
-                                        }
-                                    }}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        name="isActive"
-                                        checked={formData.isActive}
-                                        onChange={handleChange}
-                                        className="hidden"
-                                    />
-                                    <div className={cn(
-                                        "w-[30px] h-[16px] rounded-full flex items-center transition-colors px-[2px] shadow-inner group-focus-visible:ring-2 group-focus-visible:ring-[#4A8AF4] group-focus-visible:ring-offset-1 outline-none",
-                                        formData.isActive ? "bg-[#4A8AF4]" : "bg-slate-200"
-                                    )}>
-                                        <div className={cn(
-                                            "w-[12px] h-[12px] rounded-full bg-white shadow-sm transition-transform",
-                                            formData.isActive ? "translate-x-[14px]" : "translate-x-0"
-                                        )}></div>
-                                    </div>
-                                    <span className="text-[12px] font-bold text-slate-600 group-hover:text-slate-800 select-none">Active</span>
-                                </label>
                             </div>
 
                             {/* GST Info */}
@@ -588,28 +563,58 @@ const CreatePartyDrawer = ({ isOpen, onClose, party, onSuccess }) => {
                     </div>
 
                     {/* Footer Actions */}
-                    <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-3 shrink-0">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 bg-white border border-slate-200 rounded-md text-[13px] font-bold text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors"
+                    <div className="px-5 py-2.5 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+                        <label
+                            className="flex items-center gap-2 cursor-pointer group"
+                            tabIndex={0}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    handleChange({ target: { name: 'isActive', type: 'checkbox', checked: !formData.isActive } });
+                                }
+                            }}
                         >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="px-6 py-2 bg-[#4A8AF4] text-white rounded-md text-[13px] font-bold hover:bg-[#3b78df] shadow-sm shadow-[#4A8AF4]/20 transition-all disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
-                        >
-                            {isSubmitting ? (
-                                <>
-                                    <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                    <span>Saving</span>
-                                </>
-                            ) : (
-                                <span>{isEditing ? 'Update Party' : 'Create Party'}</span>
-                            )}
-                        </button>
+                            <div className="relative inline-flex items-center">
+                                <input
+                                    type="checkbox"
+                                    name="isActive"
+                                    checked={formData.isActive}
+                                    onChange={handleChange}
+                                    tabIndex={-1}
+                                    className="sr-only peer"
+                                />
+                                <div className="relative h-4 w-7 rounded-full bg-slate-200 shadow-inner transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-300 peer-checked:bg-[#4A8AF4] before:absolute before:left-[2px] before:top-[2px] before:h-3 before:w-3 before:rounded-full before:bg-white before:shadow-sm before:transition-transform before:duration-200 peer-checked:before:translate-x-3"></div>
+                            </div>
+                            <span className="text-[11px] font-bold text-slate-600 select-none group-hover:text-slate-900 transition-colors">
+                                {formData.isActive ? 'Active' : 'Inactive'}
+                            </span>
+                        </label>
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-3 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting}
+                                className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center gap-1.5 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader className="h-3.5 w-3.5 text-white" />
+                                        <span>Saving</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Save size={13} strokeWidth={2.5} />
+                                        <span>{isEditing ? 'Update' : 'Save'}</span>
+                                    </>
+                                )}
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

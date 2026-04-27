@@ -144,10 +144,11 @@ const getInitialFormData = (account) => {
     accountType:
       (
         account.accountType ??
+        account.account_type ??
         account.type ??
         ""
       )?.toString() || "",
-    subtype: (account.subtype ?? account.subType ?? "")?.toString() || "",
+    subtype: (account.subtype ?? account.subType ?? account.sub_type ?? "")?.toString() || "",
     branchId: (account.branchId || account.branch_id || "")?.toString() || "",
     currencyId: account.currencyId || account.currency_id || "",
     currencyCode: account.currencyCode || account.baseCurrency || "",
@@ -162,8 +163,8 @@ const getInitialFormData = (account) => {
       account.bank_branch_name ||
       account.branchName ||
       "",
-    openingBalance: account.openingBalance ?? "0.00",
-    openingBalanceDate: formatDateForInput(account.openingBalanceDate),
+    openingBalance: account.openingBalance ?? account.opening_balance ?? "0.00",
+    openingBalanceDate: formatDateForInput(account.openingBalanceDate || account.opening_balance_date),
     description: account.description || "",
     isActive:
       account.isActive !== undefined ? account.isActive : account.status === 1,
@@ -242,7 +243,7 @@ const CreateAccount = ({
         triggeringElementRef.current.focus();
       }
       shouldRestoreFocusRef.current = false;
-    }, ACCOUNT_DRAWER_CLOSE_ANIMATION_MS);
+    }, 0);
 
     return () => {
       if (openStateTimer) {
@@ -958,11 +959,19 @@ const CreateAccount = ({
       const p = {
         ...formData,
         accountType: parseInt(formData.accountType),
+        account_type: parseInt(formData.accountType),
         subtype:
           formData.subtype && formData.subtype !== "0"
             ? parseInt(formData.subtype)
             : null,
+        sub_type:
+          formData.subtype && formData.subtype !== "0"
+            ? parseInt(formData.subtype)
+            : null,
         openingBalance: unformatNumber(formData.openingBalance) || "0",
+        opening_balance: unformatNumber(formData.openingBalance) || "0",
+        openingBalanceDate: formData.openingBalanceDate,
+        opening_balance_date: formData.openingBalanceDate,
         currency_id: formData.currencyId ? parseInt(formData.currencyId) : null,
         branchId: formData.branchId ? parseInt(formData.branchId) : null,
       };
@@ -1023,8 +1032,7 @@ const CreateAccount = ({
       {/* Backdrop */}
       <div
         className={cn(
-          "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]",
-          isClosingDrawer ? "animate-fade-out" : "animate-fade-in",
+          "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]"
         )}
         onClick={handleClose}
       ></div>
@@ -1032,8 +1040,7 @@ const CreateAccount = ({
       {/* Sliding Drawer */}
       <div
         className={cn(
-          "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden",
-          isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right",
+          "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden"
         )}
       >
         <form

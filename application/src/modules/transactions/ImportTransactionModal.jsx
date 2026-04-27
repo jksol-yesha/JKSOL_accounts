@@ -1,14 +1,65 @@
 import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, Loader2, ChevronDown, Check } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, CheckCircle, AlertCircle, ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import apiService from '../../services/api';
+import { Loader } from '../../components/common/Loader';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 
 const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
     const { selectedBranch, branches } = useBranch();
     const { selectedYear } = useYear();
+
+    // Animation States
+    const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
+    const [isClosingDrawer, setIsClosingDrawer] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
+
+    React.useEffect(() => {
+        let openStateTimer = null;
+        if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+            openStateTimer = setTimeout(() => {
+                setShouldRenderDrawer(true);
+                setIsClosingDrawer(false);
+            }, 0);
+            return () => {
+                if (openStateTimer) clearTimeout(openStateTimer);
+            };
+        }
+
+        if (!shouldRenderDrawer) return;
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingDrawer(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderDrawer(false);
+            setIsClosingDrawer(false);
+            closeAnimationTimerRef.current = null;
+        }, 280);
+
+        return () => {
+            if (openStateTimer) clearTimeout(openStateTimer);
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderDrawer]);
+
+    React.useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+            }
+        };
+    }, []);
 
     // Target Branch state
     const [targetBranchIds, setTargetBranchIds] = useState([]);
@@ -29,8 +80,8 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
         document.addEventListener('mousedown', handleClickOutside);
         document.addEventListener('keydown', handleEscape);
         return () => {
-             document.removeEventListener('mousedown', handleClickOutside);
-             document.removeEventListener('keydown', handleEscape);
+            document.removeEventListener('mousedown', handleClickOutside);
+            document.removeEventListener('keydown', handleEscape);
         };
     }, [isOpen, isBranchDropdownOpen, onClose]);
 
@@ -54,7 +105,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
     const isPartialResult = Boolean(result && (result.partialSuccess || (insertedRows > 0 && errorCount > 0)));
     const isSuccessfulResult = Boolean(result && result.success && insertedRows > 0 && errorCount === 0 && !isPartialResult);
 
-    if (!isOpen) return null;
+    if (!shouldRenderDrawer) return null;
 
     const handleFileChange = (e) => {
         const selectedFile = e.target.files[0];
@@ -202,12 +253,18 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
         <>
             {/* Backdrop */}
             <div
-                className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110] animate-fade-in"
+                className={cn(
+                    "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]",
+                    isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
+                )}
                 onClick={onClose}
             ></div>
 
             {/* Sliding Drawer */}
-            <div className="fixed inset-y-0 right-0 z-[120] w-full max-w-[480px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col animate-slide-in-right overflow-hidden">
+            <div className={cn(
+                "fixed inset-y-0 right-0 z-[120] w-full max-w-[480px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden",
+                isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
+            )}>
                 {/* Drawer Header */}
                 <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
                     <div className="flex items-start justify-between">
@@ -330,8 +387,8 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                                 }}
                                                 className={cn(
                                                     "w-full border-2 border-dashed shadow-sm rounded-lg p-8 flex flex-col items-center justify-center transition-all",
-                                                    targetBranchIds.length === 0 
-                                                        ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed" 
+                                                    targetBranchIds.length === 0
+                                                        ? "border-slate-200 bg-slate-50 opacity-60 cursor-not-allowed"
                                                         : "border-slate-200 hover:border-[#4A8AF4] hover:bg-[#4A8AF4]/5 cursor-pointer group",
                                                     error ? "border-rose-400 bg-rose-50/30" : ""
                                                 )}
@@ -499,8 +556,8 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                 disabled={!file || isLoading || targetBranchIds.length === 0}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-[#4A8AF4] hover:bg-[#3b76d6] text-white shadow-sm shadow-[#4A8AF4]/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} strokeWidth={2.5} />}
-                                {isLoading ? 'Extracting...' : 'Start Import'}
+                                {isLoading ? <Loader className="h-3.5 w-3.5 text-white" /> : null}
+                                {isLoading ? 'Extracting...' : 'Import'}
                             </button>
                         </>
                     )}
@@ -537,7 +594,7 @@ const ImportTransactionModal = ({ isOpen, onClose, onSuccess }) => {
                                 disabled={isLoading}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm shadow-rose-200 flex items-center gap-2 transition-colors disabled:opacity-50"
                             >
-                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} strokeWidth={2.5} />}
+                                {isLoading ? <Loader className="h-3.5 w-3.5 text-white" /> : <AlertCircle size={14} strokeWidth={2.5} />}
                                 {isLoading ? 'Creating...' : 'Confirm'}
                             </button>
                         </>

@@ -11,7 +11,6 @@ import {
     Camera,
     AlignLeft,
     ArrowRight,
-    Loader2,
     Trash2
 } from 'lucide-react';
 import {
@@ -29,6 +28,7 @@ import { useSidebarLayout } from './SidebarLayoutContext';
 import { useOrganization } from '../../context/OrganizationContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
+import { Loader } from '../common/Loader';
 
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -647,7 +647,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     className="absolute left-6 top-3 flex h-7 w-7 items-center justify-center rounded-full bg-slate-900 text-white shadow-[0_10px_24px_rgba(15,23,42,0.18)] transition-all hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 active:scale-95"
                 >
                     {isSaving ? (
-                        <Loader2 size={12} className="animate-spin" />
+                        <Loader className="h-3 w-3 text-white" />
                     ) : (
                         <Check size={14} strokeWidth={3.5} />
                     )}
@@ -677,7 +677,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         {/* Saving overlay */}
                         {isSaving && (
                             <div className="absolute inset-0 flex items-center justify-center bg-white/60 z-20">
-                                <Loader2 size={16} className="animate-spin text-slate-900" />
+                                <Loader className="h-4 w-4 text-slate-900" />
                             </div>
                         )}
 
@@ -725,7 +725,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                 />
             </div>
 
-            <div className="px-6 pb-3 space-y-0.5">
+            <div className="px-3 pb-3 space-y-0.5">
                 {activeEditField === 'name' ? (
                     <input
                         value={tempDisplayName}
@@ -878,13 +878,13 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     <button
                         type="button"
                         onClick={openProfileLogoutConfirm}
-                        className="flex w-full items-center gap-2 px-6 py-3 text-left text-slate-900 transition-colors"
+                        className="flex w-full items-center gap-2 px-3 py-3 text-left text-slate-900 transition-colors"
                     >
                         <LogOut size={14} strokeWidth={1.8} className="shrink-0 text-black" />
                         <span className="text-[12px] font-semibold tracking-tight">Log out</span>
                     </button>
                 ) : (
-                    <div className="px-6 py-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                    <div className="px-3 py-3 animate-in fade-in slide-in-from-top-1 duration-200">
                         <p className="text-[13px] font-bold tracking-tight text-slate-800">
                             Log out?
                         </p>
@@ -1124,7 +1124,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     onMouseLeave={clearHoveredItem}
                                     className={cn(
                                         "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent bg-[#EEF0FC] text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                        effectiveCollapsed ? "mx-auto h-9 w-9 justify-center rounded-md px-0" : "justify-start px-6",
+                                        effectiveCollapsed ? "mx-auto h-9 w-9 justify-center rounded-md px-0" : "justify-start px-3",
                                         showHoverExpandPanel && "overflow-visible",
                                         showSidebarControlMenu && "text-slate-900"
                                     )}

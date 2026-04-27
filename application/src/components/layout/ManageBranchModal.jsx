@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Building2, Plus, ChevronDown, Check, ArrowLeft, Edit2, Trash2, AlertCircle, Power, Search, Loader2 } from 'lucide-react';
+import { X, Building2, Plus, ChevronDown, Check, ArrowLeft, Edit2, Trash2, AlertCircle, Power, Search, Save } from 'lucide-react';
+import { Loader } from '../common/Loader';
+import { cn } from '../../utils/cn';
 import apiService from '../../services/api';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 import { useBranch } from '../../context/BranchContext';
@@ -18,6 +20,56 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
     const [currencySearch, setCurrencySearch] = useState('');
     const countryRef = useRef(null);
     const currencyRef = useRef(null);
+
+    // Animation States
+    const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
+    const [isClosingDrawer, setIsClosingDrawer] = useState(false);
+    const closeAnimationTimerRef = useRef(null);
+
+    useEffect(() => {
+        let openStateTimer = null;
+        if (isOpen) {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+            openStateTimer = setTimeout(() => {
+                setShouldRenderDrawer(true);
+                setIsClosingDrawer(false);
+            }, 0);
+            return () => {
+                if (openStateTimer) clearTimeout(openStateTimer);
+            };
+        }
+
+        if (!shouldRenderDrawer) return;
+
+        openStateTimer = setTimeout(() => {
+            setIsClosingDrawer(true);
+        }, 0);
+
+        closeAnimationTimerRef.current = setTimeout(() => {
+            setShouldRenderDrawer(false);
+            setIsClosingDrawer(false);
+            closeAnimationTimerRef.current = null;
+        }, 280);
+
+        return () => {
+            if (openStateTimer) clearTimeout(openStateTimer);
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+                closeAnimationTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRenderDrawer]);
+
+    useEffect(() => {
+        return () => {
+            if (closeAnimationTimerRef.current) {
+                clearTimeout(closeAnimationTimerRef.current);
+            }
+        };
+    }, []);
 
     // Handle click outside dropdowns to close them
     useEffect(() => {
@@ -296,37 +348,54 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
 
     // Branch selection happens only in the BranchSelector dropdown now.
 
-    if (!isOpen) return null;
+    if (!shouldRenderDrawer) return null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl scale-100 animate-in zoom-in-95 duration-200 relative overflow-visible flex flex-col max-h-[90vh]">
+        <>
+            <div
+                className={cn(
+                    "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]",
+                    isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
+                )}
+                onClick={onClose}
+            ></div>
+            
+            <div className={cn(
+                "fixed inset-y-0 right-0 z-[120] w-full max-w-[480px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden",
+                isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
+            )}>
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-none bg-white rounded-t-2xl z-20">
-                    <div className="flex items-center gap-2">
-                        {isCreating && (
-                            <button
-                                onClick={exitFormView}
-                                className="mr-2 text-gray-400 hover:text-black transition-colors"
-                            >
-                                <ArrowLeft size={20} />
-                            </button>
-                        )}
-                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Building2 className="text-gray-900" size={24} />
-                            {isCreating ? (editingId ? 'Update Branch' : 'New Branch') : 'Manage Branch'}
-                        </h3>
+                <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
+                    <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                            <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                                {isCreating ? (
+                                    <button onClick={exitFormView} className="hover:text-black transition-colors outline-none"><ArrowLeft size={14} strokeWidth={2.5}/></button>
+                                ) : (
+                                    <Building2 size={14} strokeWidth={2.5} />
+                                )}
+                            </div>
+                            <div className="flex flex-col">
+                                <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                                    {isCreating ? (editingId ? 'Update Branch' : 'New Branch') : 'Manage Branch'}
+                                </h2>
+                                <p className="text-[10px] font-semibold text-slate-500">
+                                    {isCreating ? 'Add branch location to organize access' : 'Manage your organization\'s locations'}
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
+                        >
+                            <X size={14} strokeWidth={2.5} />
+                        </button>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                        <X size={20} />
-                    </button>
                 </div>
 
                 {/* Body - Scrollable */}
-                <div className={`p-6 min-h-0 ${!isCreating ? 'overflow-y-auto' : 'overflow-visible'}`}>
+                <div className={`flex-1 px-5 py-5 min-h-0 ${!isCreating ? 'overflow-y-auto custom-scrollbar bg-white' : 'overflow-y-auto custom-scrollbar bg-white'}`}>
                     {successMessage ? (
                         <div className="flex flex-col items-center justify-center py-8 text-center animate-in fade-in zoom-in duration-300">
                             <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4">
@@ -371,7 +440,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                 <div className="relative">
                                     {isLoading && branchesList.length === 0 ? (
                                         <div className="min-h-[180px] flex items-center justify-center">
-                                            <Loader2 size={24} className="text-gray-500 animate-spin" />
+                                            <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                         </div>
                                     ) : (
                                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
@@ -449,22 +518,24 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                     )}
                                     {isLoading && branchesList.length > 0 && (
                                         <div className="absolute inset-0 z-10 bg-white/85 rounded-xl flex flex-col items-center justify-center">
-                                            <Loader2 size={22} className="text-gray-500 animate-spin" />
+                                            <Loader className="h-[22px] w-[22px] text-[#4A8AF4]" />
                                         </div>
                                     )}
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        <form onSubmit={handleSubmit} className="space-y-4">
+                        <form onSubmit={handleSubmit} className="flex h-full flex-col min-h-0">
+                            <div className="flex-1 overflow-y-auto py-5 no-scrollbar bg-white">
+                            <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-gray-700 mb-1">Branch Name</label>
+                                <label className="block text-[11px] font-bold text-slate-600 mb-1">Branch Name</label>
                                 <input
                                     type="text"
                                     name="name"
                                     value={formData.name}
                                     onChange={handleInputChange}
-                                    className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent"
+                                    className="w-full px-3 h-[34px] text-[13px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4]"
                                     placeholder="Enter branch name"
                                     required
                                 />
@@ -472,10 +543,10 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="relative" ref={countryRef}>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Country</label>
+                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Country</label>
                                     <input type="hidden" name="country" value={formData.country} required />
                                     <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
                                         <input
                                             type="text"
                                             value={showCountryDropdown ? countrySearch : formData.country}
@@ -501,9 +572,9 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                                 }
                                             }}
                                             placeholder="Search country"
-                                            className="w-full pl-9 pr-9 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent bg-white text-sm font-medium text-gray-700 placeholder:text-gray-400"
+                                            className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
                                         />
-                                        <ChevronDown size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
+                                        <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
                                     </div>
 
                                     {showCountryDropdown && (
@@ -529,10 +600,10 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                 </div>
 
                                 <div className="relative" ref={currencyRef}>
-                                    <label className="block text-sm font-bold text-gray-700 mb-1">Currency</label>
+                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Currency</label>
                                     <input type="hidden" name="currencyCode" value={formData.currencyCode} required />
                                     <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
                                         <input
                                             type="text"
                                             value={showCurrencyDropdown ? currencySearch : formData.currencyCode}
@@ -558,9 +629,9 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                                 }
                                             }}
                                             placeholder="Search currency"
-                                            className="w-full pl-9 pr-9 py-2 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black focus:border-transparent bg-white text-sm font-medium text-gray-700 placeholder:text-gray-400"
+                                            className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
                                         />
-                                        <ChevronDown size={16} className={`absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
+                                        <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
                                     </div>
 
                                     {showCurrencyDropdown && (
@@ -586,47 +657,48 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                 </div>
                             </div>
 
-                            {/* Active Toggle */}
-                            <div className="inline-flex items-center gap-6 px-1 py-0.5">
-                                <div>
-                                    <h3 className="text-sm font-bold text-gray-700">Status</h3>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        name="status"
-                                        checked={formData.status === 1}
-                                        onChange={(e) => handleInputChange({ target: { name: 'status', value: e.target.checked ? 1 : 2 } })}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-10 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-black"></div>
-                                </label>
-                            </div>
-
                             {requestError && (
-                                <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100 flex items-start gap-2">
-                                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                                <div className="p-3 bg-rose-50 text-rose-600 text-[11px] font-bold rounded-md border border-rose-100 flex items-start gap-2">
+                                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
                                     <span>{requestError}</span>
                                 </div>
                             )}
+                            </div>
+                            </div>
 
-                            <div className="pt-2 flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={exitFormView}
-                                    className="px-5 py-2.5 bg-white border border-gray-200 text-gray-700 text-sm font-bold rounded-xl hover:bg-gray-50 transition-colors min-w-[120px]"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className={editingId
-                                        ? "px-6 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg active:scale-95 min-w-[120px]"
-                                        : "px-6 py-2.5 bg-black text-white text-sm font-bold rounded-xl hover:bg-gray-800 transition-colors shadow-lg active:scale-95 min-w-[140px]"
-                                    }
-                                >
-                                    {editingId ? 'Update' : 'Create'}
-                                </button>
+                            <div className="py-2 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+                                <label className="flex items-center gap-2 cursor-pointer group">
+                                    <div className="relative inline-flex items-center">
+                                        <input
+                                            type="checkbox"
+                                            name="status"
+                                            checked={formData.status === 1}
+                                            onChange={(e) => handleInputChange({ target: { name: 'status', value: e.target.checked ? 1 : 2 } })}
+                                            tabIndex={-1}
+                                            className="sr-only peer"
+                                        />
+                                        <div className="relative h-4 w-7 rounded-full bg-slate-200 shadow-inner transition-colors duration-200 peer-focus-visible:ring-2 peer-focus-visible:ring-slate-300 peer-checked:bg-[#4A8AF4] before:absolute before:left-[2px] before:top-[2px] before:h-3 before:w-3 before:rounded-full before:bg-white before:shadow-sm before:transition-transform before:duration-200 peer-checked:before:translate-x-3"></div>
+                                    </div>
+                                    <span className="text-[11px] font-bold text-slate-600 select-none group-hover:text-slate-900 transition-colors">
+                                        {formData.status === 1 ? 'Active' : 'Inactive'}
+                                    </span>
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={exitFormView}
+                                        className="px-3 py-1 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1 rounded-md shadow-sm active:scale-95 transition-all flex items-center gap-1.5 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30"
+                                    >
+                                        <Save size={13} strokeWidth={2.5} />
+                                        <span>{editingId ? 'Update' : 'Save'}</span>
+                                    </button>
+                                </div>
                             </div>
                         </form>
                     )}
@@ -634,17 +706,17 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
 
                 {/* Footer only for List View */}
                 {!isCreating && (
-                    <div className="bg-gray-50 px-6 py-4 flex justify-end rounded-b-2xl flex-none">
+                    <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
                         <button
                             onClick={onClose}
-                            className="px-6 py-2 bg-black text-white font-bold rounded-lg hover:bg-gray-800 transition-colors"
+                            className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                         >
                             Done
                         </button>
                     </div>
                 )}
             </div>
-        </div >,
+        </>,
         document.body
     );
 };

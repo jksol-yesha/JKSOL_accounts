@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, Mail, Calendar, Save, Check, Camera, Loader2, X } from 'lucide-react';
+import { User, Mail, Calendar, Save, Check, Camera, X } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
+import { Loader } from '../../components/common/Loader';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { usePreferences } from '../../context/PreferenceContext';
@@ -196,7 +197,7 @@ const Profile = () => {
                                     {/* Saving Overaly */}
                                     {isLoading && (
                                         <div className="absolute inset-0 flex items-center justify-center bg-white/60 rounded-full z-20">
-                                            <Loader2 size={24} className="animate-spin text-black" />
+                                            <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                         </div>
                                     )}
 
@@ -298,7 +299,7 @@ const Profile = () => {
                                             isLoading && "opacity-70 cursor-not-allowed"
                                         )}
                                     >
-                                        {isLoading ? <Loader2 size={24} className="animate-spin" /> : <Check size={28} strokeWidth={3.5} />}
+                                        {isLoading ? <Loader className="h-6 w-6 text-white" /> : <Check size={28} strokeWidth={3.5} />}
                                     </button>
                                 </div>
                             </div>

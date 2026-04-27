@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
+import { Loader } from '../../components/common/Loader';
 import { useAuth } from '../../context/AuthContext';
 
 const EmailVerification = () => {
@@ -128,7 +129,7 @@ const EmailVerification = () => {
                 <button
                     disabled={isLoading || success}
                     className="w-full bg-black text-white font-bold py-3 rounded-lg hover:bg-gray-800 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    {isLoading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>}
+                    {isLoading && <Loader className="h-4 w-4 text-white" />}
                     <span>{isLoading ? 'Verifying...' : 'Verify Email'}</span>
                 </button>
 

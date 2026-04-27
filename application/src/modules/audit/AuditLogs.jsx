@@ -15,13 +15,13 @@ import {
     Shield,
     FileJson,
     ChevronDown,
-    Loader2,
     Eye,
     X,
     ArrowRight
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import PageHeader from '../../components/layout/PageHeader';
+import { Loader } from '../../components/common/Loader';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
 import MobilePagination from '../../components/common/MobilePagination';
@@ -452,7 +452,11 @@ const AuditLogs = () => {
                                     className="h-9 px-3 flex flex-row items-center justify-center gap-2 rounded-md border bg-white border-gray-200 text-gray-700 font-medium text-xs hover:bg-gray-50 shadow-sm transition-all outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                                     title="Refresh Logs"
                                 >
-                                    <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
+                                    {loading ? (
+                                        <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
+                                    ) : (
+                                        <RefreshCw size={14} />
+                                    )}
                                     <span className="md:hidden lg:inline">Refresh</span>
                                 </button>
                             </div>
@@ -466,7 +470,7 @@ const AuditLogs = () => {
                     <div className="relative flex-1 space-y-4 min-h-0" aria-busy={loading}>
                         {showInitialLoader ? (
                             <div className="py-8 flex items-center justify-center">
-                                <Loader2 size={26} className="text-gray-500 animate-spin" />
+                                <Loader className="h-[26px] w-[26px] text-[#4A8AF4]" />
                             </div>
                         ) : logs.length === 0 ? (
                             <div className="text-center py-8 text-sm text-gray-500">No logs found.</div>
@@ -527,7 +531,7 @@ const AuditLogs = () => {
                     <div className="relative flex-1 min-h-[400px] bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden flex flex-col" aria-busy={loading}>
                         {showInitialLoader ? (
                             <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10">
-                                <Loader2 size={24} className="text-gray-500 animate-spin" />
+                                <Loader className="h-6 w-6 text-[#4A8AF4]" />
                             </div>
                         ) : null}
                         <div className="flex-1 w-full" style={{ "--ag-font-family": "inherit" }}>

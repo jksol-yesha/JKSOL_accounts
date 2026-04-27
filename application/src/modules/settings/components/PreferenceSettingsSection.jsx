@@ -4,7 +4,7 @@ import CustomSelect from '../../../components/common/CustomSelect';
 import { useCurrencyOptions } from '../../../hooks/useCurrencyOptions';
 import { usePreferences } from '../../../context/PreferenceContext';
 import { cn } from '../../../utils/cn';
-import { CheckCircle2, AlertTriangle, Check, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, Check } from 'lucide-react';
 
 const dateFormats = [
     { value: 'DD MMM, YYYY (d M, Y)', label: '08 Jan, 2026 (d M, Y)' },

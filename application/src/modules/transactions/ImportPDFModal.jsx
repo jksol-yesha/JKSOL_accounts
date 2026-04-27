@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Upload, FileText, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { X, Upload, FileText, CheckCircle, AlertCircle } from 'lucide-react';
 import apiService from '../../services/api';
+import { Loader } from '../../components/common/Loader';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 
@@ -329,7 +330,7 @@ const ImportPDFModal = ({ isOpen, onClose, onSuccess }) => {
                                 disabled={!file || !selectedAccount || isLoading}
                                 className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-[#4A8AF4] hover:bg-[#3b76d6] text-white shadow-sm shadow-[#4A8AF4]/20 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
-                                {isLoading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} strokeWidth={2.5} />}
+                                {isLoading ? <Loader className="h-3.5 w-3.5 text-white" /> : <Upload size={14} strokeWidth={2.5} />}
                                 {isLoading ? 'Extracting...' : 'Import Data'}
                             </button>
                         </>

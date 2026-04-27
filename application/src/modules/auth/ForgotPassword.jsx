@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
 import { Lock } from 'lucide-react';
+import { Loader } from '../../components/common/Loader';
 import { useFormNavigation } from '../../hooks/useFormNavigation';
 import { useAuth } from '../../context/AuthContext';
 
@@ -68,7 +69,7 @@ const ForgotPassword = () => {
                 <button
                     disabled={loading}
                     className="w-full bg-black text-white font-bold py-2 rounded hover:bg-gray-800 transition-colors flex items-center justify-center space-x-2 disabled:bg-gray-400 disabled:cursor-not-allowed">
-                    {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>}
+                    {loading && <Loader className="h-4 w-4 text-white" />}
                     <Lock size={18} className="text-white" />
                     <span>{loading ? 'Sending...' : 'Send Reset Link'}</span>
                 </button>

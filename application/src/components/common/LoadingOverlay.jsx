@@ -1,5 +1,5 @@
 import React from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader } from './Loader';
 
 const LoadingOverlay = ({ label = 'Loading...', className = '' }) => {
     const classes = ['absolute inset-0 z-10 bg-white/35 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2', className]
@@ -8,7 +8,9 @@ const LoadingOverlay = ({ label = 'Loading...', className = '' }) => {
 
     return (
         <div className={classes} role="status" aria-live="polite" aria-label={label}>
-            <Loader2 className="w-8 h-8 text-gray-500 animate-spin" />
+            <div className="flex flex-col items-center justify-center rounded-xl border border-[#4A8AF4]/30 bg-white/90 px-5 py-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+                <Loader className="h-8 w-8 text-[#4A8AF4]" />
+            </div>
         </div>
     );
 };

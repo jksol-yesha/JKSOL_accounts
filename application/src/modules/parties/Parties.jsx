@@ -12,7 +12,6 @@ import {
     Edit,
     Trash2,
     Copy,
-    Loader2,
     ListMinus,
     ShoppingBag,
     Users
@@ -90,7 +89,8 @@ const Parties = () => {
         filter: true,
         resizable: true,
         suppressMovable: true,
-        menuTabs: []
+        menuTabs: [],
+        cellStyle: { fontSize: '12px' }
     }), []);
 
     const colDefs = useMemo(() => [
@@ -99,7 +99,7 @@ const Parties = () => {
             valueGetter: "node.rowIndex + 1",
             maxWidth: 70,
             cellRenderer: (params) => (
-                <span className="text-[11px] font-bold text-gray-400">{params.value}</span>
+                <span className="text-[12px] font-bold text-gray-400">{params.value}</span>
             )
         },
         {
@@ -126,7 +126,7 @@ const Parties = () => {
             flex: 1.2,
             minWidth: 120,
             cellRenderer: (params) => (
-                <span className="text-[11px] font-medium text-gray-600">{params.value || '-'}</span>
+                <span className="text-[12px] font-medium text-gray-600">{params.value || '-'}</span>
             )
         },
         {
@@ -136,7 +136,7 @@ const Parties = () => {
             minWidth: 180,
             cellRenderer: (params) => (
                 <div className="flex items-center gap-2 h-full w-full">
-                    <span className="text-[11px] font-medium text-gray-600 truncate max-w-[150px]" title={params.value}>
+                    <span className="text-[12px] font-medium text-gray-600 truncate max-w-[150px]" title={params.value}>
                         {params.value || '-'}
                     </span>
                     {params.value && params.value !== '-' && (
@@ -157,7 +157,7 @@ const Parties = () => {
             minWidth: 160,
             cellRenderer: (params) => (
                 <div className="flex items-center gap-2 h-full w-full">
-                    <span className="text-[11px] font-medium text-gray-600 uppercase" title={params.value}>
+                    <span className="text-[12px] font-medium text-gray-600 uppercase" title={params.value}>
                         {params.value || '-'}
                     </span>
                     {params.value && params.value !== '-' && (
@@ -181,7 +181,7 @@ const Parties = () => {
                         onClick={(e) => { e.stopPropagation(); handleToggleStatus(params.data); }}
                         disabled={!canEditParty}
                         className={cn(
-                            "inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider transition-colors",
+                            "inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider transition-colors",
                             params.value ? "text-emerald-600" : "text-gray-500",
                             !canEditParty ? "cursor-default opacity-80" : "cursor-pointer hover:brightness-95"
                         )}
@@ -460,7 +460,7 @@ const Parties = () => {
                         {canCreateParty && (
                             <button
                                 onClick={() => { setEditingParty(null); setIsDrawerOpen(true); }}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium"
                                 title="Add Party"
                             >
                                 <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
@@ -487,8 +487,11 @@ const Parties = () => {
                 </div>
 
                 {/* Table Section */}
-                <div className="relative flex-1 min-h-[400px] w-full px-5 pb-1 flex flex-col">
-                    <div className="flex-1 w-full relative">
+                <div
+                    className="parties-grid-shell relative w-full px-5 pb-1 flex flex-col"
+                    style={{ height: '760px' }}
+                >
+                    <div className="h-full w-full relative">
                         <div className="absolute inset-0">
                             <AgGridReact
                                 ref={gridRef}
@@ -501,6 +504,9 @@ const Parties = () => {
                                 animateRows={true}
                                 suppressCellFocus={true}
                                 suppressRowClickSelection={true}
+                                pagination={true}
+                                paginationPageSize={50}
+                                paginationPageSizeSelector={[25, 50, 100, 200]}
                                 overlayLoadingTemplate='<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading parties...</span>'
                                 overlayNoRowsTemplate='<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No parties found</span>'
                             />

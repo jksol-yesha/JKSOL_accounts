@@ -251,7 +251,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
     const createEmptyFormData = (currencyCode = transactionBranchCurrency) => ({
         txnDate: new Date().toISOString().split('T')[0],
-        txnTypeId: 2, // Default to Expense
+        txnTypeId: '', // Require user to select
         name: '',
         accountId: '',
         attachmentPath: '',
@@ -431,6 +431,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
     }, [transactionBranchCurrency]);
 
     useEffect(() => {
+        if (!isOpen) return;
         if (shouldFetchData) return;
 
         setInitialData(null);
@@ -439,7 +440,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         setFormData(createEmptyFormData(transactionBranchCurrency));
         setErrorMsg('');
         setErrors({});
-    }, [shouldFetchData, id, transactionBranchCurrency]);
+        setTargetBranchIds([]);
+    }, [isOpen, shouldFetchData, id]);
 
     // Fetch Dependencies
     useEffect(() => {
@@ -1354,8 +1356,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                             {...getSelectNavigationProps('txnTypeId')}
                                             searchPlaceholder="Search type..."
                                             value={formData.txnTypeId ?? ""}
-                                            onChange={(e) => handleTypeChange(Number(e.target.value))}
+                                            onChange={(e) => handleTypeChange(e.target.value ? Number(e.target.value) : '')}
                                             className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all capitalize", errors.txnTypeId ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                            placeholder="Select Type"
                                         >
                                             {txnTypes.length > 0 ? (
                                                 txnTypes.map(t => (
@@ -1370,7 +1373,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                         {errors.txnTypeId && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnTypeId}</p>}
                                     </div>
 
-                                    {Number(formData.txnTypeId) !== 4 && (
+                                    {Boolean(formData.txnTypeId) && Number(formData.txnTypeId) !== 4 && (
                                         <div className="space-y-1 w-full">
                                             <label className="text-[11px] font-bold text-slate-600 block capitalize">Party</label>
                                             <CustomSelect
@@ -1408,7 +1411,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                 </div>
 
                                 {/* Dynamic Fields */}
-                                {Number(formData.txnTypeId) === 4 ? (
+                                {Boolean(formData.txnTypeId) && (
+                                    <>
+                                        {Number(formData.txnTypeId) === 4 ? (
                                     // Transfer
                                     <>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
@@ -1648,8 +1653,8 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         value={formData.subCategoryId ?? ""}
                                                         onChange={(e) => setFormData({ ...formData, subCategoryId: e.target.value })}
                                                         className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        placeholder="Select Sub-Category"
                                                     >
-                                                        <option value="">Select Sub-Category</option>
                                                         {currentSubcategories.map((subCategory) => {
                                                             const inactive = isCategoryInactive(subCategory);
                                                             return (
@@ -1855,9 +1860,9 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                         searchPlaceholder="Search sub-category..."
                                                         value={formData.subCategoryId ?? ""}
                                                         onChange={(e) => setFormData({ ...formData, subCategoryId: e.target.value })}
-                                                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
+                                                        className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
+                                                        placeholder="Select Sub-Category"
                                                     >
-                                                        <option value="">Select Sub-Category</option>
                                                         {currentSubcategories.map(s => {
                                                             const inactive = isCategoryInactive(s);
                                                             return (
@@ -2075,13 +2080,15 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
 
                                         {/* Non-Taxable: show plain amount */}
                                         {!formData.isTaxable && parseFloat(formData.amountLocal) > 0 && (
-                                            <div className="mt-4 flex items-center justify-between rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                                                <span className="text-sm font-medium text-gray-500">Amount (No GST)</span>
-                                                <span className="text-base font-extrabold text-gray-800">
+                                            <div className="mt-2 flex items-center justify-between rounded-md border border-gray-100 bg-gray-50 px-2.5 py-1.5">
+                                                <span className="text-[12px] font-medium text-gray-500">Amount (No GST)</span>
+                                                <span className="text-[13px] font-bold text-gray-800">
                                                     {formData.currencyCode} {(parseFloat(formData.amountLocal) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                                                 </span>
                                             </div>
                                         )}
+                                    </>
+                                )}
                                     </>
                                 )}
 
@@ -2178,22 +2185,25 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                         </div>
                 
                     {/* Drawer Footer */}
-                    <div className="px-5 py-3 border-t border-slate-100 bg-white flex items-center justify-end gap-3 shrink-0">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="px-4 py-2 rounded-lg text-[13px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all border border-transparent hover:border-slate-200"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[13px] font-bold px-5 py-2 rounded-lg shadow-sm active:scale-95 flex items-center gap-2 transition-all disabled:opacity-70 disabled:cursor-not-allowed"
-                        >
-                            <Save size={16} strokeWidth={2.5} />
-                            <span>{loading ? 'Saving...' : (isEditMode ? 'Update' : 'Save')}</span>
-                        </button>
+                    <div className="px-5 py-2.5 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
+                        <div />
+                        <div className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="px-3 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center gap-1.5 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-70 disabled:cursor-not-allowed"
+                            >
+                                <Save size={13} strokeWidth={2.5} />
+                                <span>{loading ? 'Saving...' : (isEditMode ? 'Update' : 'Save')}</span>
+                            </button>
+                        </div>
                     </div>
                 </form>
             </div>

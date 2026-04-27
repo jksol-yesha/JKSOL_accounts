@@ -98,12 +98,12 @@ export const getAllAccounts = async (
         accountId: accounts.id,
         currencyCode: currencies.code,
         netDelta: sql<string>`
-            COALESCE(SUM(
-                CASE
-                    WHEN ${transactions.id} IS NULL THEN 0
-                    ELSE COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0)
-                END
-            ), 0)
+                COALESCE(SUM(
+                    CASE
+                        WHEN ${transactions.id} IS NULL THEN 0
+                        ELSE COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0)
+                    END
+                ), 0)
         `
     })
         .from(accounts)

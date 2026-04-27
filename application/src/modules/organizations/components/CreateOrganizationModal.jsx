@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { X, Save, Check, ChevronDown, List, Plus } from 'lucide-react';
 import apiService from '../../../services/api';
 import { useCurrencyOptions } from '../../../hooks/useCurrencyOptions';
+import { Loader } from '../../../components/common/Loader';
 
 const CreateOrganizationModal = ({ isOpen, onClose, onSuccess }) => {
     const [isLoading, setIsLoading] = useState(false);
@@ -194,7 +195,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, onSuccess }) => {
 
                             {isFetchingOrgs ? (
                                 <div className="flex justify-center py-8">
-                                    <span className="w-6 h-6 border-2 border-gray-200 border-t-black rounded-full animate-spin" />
+                                    <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                 </div>
                             ) : filteredOrgs.length > 0 ? (
                                 <div className="space-y-2">
@@ -340,7 +341,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, onSuccess }) => {
                             className="w-full bg-black hover:bg-black/90 text-white text-[15px] font-bold py-3.5 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center space-x-2 disabled:opacity-70 disabled:cursor-not-allowed"
                         >
                             {isLoading ? (
-                                <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                <Loader className="h-5 w-5 text-white" />
                             ) : (
                                 <>
                                     <Save size={18} />

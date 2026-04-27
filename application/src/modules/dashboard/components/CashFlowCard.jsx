@@ -107,10 +107,10 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
     const showAllMonthTicks = displayData.length > 0 && displayData.every((item) => isMonthlyCashFlowLabel(item.label));
 
     return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 xl:col-span-2 overflow-hidden min-h-[360px]">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 xl:col-span-2 overflow-hidden min-h-[280px] 2xl:min-h-[360px]">
             {/* Header */}
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
-                <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
+                <h3 className="text-[13px] 2xl:text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
                     Cash Flow
                 </h3>
             </div>
@@ -119,7 +119,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
             <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-white">
 
                 {/* Left Side: Graph */}
-                <div className="flex-1 p-5 relative min-h-[220px]">
+                <div className="flex-1 p-5 relative min-h-[160px] 2xl:min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 8 }}>
                             <defs>
@@ -185,7 +185,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                             Opening Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-bold text-[#111827] tracking-tight">
+                            <span className="text-[13px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.openingBalance || 0)}
                             </span>
                         </div>
@@ -197,7 +197,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                             Incoming
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-bold text-[#111827] tracking-tight">
+                            <span className="text-[13px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.totalIncome || 0)}
                             </span>
                             <span className="text-[13px] font-bold text-emerald-600">+</span>
@@ -210,7 +210,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                             Outgoing
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[15px] font-bold text-[#111827] tracking-tight">
+                            <span className="text-[13px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.totalExpense || 0)}
                             </span>
                             <span className="text-[13px] font-bold text-rose-500">-</span>
@@ -223,7 +223,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                             Closing Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[16px] font-bold text-[#111827] tracking-tight">
+                            <span className="text-[13px] font-bold text-[#111827] tracking-tight">
                                 {formatCurrency(stats.closingBalance || 0)}
                             </span>
                             <span className="text-[13px] font-bold text-slate-400">=</span>

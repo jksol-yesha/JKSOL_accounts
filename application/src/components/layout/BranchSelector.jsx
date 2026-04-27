@@ -5,7 +5,7 @@ import { useOrganization } from '../../context/OrganizationContext';
 import { ChevronDown, Building2, Check, Plus, Settings } from 'lucide-react';
 import ManageBranchModal from './ManageBranchModal';
 
-const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
+const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLaptop = false }) => {
     const {
         branches,
         selectedBranch,
@@ -148,6 +148,15 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
     const isAllStagedSelected = branches.length > 0 && branches.every(b => stagedIds.includes(Number(b.id)));
     const isAllBranchesApplied = branches.length > 0 && branches.every(b => selectedBranchIds.includes(Number(b.id)));
     const canManageBranches = ['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase());
+    const triggerCompactClassName = compactLaptop ? 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2' : '';
+    const allBranchesLabelClassName = compactLaptop
+        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'max-w-[150px]';
+    const selectionLabelClassName = compactLaptop
+        ? 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]'
+        : 'max-w-[120px]';
+    const selectionRowCompactClassName = compactLaptop ? 'lg:gap-1 2xl:gap-1.5' : '';
+    const chevronCompactClassName = compactLaptop ? 'lg:ml-0.5 2xl:ml-1' : 'ml-1';
 
     const handleApply = () => {
         if (stagedIds.length === 0) {
@@ -177,16 +186,16 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                         else setHighlightedIndex(-1);
                     }}
                     onKeyDown={handleKeyDown}
-                    className="group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
+                    className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
                 >
                     <Building2 size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                     {isAllBranchesApplied ? (
-                        <span className="max-w-[150px] truncate text-sm font-semibold text-slate-800">
+                        <span className={`${allBranchesLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
                             All Branches
                         </span>
                     ) : selectedBranch?.id === 'all' || selectedBranch?.id === 'multi' ? (
-                        <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="max-w-[120px] truncate text-sm font-semibold text-slate-800">
+                        <div className={`flex items-center gap-1.5 min-w-0 ${selectionRowCompactClassName}`}>
+                            <span className={`${selectionLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
                                 {allBranchLabel || 'All Branches'}
                             </span>
                             {remainingBranchCount > 0 && (
@@ -197,11 +206,11 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                             )}
                         </div>
                     ) : (
-                        <span className="max-w-[120px] truncate text-sm font-semibold text-slate-800">
+                        <span className={`${selectionLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
                             {selectedBranch?.name || 'Select Branch'}
                         </span>
                     )}
-                    <ChevronDown size={14} className={`transition-transform ml-1 ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
+                    <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
                 </button>
 
                 {isOpen && (
@@ -224,7 +233,7 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                                                             setStagedIds(branches.map(b => Number(b.id)));
                                                         }
                                                     }}
-                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
+                                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 -ml-2 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
                                                 >
                                                     <div className="w-4 flex justify-center shrink-0">
                                                         <Check
@@ -238,7 +247,18 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                                             )}
                                         </div>
                                         <div className="flex items-center">
-                                            {/* Removed settings icon */}
+                                            {!hideSettings && canManageBranches && (
+                                                <button
+                                                    onClick={() => {
+                                                        setIsOpen(false);
+                                                        setShowManageModal(true);
+                                                    }}
+                                                    className="p-1 text-slate-400 hover:text-[#4A8AF4] border border-transparent hover:border-[#BAE6FD] hover:bg-[#F0F9FF] rounded-md transition-colors"
+                                                    title="Manage Branches"
+                                                >
+                                                    <Settings size={13} strokeWidth={2.5} />
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
 
@@ -262,7 +282,7 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                                                     {isStaged && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                                 </div>
                                                 <div className="flex items-center gap-1.5 min-w-0 truncate">
-                                                    <p className={`min-w-0 truncate tracking-tight text-[13px] ${isStaged && !isInactive ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                    <p className={`min-w-0 truncate tracking-tight text-[12px] ${isStaged && !isInactive ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
                                                         {branch.name}
                                                     </p>
                                                     {isInactive && (
@@ -280,10 +300,10 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false }) => {
                                 })}
                                     </div>
 
-                                    <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
+                                    <div className="mt-1 pt-1 border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 pb-0.5">
                                         <button
                                             onClick={handleApply}
-                                            className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === branches.length + 1 ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === branches.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
                                         >
                                             Apply
                                         </button>

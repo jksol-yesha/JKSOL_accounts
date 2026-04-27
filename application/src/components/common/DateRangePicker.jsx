@@ -68,7 +68,7 @@ const DateRangePicker = forwardRef(({
         const rect = inputRef.current.getBoundingClientRect();
         const viewportPadding = 12;
         const popupWidth = Math.min(
-            presetOptions.length > 0 ? 440 : 260,
+            presetOptions.length > 0 ? 360 : 230,
             window.innerWidth - (viewportPadding * 2)
         );
         const spaceBelow = window.innerHeight - rect.bottom;
@@ -82,7 +82,6 @@ const DateRangePicker = forwardRef(({
         setDropdownStyles({
             position: 'fixed',
             left,
-            width: popupWidth,
             zIndex: 10000,
             ...(showAbove ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
         });
@@ -385,12 +384,12 @@ const DateRangePicker = forwardRef(({
                 <CalendarDays size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors shrink-0" />
                 <div className="flex-1 text-left truncate">
                     {startDate ? (
-                        <span className="text-sm font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
+                        <span className="text-[12px]  font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
                             {formatDisplayDate(startDate)}
                             {endDate && endDate !== startDate ? ` to ${formatDisplayDate(endDate)}` : ''}
                         </span>
                     ) : (
-                        <span className="text-sm font-semibold text-slate-400">{placeholder}</span>
+                        <span className="text-[12px]  font-semibold text-slate-400">{placeholder}</span>
                     )}
                 </div>
             </button>
@@ -399,13 +398,13 @@ const DateRangePicker = forwardRef(({
                 <div
                     data-date-range-dropdown="true"
                     style={dropdownStyles}
-                    className="bg-white rounded-xl shadow-xl border border-gray-100 p-3 w-max"
+                    className="bg-white rounded-xl shadow-xl border border-gray-100 p-1 w-max"
                 >
                     <div className="flex flex-col">
                         <div className={presetOptions.length > 0 ? 'flex gap-2' : ''}>
                             {presetOptions.length > 0 && (
                                 <div 
-                                    className="w-[180px] border-r border-gray-100 pr-2 py-1 max-h-[260px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300"
+                                    className="w-[125px] border-r border-gray-100 pr-1 py-0.5 max-h-[260px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300"
                                     onMouseLeave={() => {
                                         if (effectiveStartDate) {
                                             const d = parseLocalDate(effectiveStartDate);
@@ -434,7 +433,7 @@ const DateRangePicker = forwardRef(({
                                                         setHoveredPreset(null);
                                                         setHighlightedIndex(-1);
                                                     }}
-                                                    className={`group cursor-pointer w-full flex items-center gap-2 rounded-md px-3 py-2 text-left transition-colors ${
+                                                    className={`group cursor-pointer w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors ${
                                                         isSelected
                                                             ? 'hover:bg-[#EEF0FC]/60'
                                                             : isHighlighted 
@@ -445,7 +444,7 @@ const DateRangePicker = forwardRef(({
                                                     <div className="w-4 flex justify-center shrink-0">
                                                         {isSelected && <Check size={16} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                                     </div>
-                                                    <span className={`text-[13px] tracking-tight truncate ${isSelected ? 'font-bold text-[#2F5FC6]' : isHighlighted ? 'font-bold text-[#4A8AF4]' : 'font-medium text-slate-600 group-hover:text-[#4A8AF4]'}`}>
+                                                    <span className={`text-[11px] tracking-tight truncate ${isSelected ? 'font-bold text-[#2F5FC6]' : isHighlighted ? 'font-bold text-[#4A8AF4]' : 'font-medium text-slate-600 group-hover:text-[#4A8AF4]'}`}>
                                                         {option.label}
                                                     </span>
                                                 </button>
@@ -455,12 +454,12 @@ const DateRangePicker = forwardRef(({
                                 </div>
                             )}
 
-                            <div className="w-[260px] shrink-0 py-1 px-3">
-                                <div className="flex items-center justify-between mb-3">
+                            <div className="w-fit shrink-0 py-0.5 pl-2 pr-2">
+                                <div className="flex items-center justify-between mb-2">
                                     <button type="button" onClick={handlePrevMonth} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors border border-transparent hover:border-gray-200">
                                         <ChevronLeft size={16} className="text-gray-600" />
                                     </button>
-                                    <span className="text-[14px] font-bold text-gray-800 tracking-tight">
+                                    <span className="text-[12px] font-bold text-gray-800 tracking-tight">
                                         {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                                     </span>
                                     <button type="button" onClick={handleNextMonth} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors border border-transparent hover:border-gray-200">
@@ -476,7 +475,7 @@ const DateRangePicker = forwardRef(({
 
                                 <div className="grid grid-cols-7 gap-1">
                                     {Array.from({ length: firstDay }).map((_, i) => (
-                                        <div key={`empty-${i}`} className="h-8 w-8" />
+                                        <div key={`empty-${i}`} className="h-7 w-7" />
                                     ))}
                                     {Array.from({ length: days }).map((_, i) => {
                                         const day = i + 1;
@@ -491,7 +490,7 @@ const DateRangePicker = forwardRef(({
                                                 type="button"
                                                 onClick={() => handleDateClick(day)}
                                                 className={`
-                                                    h-8 w-8 rounded-md text-[13px] font-medium transition-all flex items-center justify-center
+                                                    h-7 w-7 rounded-sm text-[12px] font-medium transition-all flex items-center justify-center
                                                     ${isSelected ? 'bg-[#4A8AF4] text-white shadow-sm ring-1 ring-[#4A8AF4]' : ''}
                                                     ${inRange ? 'bg-[#EEF0FC] text-[#2F5FC6] rounded-none' : ''}
                                                     ${isHoverPreview ? 'bg-[#EEF0FC]/80 text-slate-600 rounded-none border border-dashed border-[#CBD4F7]' : ''}
@@ -507,18 +506,18 @@ const DateRangePicker = forwardRef(({
                             </div>
                         </div>
 
-                        <div className="mt-3 pt-3 border-t border-gray-100 flex justify-end gap-2 px-2">
+                        <div className="mt-1 pt-1 border-t border-slate-100 flex justify-end gap-1.5 px-1 pb-0.5">
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}
-                                className="h-8 px-4 rounded-md text-[13px] font-semibold text-gray-500 hover:text-[#2F5FC6] hover:bg-[#EEF0FC] transition-colors"
+                                className="h-6 px-3 rounded-md text-[11px] font-semibold text-gray-500 hover:text-[#2F5FC6] hover:bg-[#EEF0FC] transition-colors"
                             >
                                 Cancel
                             </button>
                             <button
                                 type="button"
                                 onClick={handleApply}
-                                className="h-8 rounded-md bg-[#4A8AF4] px-5 text-[13px] font-semibold text-white shadow-sm hover:bg-[#3E79DE] transition-all hover:scale-[1.02] active:scale-[0.98]"
+                                className="h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm hover:bg-[#3E79DE] transition-all hover:scale-[1.02] active:scale-[0.98]"
                             >
                                 Apply
                             </button>

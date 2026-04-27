@@ -61,6 +61,30 @@
   --ag-font-size: 11px;
 }
 
+.transactions-grid-shell .ag-paging-panel,
+.transactions-grid-shell .ag-paging-panel .ag-label,
+.transactions-grid-shell .ag-paging-panel .ag-picker-field-display,
+.transactions-grid-shell .ag-paging-panel .ag-paging-number,
+.transactions-grid-shell .ag-paging-panel .ag-paging-row-summary-panel-number {
+  font-size: 11px !important;
+}
+
+.parties-grid-shell .ag-paging-panel,
+.parties-grid-shell .ag-paging-panel .ag-label,
+.parties-grid-shell .ag-paging-panel .ag-picker-field-display,
+.parties-grid-shell .ag-paging-panel .ag-paging-number,
+.parties-grid-shell .ag-paging-panel .ag-paging-row-summary-panel-number {
+  font-size: 11px !important;
+}
+
+.category-grid-shell .ag-paging-panel,
+.category-grid-shell .ag-paging-panel .ag-label,
+.category-grid-shell .ag-paging-panel .ag-picker-field-display,
+.category-grid-shell .ag-paging-panel .ag-paging-number,
+.category-grid-shell .ag-paging-panel .ag-paging-row-summary-panel-number {
+  font-size: 11px !important;
+}
+
 /* Explicit override for header background - Ultimate Fallback */
 .ag-header,
 .ag-header-row,
@@ -2091,10 +2115,8 @@
   background-color: #fee2e2 !important; /* light red-100 */
 }
 
-.ag-header-cell-text {
+.ag-header-cell-text,
+.ag-header-cell-label {
     font-size: 11px !important;
-}
-
-.ag-header-cell-text {
     text-transform: uppercase !important;
 }

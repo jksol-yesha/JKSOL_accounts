@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import AuthLayout from './AuthLayout';
 import { useAuth } from '../../context/AuthContext';
 import { Eye, EyeOff, Lock } from 'lucide-react';
+import { Loader } from '../../components/common/Loader';
 import { isRequired } from '../../utils/validation';
 
 const ResetPassword = () => {
@@ -96,7 +97,7 @@ const ResetPassword = () => {
                     disabled={loading}
                     className="w-full bg-black text-white font-bold py-2 rounded hover:bg-gray-800 transition-colors flex items-center justify-center space-x-2"
                 >
-                    {loading && <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></span>}
+                    {loading && <Loader className="h-4 w-4 text-white" />}
                     <Lock size={18} className="text-white" />
                     <span>Reset Password</span>
                 </button>

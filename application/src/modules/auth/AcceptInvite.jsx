@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import apiService from '../../services/api';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
+import { Loader } from '../../components/common/Loader';
 
 
 
@@ -55,7 +56,7 @@ const AcceptInvite = () => {
         return (
             <div className="min-h-screen flex items-center justify-center bg-white">
                 <div className="flex flex-col items-center gap-3">
-                    <Loader2 size={32} className="animate-spin text-black" />
+                    <Loader className="h-8 w-8 text-[#4A8AF4]" />
                     <p className="text-gray-500 font-medium">Redirecting to login...</p>
                 </div>
             </div>

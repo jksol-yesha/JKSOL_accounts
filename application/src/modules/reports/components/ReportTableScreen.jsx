@@ -104,7 +104,8 @@ const ReportTableScreen = ({
                     <div className="absolute left-1/2 -translate-x-1/2 text-[12px] font-bold text-slate-800 uppercase tracking-tight">
                         {(selectedOrg?.name || "Organization Name") + (filters?.branch && filters.branch !== 'All Branches' ? `-${filters.branch}` : "")}
                     </div>
-                    <div className="pr-2 no-print ml-auto">
+                    <div className="pr-2 no-print ml-auto flex items-center justify-end gap-2">
+
                         <button onClick={() => window.history.back()} className="text-slate-500 hover:text-slate-800 transition-colors p-1" title="Close Report">
                             <X size={16} />
                         </button>
@@ -114,7 +115,7 @@ const ReportTableScreen = ({
                 {/* Column Headers */}
                 <div className="grid grid-cols-2 border-b border-gray-300 bg-white">
                     <div className="border-r border-gray-300 p-2 flex justify-between items-start">
-                        <span className="text-[12px] font-bold italic">Particulars</span>
+                        <span className="text-[11px] font-bold italic">Particulars</span>
                         <div className="text-right">
                             <div className="text-[10px] text-gray-700 font-bold">
                                 {filters?.startDate && filters?.endDate
@@ -124,7 +125,7 @@ const ReportTableScreen = ({
                         </div>
                     </div>
                     <div className="p-2 flex justify-between items-start">
-                        <span className="text-[12px] font-bold italic">Particulars</span>
+                        <span className="text-[11px] font-bold italic">Particulars</span>
                         <div className="text-right">
                             <div className="text-[10px] text-gray-700 font-bold">
                                 {filters?.startDate && filters?.endDate
@@ -265,23 +266,23 @@ const ReportTableScreen = ({
 
         if (reportData.type === 'transactions') {
             return [
-                { field: 'date', headerName: 'Date', minWidth: 120, cellRenderer: (params) => <span className="text-[12px] font-medium text-gray-600">{formatDate(params.value)}</span> },
-                { field: 'description', headerName: 'Description', flex: 2, minWidth: 200, cellRenderer: (params) => <span className="text-[12px] font-medium text-gray-800">{params.value}</span> },
-                { field: 'category', headerName: 'Category', valueGetter: (params) => typeof params.data.category === 'object' && params.data.category !== null ? params.data.category.name : params.data.category, minWidth: 150, flex: 1, cellRenderer: (params) => <span className="text-[12px] text-gray-500">{params.value}</span> },
-                { field: 'account', headerName: 'Bank Name', valueGetter: (params) => typeof params.data.account === 'object' && params.data.account !== null ? params.data.account.name : (params.data.account || params.data.method), minWidth: 150, flex: 1, cellRenderer: (params) => <span className="text-[12px] text-gray-500">{params.value}</span> },
-                { field: 'type', headerName: 'Type', cellRenderer: (params) => <span className={cn("text-[11px] font-bold px-2 py-1 rounded-full border", params.value === 'Income' ? "bg-emerald-50 text-emerald-600 border-emerald-100" : params.value === 'Expense' ? "bg-rose-50 text-rose-600 border-rose-100" : "bg-blue-50 text-blue-600 border-blue-100")}>{params.value}</span>, minWidth: 100 },
-                { field: 'amount', headerName: 'Amount', type: 'rightAligned', valueGetter: params => params.data.amount || params.data.amountBase || params.data.amountLocal, cellRenderer: (params) => <span className={cn("font-bold tabular-nums text-[12px]", params.data.type === 'Income' || params.data.type === 'Borrow' ? "text-emerald-600" : "text-gray-900")}>{formatCurrency(parseFloat(params.value || 0), preferences.currency)}</span>, minWidth: 120 }
+                { field: 'date', headerName: 'Date', minWidth: 120, cellRenderer: (params) => <span className="text-[11px] lg:text-[12px] font-medium text-gray-600">{formatDate(params.value)}</span> },
+                { field: 'description', headerName: 'Description', flex: 2, minWidth: 200, cellRenderer: (params) => <span className="text-[11px] lg:text-[12px] font-medium text-gray-800">{params.value}</span> },
+                { field: 'category', headerName: 'Category', valueGetter: (params) => typeof params.data.category === 'object' && params.data.category !== null ? params.data.category.name : params.data.category, minWidth: 150, flex: 1, cellRenderer: (params) => <span className="text-[11px] lg:text-[12px] text-gray-500">{params.value}</span> },
+                { field: 'account', headerName: 'Bank Name', valueGetter: (params) => typeof params.data.account === 'object' && params.data.account !== null ? params.data.account.name : (params.data.account || params.data.method), minWidth: 150, flex: 1, cellRenderer: (params) => <span className="text-[11px] lg:text-[12px] text-gray-500">{params.value}</span> },
+                { field: 'type', headerName: 'Type', cellRenderer: (params) => <span className={cn("text-[11px] lg:text-[12px] font-medium", params.value === 'Income' ? "text-emerald-600" : params.value === 'Expense' ? "text-rose-600" : "text-gray-500")}>{params.value}</span>, width: typeof window !== 'undefined' && window.innerWidth >= 1024 && window.innerWidth < 1536 ? 85 : undefined, minWidth: 85 },
+                { field: 'amount', headerName: 'Amount', type: 'rightAligned', valueGetter: params => params.data.amount || params.data.amountBase || params.data.amountLocal, cellRenderer: (params) => <span className={cn("font-bold tabular-nums text-[11px] lg:text-[12px]", params.data.type === 'Income' || params.data.type === 'Borrow' ? "text-emerald-600" : "text-gray-900")}>{formatCurrency(parseFloat(params.value || 0), preferences.currency)}</span>, minWidth: 120 }
             ];
         }
 
         if (reportData.type === 'ledger') {
             return [
                 { field: 'date', headerName: 'Date', minWidth: 120, cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-[12px] font-medium text-gray-600">{formatDate(params.value)}</span> },
-                { field: 'description', headerName: 'Description', flex: 2, minWidth: 200, colSpan: (params) => params.data.isPinnedTitle ? 4 : 1, cellRenderer: (params) => params.data.isPinnedTitle ? <span className="text-[13px] font-bold text-gray-800">{params.data.title}</span> : <span className="text-[12px] font-medium text-gray-800">{params.value}</span> },
+                { field: 'description', headerName: 'Description', flex: 2, minWidth: 200, colSpan: (params) => params.data.isPinnedTitle ? 4 : 1, cellRenderer: (params) => params.data.isPinnedTitle ? <span className="text-[12px] font-bold text-gray-800">{params.data.title}</span> : <span className="text-[12px] font-medium text-gray-800">{params.value}</span> },
                 { field: 'category', headerName: 'Category', valueGetter: (params) => typeof params.data.category === 'object' && params.data.category !== null ? params.data.category.name : params.data.category, minWidth: 150, flex: 1, cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-[12px] text-gray-500">{params.value}</span> },
-                { field: 'debit', headerName: 'Debit', type: 'rightAligned', cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-rose-600 font-medium tabular-nums text-[13px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 120 },
-                { field: 'credit', headerName: 'Credit', type: 'rightAligned', cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-emerald-600 font-medium tabular-nums text-[13px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 120 },
-                { field: 'balance', headerName: 'Balance', type: 'rightAligned', pinnedRowCellRenderer: (params) => <span className="font-bold text-gray-800 tabular-nums text-[13px]">{formatCurrency(params.data?.balance, preferences.currency)}</span>, cellRenderer: (params) => <span className="font-bold text-gray-800 tabular-nums text-[13px]">{formatCurrency(params.value, preferences.currency)}</span>, minWidth: 120 }
+                { field: 'debit', headerName: 'Debit', type: 'rightAligned', cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-rose-600 font-medium tabular-nums text-[12px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 120 },
+                { field: 'credit', headerName: 'Credit', type: 'rightAligned', cellRenderer: (params) => params.data.isPinnedTitle ? null : <span className="text-emerald-600 font-medium tabular-nums text-[12px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 120 },
+                { field: 'balance', headerName: 'Balance', type: 'rightAligned', pinnedRowCellRenderer: (params) => <span className="font-bold text-gray-800 tabular-nums text-[12px]">{formatCurrency(params.data?.balance, preferences.currency)}</span>, cellRenderer: (params) => <span className="font-bold text-gray-800 tabular-nums text-[12px]">{formatCurrency(params.value, preferences.currency)}</span>, minWidth: 120 }
             ];
         }
 
@@ -289,11 +290,11 @@ const ReportTableScreen = ({
             const nameHeader = reportData.type === 'categories' ? 'Category' : (reportData.type === 'accounts' ? 'Account Name' : 'Party Name');
             return [
                 { field: 'name', headerName: nameHeader, minWidth: 180, flex: 2, cellRenderer: (params) => <span className="font-bold text-gray-800 text-[12px]">{params.value}</span> },
-                { field: 'openingBalance', headerName: 'Opening Balance', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-gray-500 tabular-nums text-[13px]">{params.value !== undefined ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 130 },
-                { field: 'income', headerName: 'Income', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-emerald-600 tabular-nums text-[13px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
-                { field: 'expense', headerName: 'Expense', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-rose-600 tabular-nums text-[13px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
-                { field: 'investment', headerName: 'Investment', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-blue-600 tabular-nums text-[13px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
-                { field: 'closingBalance', headerName: 'Closing Balance', type: 'rightAligned', cellRenderer: (params) => <span className="font-bold text-gray-900 tabular-nums text-[13px]">{params.value !== undefined ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 130 },
+                { field: 'openingBalance', headerName: 'Opening Balance', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-gray-500 tabular-nums text-[12px]">{params.value !== undefined ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 130 },
+                { field: 'income', headerName: 'Income', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-emerald-600 tabular-nums text-[12px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
+                { field: 'expense', headerName: 'Expense', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-rose-600 tabular-nums text-[12px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
+                { field: 'investment', headerName: 'Investment', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-blue-600 tabular-nums text-[12px]">{params.value ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 110 },
+                { field: 'closingBalance', headerName: 'Closing Balance', type: 'rightAligned', cellRenderer: (params) => <span className="font-bold text-gray-900 tabular-nums text-[12px]">{params.value !== undefined ? formatCurrency(params.value, preferences.currency) : '-'}</span>, minWidth: 130 },
                 { field: 'count', headerName: 'Count', type: 'rightAligned', cellRenderer: (params) => <span className="font-medium text-gray-600 text-[12px]">{params.value}</span>, minWidth: 80 }
             ];
         }
@@ -350,15 +351,15 @@ const ReportTableScreen = ({
                             {/* Mobile Search Toggle */}
                             <button
                                 onClick={() => setShowSearch(true)}
-                                className="xl:hidden w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 transition-all active:scale-95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                className="lg:hidden w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 transition-all active:scale-95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                             >
                                 <Search size={14} />
                             </button>
 
-                            <div className="relative no-print">
+                            <div className="relative no-print lg:hidden 2xl:block">
                                 <button
                                     onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px]  shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                                     title="Export Options"
                                 >
                                     <Download size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
@@ -372,7 +373,7 @@ const ReportTableScreen = ({
                                                 setIsExportDropdownOpen(false);
                                                 onExportExcel();
                                             }}
-                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                            className="w-full text-left px-4 py-2 text-[12px]  font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
                                         >
                                             <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
                                             Export as Excel
@@ -382,7 +383,7 @@ const ReportTableScreen = ({
                                                 setIsExportDropdownOpen(false);
                                                 onExportPdf();
                                             }}
-                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                            className="w-full text-left px-4 py-2 text-[12px]  font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
                                         >
                                             <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
                                             Export as PDF
@@ -390,14 +391,14 @@ const ReportTableScreen = ({
                                     </div>
                                 )}
                             </div>
-                            <div className="relative w-[280px] hidden xl:block no-print group">
+                            <div className="relative hidden 2xl:block w-[280px] no-print group">
                                 <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
                                 <input
                                     type="text"
                                     value={searchTerm}
                                     onChange={(e) => setSearchTerm(e.target.value)}
                                     placeholder="Search..."
-                                    className="w-full h-[32px] pl-9 pr-4 bg-white border border-gray-200 rounded-md text-[13px] outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all font-medium placeholder:font-normal placeholder:text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                    className="w-full h-[32px] pl-9 pr-4 bg-white border border-gray-200 rounded-md text-[12px] outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all font-medium placeholder:font-normal placeholder:text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                                 />
                             </div>
                         </div>

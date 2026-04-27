@@ -19,6 +19,8 @@ const CurrencySelector = React.forwardRef(({
     onKeyDown,
     onFocusNext,
     className = '',
+    triggerTextClassName = '',
+    optionTextClassName = '',
 }, ref) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -203,7 +205,10 @@ const CurrencySelector = React.forwardRef(({
                     className,
                 )}
             >
-                <div className="flex items-center gap-1 text-[13px] font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
+                <div className={cn(
+                    "flex items-center gap-1 text-[13px] font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors",
+                    triggerTextClassName,
+                )}>
                     {hasSymbolLabel ? (
                         <>
                             <span className="text-[#4A8AF4] font-bold opacity-90">
@@ -255,7 +260,7 @@ const CurrencySelector = React.forwardRef(({
                                 <div className="w-4 flex justify-center shrink-0">
                                     {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                 </div>
-                                <span className="text-[13px] tracking-tight text-slate-800">
+                                <span className={cn("text-[13px] tracking-tight text-slate-800", optionTextClassName)}>
                                     <span className={`font-bold mr-1 ${isSelected ? 'text-[#2F5FC6]' : isHighlighted ? 'text-[#4A8AF4]' : 'text-slate-400'}`}>
                                         {option.label.split(' - ')[0]}
                                     </span>

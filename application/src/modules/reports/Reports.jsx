@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import {
@@ -20,7 +21,11 @@ import {
     ArrowDownLeft,
     Activity,
     FileSpreadsheet,
-    FileText
+    FileText,
+    Check,
+    Plus,
+    ShoppingBag,
+    Users
 } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
@@ -39,6 +44,1006 @@ import { useAuth } from '../../context/AuthContext';
 import { useYear } from '../../context/YearContext';
 import { generateDatePresets } from '../../utils/constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
+
+const ALL_TYPES_VALUE = 'All Types';
+const ALL_CATEGORIES_VALUE = 'All Categories';
+const ALL_ACCOUNTS_VALUE = 'All Accounts';
+const ALL_PARTIES_VALUE = 'All Parties';
+
+const normalizeTypeFilterValues = (value) => {
+    const rawValues = Array.isArray(value)
+        ? value
+        : value && value !== ALL_TYPES_VALUE
+            ? [value]
+            : [];
+
+    const seen = new Set();
+
+    return rawValues
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .filter((item) => {
+            const key = item.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+};
+
+const isAllTypeFilterSelected = (value, options = []) => {
+    if (value === ALL_TYPES_VALUE) return true;
+
+    const normalized = normalizeTypeFilterValues(value);
+    return normalized.length === 0 || (options.length > 0 && normalized.length >= options.length);
+};
+
+const buildTypeFilterValue = (values, options = []) => {
+    const normalized = normalizeTypeFilterValues(values);
+
+    if (normalized.length === 0 || (options.length > 0 && normalized.length >= options.length)) {
+        return ALL_TYPES_VALUE;
+    }
+
+    return normalized.length === 1 ? normalized[0] : normalized;
+};
+
+const matchesSelectedType = (typeValue, selectedTypes = []) => {
+    if (selectedTypes.length === 0) return true;
+    const normalizedType = String(typeValue || '').trim().toLowerCase();
+    return selectedTypes.some((type) => type.toLowerCase() === normalizedType);
+};
+
+const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onKeyDown }, ref) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [stagedValues, setStagedValues] = useState([]);
+    const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
+
+    const optionValues = useMemo(
+        () => options.map((option) => String(option || '').trim()).filter(Boolean),
+        [options]
+    );
+    const selectedValues = useMemo(() => normalizeTypeFilterValues(value), [value]);
+    const isAllSelected = isAllTypeFilterSelected(value, optionValues);
+    const isAllStagedSelected = optionValues.length > 0 && stagedValues.length >= optionValues.length;
+
+    const activeDisplayValues = isAllSelected
+        ? []
+        : optionValues.filter((option) => selectedValues.some((selected) => selected.toLowerCase() === option.toLowerCase()));
+    const displayLabel = activeDisplayValues.slice(0, 2).join('+') || ALL_TYPES_VALUE;
+    const remainingCount = Math.max(0, activeDisplayValues.length - 2);
+
+    React.useImperativeHandle(ref, () => buttonRef.current);
+
+    useEffect(() => {
+        if (!isOpen) return;
+
+        if (isAllSelected) {
+            setStagedValues(optionValues);
+            return;
+        }
+
+        setStagedValues(selectedValues);
+    }, [isOpen, isAllSelected, optionValues, selectedValues]);
+
+    React.useLayoutEffect(() => {
+        if (!isOpen) {
+            setDropdownPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            const width = 288;
+            const viewportWidth = window.innerWidth;
+            const left = Math.min(
+                Math.max(12, rect.left + rect.width / 2 - width / 2),
+                Math.max(12, viewportWidth - width - 12)
+            );
+
+            setDropdownPosition({
+                top: rect.bottom + 8,
+                left
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const clickedTrigger = dropdownRef.current?.contains(event.target);
+            const clickedMenu = dropdownMenuRef.current?.contains(event.target);
+
+            if (!clickedTrigger && !clickedMenu) {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const toggleStagedValue = (typeValue) => {
+        setStagedValues((prev) => {
+            const exists = prev.some((item) => item.toLowerCase() === typeValue.toLowerCase());
+            if (exists) {
+                return prev.filter((item) => item.toLowerCase() !== typeValue.toLowerCase());
+            }
+            return [...prev, typeValue];
+        });
+    };
+
+    const handleApply = () => {
+        onChange(buildTypeFilterValue(stagedValues, optionValues));
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+    };
+
+    const handleTriggerKeyDown = (event) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault();
+                setIsOpen(true);
+                setHighlightedIndex(0);
+                return;
+            }
+
+            onKeyDown?.(event);
+            return;
+        }
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            setIsOpen(false);
+            setHighlightedIndex(-1);
+            onKeyDown?.(event);
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev + 1) % (optionValues.length + 2));
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev - 1 + optionValues.length + 2) % (optionValues.length + 2));
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (highlightedIndex === 0) {
+                    setStagedValues(isAllStagedSelected ? [] : optionValues);
+                } else if (highlightedIndex > 0 && highlightedIndex <= optionValues.length) {
+                    toggleStagedValue(optionValues[highlightedIndex - 1]);
+                } else if (highlightedIndex === optionValues.length + 1) {
+                    handleApply();
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                handleApply();
+                break;
+            default:
+                break;
+        }
+    };
+
+    const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
+    const allTypesLabelClassName = 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]';
+    const selectionLabelClassName = 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+    const selectionRowCompactClassName = 'lg:gap-1 2xl:gap-1.5';
+    const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                ref={buttonRef}
+                onClick={() => {
+                    const next = !isOpen;
+                    setIsOpen(next);
+                    setHighlightedIndex(next ? 0 : -1);
+                }}
+                onKeyDown={handleTriggerKeyDown}
+                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+            >
+                <Filter size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                {isAllSelected ? (
+                    <span className={`${allTypesLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                        {ALL_TYPES_VALUE}
+                    </span>
+                ) : (
+                    <div className={`flex items-center gap-1.5 min-w-0 ${selectionRowCompactClassName}`}>
+                        <span className={`${selectionLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                            {displayLabel}
+                        </span>
+                        {remainingCount > 0 && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-slate-100 text-[10px] font-bold text-slate-600 leading-none shrink-0">
+                                <span>{remainingCount}</span>
+                                <Plus size={9} />
+                            </span>
+                        )}
+                    </div>
+                )}
+                <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
+            </button>
+
+            {isOpen && dropdownPosition && createPortal(
+                <div
+                    ref={dropdownMenuRef}
+                    className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                >
+                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            {optionValues.length > 0 && (
+                                <button
+                                    onClick={() => setStagedValues(isAllStagedSelected ? [] : optionValues)}
+                                    className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isAllStagedSelected ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
+                                >
+                                    <div className="w-4 flex justify-center shrink-0">
+                                        <Check
+                                            size={14}
+                                            className={`${isAllStagedSelected ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                            strokeWidth={isAllStagedSelected ? 3 : 2.5}
+                                        />
+                                    </div>
+                                    Select All
+                                </button>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
+                        {optionValues.map((option, idx) => {
+                            const isStaged = stagedValues.some((item) => item.toLowerCase() === option.toLowerCase());
+                            const isHighlighted = highlightedIndex === idx + 1;
+
+                            return (
+                                <button
+                                    key={option}
+                                    onClick={() => toggleStagedValue(option)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <div className="w-4 flex justify-center shrink-0">
+                                            {isStaged && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${isStaged ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                {option}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 py-1">
+                        <button
+                            onClick={handleApply}
+                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === optionValues.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
+                        >
+                            Apply
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+
+const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKeyDown }, ref) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [stagedValue, setStagedValue] = useState(ALL_CATEGORIES_VALUE);
+    const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
+
+    const optionValues = useMemo(
+        () => options.map((option) => String(option || '').trim()).filter(Boolean),
+        [options]
+    );
+    const currentValue = value && value !== ALL_CATEGORIES_VALUE ? value : ALL_CATEGORIES_VALUE;
+
+    React.useImperativeHandle(ref, () => buttonRef.current);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setStagedValue(currentValue);
+    }, [isOpen, currentValue]);
+
+    React.useLayoutEffect(() => {
+        if (!isOpen) {
+            setDropdownPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            const width = 288;
+            const viewportWidth = window.innerWidth;
+            const left = Math.min(
+                Math.max(12, rect.left + rect.width / 2 - width / 2),
+                Math.max(12, viewportWidth - width - 12)
+            );
+
+            setDropdownPosition({
+                top: rect.bottom + 8,
+                left
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const clickedTrigger = dropdownRef.current?.contains(event.target);
+            const clickedMenu = dropdownMenuRef.current?.contains(event.target);
+
+            if (!clickedTrigger && !clickedMenu) {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleApply = () => {
+        onChange(stagedValue || ALL_CATEGORIES_VALUE);
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+    };
+
+    const handleTriggerKeyDown = (event) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault();
+                setIsOpen(true);
+                if (currentValue === ALL_CATEGORIES_VALUE) {
+                    setHighlightedIndex(0);
+                } else {
+                    const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                }
+                return;
+            }
+
+            onKeyDown?.(event);
+            return;
+        }
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            setIsOpen(false);
+            setHighlightedIndex(-1);
+            onKeyDown?.(event);
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev + 1) % (optionValues.length + 2));
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev - 1 + optionValues.length + 2) % (optionValues.length + 2));
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (highlightedIndex === 0) {
+                    setStagedValue(ALL_CATEGORIES_VALUE);
+                } else if (highlightedIndex > 0 && highlightedIndex <= optionValues.length) {
+                    setStagedValue(optionValues[highlightedIndex - 1]);
+                } else if (highlightedIndex === optionValues.length + 1) {
+                    handleApply();
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                handleApply();
+                break;
+            default:
+                break;
+        }
+    };
+
+    const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
+    const labelClassName = currentValue === ALL_CATEGORIES_VALUE
+        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+    const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                ref={buttonRef}
+                onClick={() => {
+                    const next = !isOpen;
+                    setIsOpen(next);
+                    if (next) {
+                        if (currentValue === ALL_CATEGORIES_VALUE) {
+                            setHighlightedIndex(0);
+                        } else {
+                            const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                            setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                        }
+                    } else {
+                        setHighlightedIndex(-1);
+                    }
+                }}
+                onKeyDown={handleTriggerKeyDown}
+                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+            >
+                <ShoppingBag size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                    {currentValue}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
+            </button>
+
+            {isOpen && dropdownPosition && createPortal(
+                <div
+                    ref={dropdownMenuRef}
+                    className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                >
+                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                        <button
+                            onClick={() => setStagedValue(ALL_CATEGORIES_VALUE)}
+                            className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${stagedValue === ALL_CATEGORIES_VALUE ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <div className="w-4 flex justify-center shrink-0">
+                                <Check
+                                    size={14}
+                                    className={`${stagedValue === ALL_CATEGORIES_VALUE ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                    strokeWidth={stagedValue === ALL_CATEGORIES_VALUE ? 3 : 2.5}
+                                />
+                            </div>
+                            {ALL_CATEGORIES_VALUE}
+                        </button>
+                    </div>
+
+                    <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
+                        {optionValues.map((option, idx) => {
+                            const isSelected = stagedValue === option;
+                            const isHighlighted = highlightedIndex === idx + 1;
+
+                            return (
+                                <button
+                                    key={option}
+                                    onClick={() => setStagedValue(option)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <div className="w-4 flex justify-center shrink-0">
+                                            {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                {option}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 py-1">
+                        <button
+                            onClick={handleApply}
+                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === optionValues.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
+                        >
+                            Apply
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+
+const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKeyDown }, ref) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [stagedValue, setStagedValue] = useState(ALL_ACCOUNTS_VALUE);
+    const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
+
+    const optionValues = useMemo(
+        () => options.map((option) => String(option || '').trim()).filter(Boolean),
+        [options]
+    );
+    const currentValue = value && value !== ALL_ACCOUNTS_VALUE ? value : ALL_ACCOUNTS_VALUE;
+
+    React.useImperativeHandle(ref, () => buttonRef.current);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setStagedValue(currentValue);
+    }, [isOpen, currentValue]);
+
+    React.useLayoutEffect(() => {
+        if (!isOpen) {
+            setDropdownPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            const width = 288;
+            const viewportWidth = window.innerWidth;
+            const left = Math.min(
+                Math.max(12, rect.left + rect.width / 2 - width / 2),
+                Math.max(12, viewportWidth - width - 12)
+            );
+
+            setDropdownPosition({
+                top: rect.bottom + 8,
+                left
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const clickedTrigger = dropdownRef.current?.contains(event.target);
+            const clickedMenu = dropdownMenuRef.current?.contains(event.target);
+
+            if (!clickedTrigger && !clickedMenu) {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleApply = () => {
+        onChange(stagedValue || ALL_ACCOUNTS_VALUE);
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+    };
+
+    const handleTriggerKeyDown = (event) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault();
+                setIsOpen(true);
+                if (currentValue === ALL_ACCOUNTS_VALUE) {
+                    setHighlightedIndex(0);
+                } else {
+                    const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                }
+                return;
+            }
+
+            onKeyDown?.(event);
+            return;
+        }
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            setIsOpen(false);
+            setHighlightedIndex(-1);
+            onKeyDown?.(event);
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev + 1) % (optionValues.length + 2));
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev - 1 + optionValues.length + 2) % (optionValues.length + 2));
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (highlightedIndex === 0) {
+                    setStagedValue(ALL_ACCOUNTS_VALUE);
+                } else if (highlightedIndex > 0 && highlightedIndex <= optionValues.length) {
+                    setStagedValue(optionValues[highlightedIndex - 1]);
+                } else if (highlightedIndex === optionValues.length + 1) {
+                    handleApply();
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                handleApply();
+                break;
+            default:
+                break;
+        }
+    };
+
+    const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
+    const labelClassName = currentValue === ALL_ACCOUNTS_VALUE
+        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+    const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                ref={buttonRef}
+                onClick={() => {
+                    const next = !isOpen;
+                    setIsOpen(next);
+                    if (next) {
+                        if (currentValue === ALL_ACCOUNTS_VALUE) {
+                            setHighlightedIndex(0);
+                        } else {
+                            const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                            setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                        }
+                    } else {
+                        setHighlightedIndex(-1);
+                    }
+                }}
+                onKeyDown={handleTriggerKeyDown}
+                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+            >
+                <Wallet size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                    {currentValue}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
+            </button>
+
+            {isOpen && dropdownPosition && createPortal(
+                <div
+                    ref={dropdownMenuRef}
+                    className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                >
+                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                        <button
+                            onClick={() => setStagedValue(ALL_ACCOUNTS_VALUE)}
+                            className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${stagedValue === ALL_ACCOUNTS_VALUE ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <div className="w-4 flex justify-center shrink-0">
+                                <Check
+                                    size={14}
+                                    className={`${stagedValue === ALL_ACCOUNTS_VALUE ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                    strokeWidth={stagedValue === ALL_ACCOUNTS_VALUE ? 3 : 2.5}
+                                />
+                            </div>
+                            {ALL_ACCOUNTS_VALUE}
+                        </button>
+                    </div>
+
+                    <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
+                        {optionValues.map((option, idx) => {
+                            const isSelected = stagedValue === option;
+                            const isHighlighted = highlightedIndex === idx + 1;
+
+                            return (
+                                <button
+                                    key={option}
+                                    onClick={() => setStagedValue(option)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <div className="w-4 flex justify-center shrink-0">
+                                            {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                {option}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 py-1">
+                        <button
+                            onClick={handleApply}
+                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === optionValues.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
+                        >
+                            Apply
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
+
+const ReportsPartySelect = React.forwardRef(({ value, options, onChange, onKeyDown }, ref) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [stagedValue, setStagedValue] = useState(ALL_PARTIES_VALUE);
+    const [dropdownPosition, setDropdownPosition] = useState(null);
+    const [highlightedIndex, setHighlightedIndex] = useState(-1);
+
+    const dropdownRef = useRef(null);
+    const buttonRef = useRef(null);
+    const dropdownMenuRef = useRef(null);
+
+    const optionValues = useMemo(
+        () => options.map((option) => String(option || '').trim()).filter(Boolean),
+        [options]
+    );
+    const currentValue = value && value !== ALL_PARTIES_VALUE ? value : ALL_PARTIES_VALUE;
+
+    React.useImperativeHandle(ref, () => buttonRef.current);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setStagedValue(currentValue);
+    }, [isOpen, currentValue]);
+
+    React.useLayoutEffect(() => {
+        if (!isOpen) {
+            setDropdownPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            const width = 288;
+            const viewportWidth = window.innerWidth;
+            const left = Math.min(
+                Math.max(12, rect.left + rect.width / 2 - width / 2),
+                Math.max(12, viewportWidth - width - 12)
+            );
+
+            setDropdownPosition({
+                top: rect.bottom + 8,
+                left
+            });
+        };
+
+        updatePosition();
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleClickOutside = (event) => {
+            const clickedTrigger = dropdownRef.current?.contains(event.target);
+            const clickedMenu = dropdownMenuRef.current?.contains(event.target);
+
+            if (!clickedTrigger && !clickedMenu) {
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+            }
+        };
+
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleApply = () => {
+        onChange(stagedValue || ALL_PARTIES_VALUE);
+        setIsOpen(false);
+        setHighlightedIndex(-1);
+    };
+
+    const handleTriggerKeyDown = (event) => {
+        if (!isOpen) {
+            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key)) {
+                event.preventDefault();
+                setIsOpen(true);
+                if (currentValue === ALL_PARTIES_VALUE) {
+                    setHighlightedIndex(0);
+                } else {
+                    const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                    setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                }
+                return;
+            }
+
+            onKeyDown?.(event);
+            return;
+        }
+
+        if (event.key === 'ArrowRight' || event.key === 'ArrowLeft') {
+            setIsOpen(false);
+            setHighlightedIndex(-1);
+            onKeyDown?.(event);
+            return;
+        }
+
+        switch (event.key) {
+            case 'ArrowDown':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev + 1) % (optionValues.length + 2));
+                break;
+            case 'ArrowUp':
+                event.preventDefault();
+                setHighlightedIndex((prev) => (prev - 1 + optionValues.length + 2) % (optionValues.length + 2));
+                break;
+            case 'Enter':
+                event.preventDefault();
+                if (highlightedIndex === 0) {
+                    setStagedValue(ALL_PARTIES_VALUE);
+                } else if (highlightedIndex > 0 && highlightedIndex <= optionValues.length) {
+                    setStagedValue(optionValues[highlightedIndex - 1]);
+                } else if (highlightedIndex === optionValues.length + 1) {
+                    handleApply();
+                }
+                break;
+            case 'Escape':
+                event.preventDefault();
+                setIsOpen(false);
+                setHighlightedIndex(-1);
+                buttonRef.current?.focus();
+                break;
+            case 'Tab':
+                handleApply();
+                break;
+            default:
+                break;
+        }
+    };
+
+    const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
+    const labelClassName = currentValue === ALL_PARTIES_VALUE
+        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+    const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
+
+    return (
+        <div className="relative" ref={dropdownRef}>
+            <button
+                ref={buttonRef}
+                onClick={() => {
+                    const next = !isOpen;
+                    setIsOpen(next);
+                    if (next) {
+                        if (currentValue === ALL_PARTIES_VALUE) {
+                            setHighlightedIndex(0);
+                        } else {
+                            const selectedIndex = optionValues.findIndex((option) => option === currentValue);
+                            setHighlightedIndex(selectedIndex >= 0 ? selectedIndex + 1 : 0);
+                        }
+                    } else {
+                        setHighlightedIndex(-1);
+                    }
+                }}
+                onKeyDown={handleTriggerKeyDown}
+                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+            >
+                <Users size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                    {currentValue}
+                </span>
+                <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
+            </button>
+
+            {isOpen && dropdownPosition && createPortal(
+                <div
+                    ref={dropdownMenuRef}
+                    className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-0.5 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                >
+                    <div className="px-3 py-1 border-b border-slate-100 flex items-center justify-between">
+                        <button
+                            onClick={() => setStagedValue(ALL_PARTIES_VALUE)}
+                            className={`group flex items-center gap-1.5 text-[10px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-0.5 ${stagedValue === ALL_PARTIES_VALUE ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'}`}
+                        >
+                            <div className="w-4 flex justify-center shrink-0">
+                                <Check
+                                    size={14}
+                                    className={`${stagedValue === ALL_PARTIES_VALUE ? 'text-[#4A8AF4]' : 'text-slate-200 group-hover:text-slate-300'} transition-colors`}
+                                    strokeWidth={stagedValue === ALL_PARTIES_VALUE ? 3 : 2.5}
+                                />
+                            </div>
+                            {ALL_PARTIES_VALUE}
+                        </button>
+                    </div>
+
+                    <div className="max-h-[128px] overflow-y-auto custom-scrollbar py-1">
+                        {optionValues.map((option, idx) => {
+                            const isSelected = stagedValue === option;
+                            const isHighlighted = highlightedIndex === idx + 1;
+
+                            return (
+                                <button
+                                    key={option}
+                                    onClick={() => setStagedValue(option)}
+                                    className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                >
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <div className="w-4 flex justify-center shrink-0">
+                                            {isSelected && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                        </div>
+                                        <div className="flex items-center gap-1.5 min-w-0 truncate">
+                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${isSelected ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                {option}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 py-1.5">
+                        <button
+                            onClick={handleApply}
+                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === optionValues.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
+                        >
+                            Apply
+                        </button>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+});
 
 const Reports = () => {
     const { formatCurrency, preferences } = usePreferences();
@@ -81,7 +1086,7 @@ const Reports = () => {
         startDate: '',
         endDate: '',
         datePreset: 'current',
-        type: 'All Types',
+        type: ALL_TYPES_VALUE,
         category: 'All Categories',
         account: 'All Accounts',
         party: 'All Parties',
@@ -90,11 +1095,17 @@ const Reports = () => {
     });
 
     const [isDesktopView, setIsDesktopView] = useState(
-        typeof window !== 'undefined' ? window.innerWidth >= 1280 : true
+        typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+    );
+    const [isProfitLossWideView, setIsProfitLossWideView] = useState(
+        typeof window !== 'undefined' ? window.innerWidth >= 1500 : true
     );
 
     useEffect(() => {
-        const handleResize = () => setIsDesktopView(window.innerWidth >= 1280);
+        const handleResize = () => {
+            setIsDesktopView(window.innerWidth >= 1024);
+            setIsProfitLossWideView(window.innerWidth >= 1500);
+        };
         window.addEventListener('resize', handleResize);
         return () => window.removeEventListener('resize', handleResize);
     }, []);
@@ -124,6 +1135,7 @@ const Reports = () => {
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [isPrinting, setIsPrinting] = useState(false);
+    const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
 
     // Data state
     const [categories, setCategories] = useState([]);
@@ -227,14 +1239,19 @@ const Reports = () => {
         return () => controller.abort();
     }, [selectedOrg?.id, orgLoading, getBranchFilterValue()]);
 
+    const selectedTypeFilterValues = useMemo(
+        () => normalizeTypeFilterValues(filters.type),
+        [filters.type]
+    );
+
     // Filter Categories and Accounts based on Type
     const filteredCategories = useMemo(() => {
-        if (filters.type === 'All Types') return categories;
+        if (filters.reportType === 'P/L' || selectedTypeFilterValues.length === 0) return categories;
         return categories.filter(c => {
             const type = c.txn_type || c.txnType || c.type;
-            return type && type.trim().toLowerCase() === filters.type.trim().toLowerCase();
+            return matchesSelectedType(type, selectedTypeFilterValues);
         });
-    }, [categories, filters.type]);
+    }, [categories, selectedTypeFilterValues, filters.reportType]);
 
     const categoryDropdownOptions = useMemo(() => {
         const seen = new Map();
@@ -340,7 +1357,8 @@ const Reports = () => {
             let accountId = undefined;
             let party = undefined;
 
-            if (filters.type !== 'All Types') txnType = filters.type;
+            if (selectedTypeFilterValues.length === 1) txnType = selectedTypeFilterValues[0];
+            else if (selectedTypeFilterValues.length > 1) txnType = selectedTypeFilterValues;
 
             if (filters.category !== 'All Categories') {
                 const match = categories.find(c => c.name === filters.category);
@@ -397,14 +1415,24 @@ const Reports = () => {
                     const incomes = Array.isArray(d.incomes) ? d.incomes : [];
                     const expenses = Array.isArray(d.expenses) ? d.expenses : [];
 
-                    const flatten = (section, groups) => groups.flatMap(group =>
-                        (group.items || []).map(item => ({
-                            section,
-                            category: group.category,
-                            subCategory: item.subCategory,
-                            amount: Number(item.amount || 0)
-                        }))
-                    );
+                    const flatten = (section, groups) => groups.flatMap(group => {
+                        const items = group.items || [];
+                        if (items.length > 0) {
+                            return items.map(item => ({
+                                section,
+                                category: group.category,
+                                subCategory: item.subCategory,
+                                amount: Number(item.amount || 0)
+                            }));
+                        } else {
+                            return [{
+                                section,
+                                category: group.category,
+                                subCategory: '',
+                                amount: Number(group.total || 0)
+                            }];
+                        }
+                    });
 
                     data = {
                         ...data,
@@ -459,7 +1487,9 @@ const Reports = () => {
         let accountId = undefined;
         let party = undefined;
 
-        if (exportFilters.type !== 'All Types') txnType = exportFilters.type;
+        const exportTypeFilterValues = normalizeTypeFilterValues(exportFilters.type);
+        if (exportTypeFilterValues.length === 1) txnType = exportTypeFilterValues[0];
+        else if (exportTypeFilterValues.length > 1) txnType = exportTypeFilterValues;
         if (exportFilters.category !== 'All Categories') {
             const match = categories.find(c => c.name === exportFilters.category);
             if (match) categoryId = match.id;
@@ -571,7 +1601,7 @@ const Reports = () => {
             startDate: selectedYear?.startDate || '',
             endDate: selectedYear?.endDate || new Date().toISOString().split('T')[0],
             datePreset: 'current',
-            type: 'All Types',
+            type: ALL_TYPES_VALUE,
             category: 'All Categories',
             account: 'All Accounts',
             party: 'All Parties',
@@ -631,7 +1661,7 @@ const Reports = () => {
             if (t) types.add(t);
 
             // Check if item matches current Type Filter for dependent dropdowns
-            const typeMatch = filters.type === 'All Types' || (t && t.toLowerCase() === filters.type.toLowerCase());
+            const typeMatch = selectedTypeFilterValues.length === 0 || matchesSelectedType(t, selectedTypeFilterValues);
 
             if (typeMatch) {
                 // Category
@@ -664,7 +1694,7 @@ const Reports = () => {
             accounts: Array.from(accs.values()).sort((a, b) => a.localeCompare(b)),
             parties: Array.from(partySet.values()).sort((a, b) => a.localeCompare(b))
         };
-    }, [reportData, filters.type, categories, accounts, filters.reportType]);
+    }, [reportData, selectedTypeFilterValues, categories, accounts, filters.reportType]);
 
     const typeFilterOptions = useMemo(() => {
         const baseTypes = ['Income', 'Expense', 'Transfer', 'Investment', 'Borrow', 'Lend'];
@@ -684,6 +1714,30 @@ const Reports = () => {
 
         return merged;
     }, [uniqueOptions.types]);
+
+    const categoryFilterOptions = useMemo(() => {
+        if (uniqueOptions.categories.length > 0) return uniqueOptions.categories;
+        return categoryDropdownOptions;
+    }, [uniqueOptions.categories, categoryDropdownOptions]);
+
+    const accountFilterOptions = useMemo(() => {
+        if (uniqueOptions.accounts.length > 0) return uniqueOptions.accounts;
+
+        const seen = new Map();
+        accounts.forEach((account) => {
+            const label = (account?.bankName || account?.name || '').toString().trim();
+            if (!label) return;
+            const key = label.toLowerCase();
+            if (!seen.has(key)) seen.set(key, label);
+        });
+
+        return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+    }, [uniqueOptions.accounts, accounts]);
+
+    const partyFilterOptions = useMemo(() => {
+        if (uniqueOptions.parties.length > 0) return uniqueOptions.parties;
+        return partyDropdownOptions;
+    }, [uniqueOptions.parties, partyDropdownOptions]);
 
     // Filtered Report Data (Client-side Search only)
     const filteredReportData = useMemo(() => {
@@ -753,91 +1807,157 @@ const Reports = () => {
         return income - expense;
     }, [reportData]);
     const displayFilters = isGenerated && appliedFilters ? appliedFilters : filters;
+    const isProfitLossReport = filters.reportType === 'P/L';
+    const showProfitLossCompactControls = isProfitLossReport && !isProfitLossWideView;
+
+    const profitLossCompactControls = (
+        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            <div className="w-[220px] sm:w-[248px] shrink-0">
+                <DateRangePicker
+                    ref={dateRangeRef}
+                    startDate={filters.startDate}
+                    endDate={filters.endDate}
+                    onChange={handleDateRangeChange}
+                    selectedPreset={filters.datePreset || 'current'}
+                    presetOptions={datePresets}
+                    onApplyRange={({ startDate, endDate, preset }) => {
+                        const normalizedRange = normalizeSingleDateRange({ startDate, endDate });
+                        setFilters((prev) => ({
+                            ...prev,
+                            ...normalizedRange,
+                            datePreset: preset || 'custom'
+                        }));
+                    }}
+                    onKeyDown={(e) => handleKeyDown(e, 0)}
+                    buttonLabelClassName="!text-[12px] "
+                    dropdownItemClassName="!text-[12px] "
+                    className="reports-tablet-filter-input w-full"
+                />
+            </div>
+            <div className="shrink-0">
+                <BranchSelector compactLaptop hideSettings />
+            </div>
+            <div className="w-[140px] shrink-0">
+                <ReportsCategorySelect
+                    ref={categoryRef}
+                    value={filters.category}
+                    options={categoryFilterOptions}
+                    onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
+                    onKeyDown={(e) => handleKeyDown(e, 2)}
+                />
+            </div>
+            <button
+                onClick={handleExportPdf}
+                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-slate-800 text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] no-print shrink-0"
+                title="Export Report"
+            >
+                <Download size={14} className="text-slate-600 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                <span className="hidden sm:inline">Export</span>
+            </button>
+        </div>
+    );
+    const profitLossCompactControlsRow = showProfitLossCompactControls ? (
+        <div className="w-full overflow-x-auto hide-scroll-indicator">
+            <div className="flex items-center justify-start min-w-max">
+                {profitLossCompactControls}
+            </div>
+        </div>
+    ) : null;
 
 
     const extraFiltersNode = (
         <>
-                                {filters.reportType === 'P/L' && (
-                                    <div className="w-full sm:w-auto mt-1 lg:mt-0 lg:ml-1 hidden xl:block">
-                                        <button 
-                                            onClick={handleExportPdf} 
-                                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-slate-800 text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] no-print" 
-                                            title="Export Report"
-                                        >
-                                            <Download size={14} className="text-slate-600 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                                            <span className="hidden sm:inline">Export</span>
-                                        </button>
-                                    </div>
-                                )}
-                                {filters.reportType !== 'P/L' && (
-                                    <div className="w-full sm:w-auto hidden xl:block">
-                                        <CustomSelect
-                                            ref={typeRef}
-                                            value={filters.type}
-                                            onChange={(e) => setFilters({ ...filters, type: e.target.value })}
-                                            onKeyDown={(e) => handleKeyDown(e, 1)}
-                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input w-full sm:w-[110px] px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-                                        >
-                                            <option value="All Types">All Types</option>
-                                            {typeFilterOptions.map((t) => (
-                                                <option key={t} value={t}>{t}</option>
-                                            ))}
-                                        </CustomSelect>
-                                    </div>
-                                )}
-                                {filters.reportType === 'Category-wise' && (
-                                    <div className="w-full sm:w-auto hidden xl:block">
-                                        <CustomSelect
-                                            ref={categoryRef}
-                                            value={filters.category}
-                                            onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                                            onKeyDown={(e) => handleKeyDown(e, 2)}
-                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-                                        >
-                                            <option value="All Categories">All Categories</option>
-                                            {uniqueOptions.categories.length > 0 ? (
-                                                uniqueOptions.categories.map(c => <option key={c} value={c}>{c}</option>)
-                                            ) : (
-                                                categoryDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
+
+                                {!isProfitLossReport && (
+                                    <>
+                                        <div className="w-full sm:w-auto hidden lg:block">
+                                            <ReportsTypeMultiSelect
+                                                ref={typeRef}
+                                                value={filters.type}
+                                                options={typeFilterOptions}
+                                                onChange={(nextValue) => setFilters({ ...filters, type: nextValue })}
+                                                onKeyDown={(e) => handleKeyDown(e, 1)}
+                                            />
+                                        </div>
+                                        {(filters.reportType === 'Category-wise' || filters.reportType === 'Detailed') && (
+                                            <div className="w-full sm:w-auto hidden lg:block">
+                                                <ReportsCategorySelect
+                                                    ref={categoryRef}
+                                                    value={filters.category}
+                                                    options={categoryFilterOptions}
+                                                    onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
+                                                    onKeyDown={(e) => handleKeyDown(e, 2)}
+                                                />
+                                            </div>
+                                        )}
+                                        {filters.reportType === 'Account-wise' && (
+                                            <div className="w-full sm:w-auto hidden lg:block">
+                                                <ReportsAccountSelect
+                                                    ref={accountRef}
+                                                    value={filters.account}
+                                                    options={accountFilterOptions}
+                                                    onChange={(nextValue) => setFilters({ ...filters, account: nextValue })}
+                                                    onKeyDown={(e) => handleKeyDown(e, 3)}
+                                                />
+                                            </div>
+                                        )}
+                                        {filters.reportType === 'Party-wise' && (
+                                            <div className="w-full sm:w-auto hidden lg:block">
+                                                <ReportsPartySelect
+                                                    ref={partyRef}
+                                                    value={filters.party}
+                                                    options={partyFilterOptions}
+                                                    onChange={(nextValue) => setFilters({ ...filters, party: nextValue })}
+                                                    onKeyDown={(e) => handleKeyDown(e, 4)}
+                                                />
+                                            </div>
+                                        )}
+                                        <div className="relative no-print hidden lg:block 2xl:hidden ml-1">
+                                            <button
+                                                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-[12px]  shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                                title="Export Options"
+                                            >
+                                                <Download size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
+                                                <span className="hidden sm:inline">Export</span>
+                                            </button>
+
+                                            {isExportDropdownOpen && (
+                                                <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsExportDropdownOpen(false);
+                                                            handleExportExcel();
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                    >
+                                                        <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                        Export as Excel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsExportDropdownOpen(false);
+                                                            handleExportPdf();
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                    >
+                                                        <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                        Export as PDF
+                                                    </button>
+                                                </div>
                                             )}
-                                        </CustomSelect>
-                                    </div>
-                                )}
-                                {filters.reportType === 'Account-wise' && (
-                                    <div className="w-full sm:w-auto hidden xl:block">
-                                        <CustomSelect
-                                            ref={accountRef}
-                                            value={filters.account}
-                                            onChange={(e) => setFilters({ ...filters, account: e.target.value })}
-                                            onKeyDown={(e) => handleKeyDown(e, 3)}
-                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-                                        >
-                                            <option value="All Accounts">All Accounts</option>
-                                            {uniqueOptions.accounts.length > 0 ? (
-                                                uniqueOptions.accounts.map(a => <option key={a} value={a}>{a}</option>)
-                                            ) : (
-                                                accounts.map(a => <option key={a.id} value={a.bankName || a.name}>{a.bankName || a.name}</option>)
-                                            )}
-                                        </CustomSelect>
-                                    </div>
-                                )}
-                                {filters.reportType === 'Party-wise' && (
-                                    <div className="w-full sm:w-auto hidden xl:block">
-                                        <CustomSelect
-                                            ref={partyRef}
-                                            value={filters.party}
-                                            onChange={(e) => setFilters({ ...filters, party: e.target.value })}
-                                            onKeyDown={(e) => handleKeyDown(e, 4)}
-                                            buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input min-w-[150px] w-full px-3 h-[32px] bg-white border border-gray-200 rounded-md text-[14px] text-slate-800 font-semibold focus:outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-                                        >
-                                            <option value="All Parties">All Parties</option>
-                                            {uniqueOptions.parties.length > 0 ? (
-                                                uniqueOptions.parties.map(p => <option key={p} value={p}>{p}</option>)
-                                            ) : (
-                                                partyDropdownOptions.map((name) => <option key={name} value={name}>{name}</option>)
-                                            )}
-                                        </CustomSelect>
-                                    </div>
+                                        </div>
+                                        <div className={`relative hidden lg:block 2xl:hidden no-print group ml-1 ${(filters.reportType === 'Category-wise' || filters.reportType === 'Detailed' || filters.reportType === 'Account-wise' || filters.reportType === 'Party-wise') ? 'flex-[0.8] min-w-[180px]' : 'flex-1 min-w-[220px]'}`}>
+                                            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
+                                            <input
+                                                type="text"
+                                                value={searchTerm}
+                                                onChange={(e) => setSearchTerm(e.target.value)}
+                                                placeholder="Search..."
+                                                className="w-full h-[32px] pl-9 pr-4 bg-white border border-gray-200 rounded-md text-[12px] outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all font-medium placeholder:font-normal placeholder:text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                            />
+                                        </div>
+                                    </>
                                 )}
         </>
     );
@@ -915,59 +2035,65 @@ const Reports = () => {
 
                     <div className="reports-tablet-page flex-1 p-4 md:p-4 xl:px-6 xl:pt-2 xl:pb-4 space-y-4 animate-in fade-in duration-500 print:hidden">
                         {/* Filters & Inline Summary Section */}
-                        <div className="no-print report-filters flex flex-col xl:flex-row xl:justify-between items-start xl:items-center gap-4 border-b border-gray-100 xl:border-none px-5 pb-4 xl:pb-0 mb-4 xl:mb-0 w-full transition-all">
+                        <div className="no-print report-filters flex flex-col 2xl:flex-row 2xl:justify-between items-start 2xl:items-center gap-4 px-5 w-full transition-all">
                             
                             {/* LEFT SIDE: Transaction Summary Metrics */}
                             {isGenerated && reportData && reportData.summary ? (
-                                <div className="flex flex-row items-center gap-x-6 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full xl:w-auto pb-2 xl:pb-0 hide-scroll-indicator">
-                                    {/* Opening */}
-                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-slate-200/60 bg-slate-50 flex items-center justify-center shrink-0">
-                                            <Wallet size={16} className="text-slate-600" strokeWidth={2.5} />
+                                <div className="flex flex-col items-start w-full 2xl:w-auto">
+                                    <div className="flex flex-row items-center gap-x-5 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full pb-2 2xl:pb-0 hide-scroll-indicator">
+                                        {/* Opening */}
+                                        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                            <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-lg border border-slate-200/60 bg-slate-50 flex items-center justify-center shrink-0">
+                                                <Wallet className="text-slate-600 w-[14px] h-[14px] xl:w-4 xl:h-4" strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Opening</div>
+                                                <div className="text-[12px] xl:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.openingBalance, preferences.currency)}</div>
+                                            </div>
                                         </div>
-                                        <div>
-                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Opening</div>
-                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.openingBalance, preferences.currency)}</div>
+                                        {/* Debit */}
+                                        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                            <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-lg border border-white/60 bg-rose-50 flex items-center justify-center shrink-0">
+                                                <ArrowUpRight className="text-rose-600 w-[14px] h-[14px] xl:w-4 xl:h-4" strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Debit</div>
+                                                <div className="text-[12px] xl:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.expense + reportData.summary.investment, preferences.currency)}</div>
+                                            </div>
+                                        </div>
+                                        {/* Credit */}
+                                        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                            <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-lg border border-white/60 bg-emerald-50 flex items-center justify-center shrink-0">
+                                                <ArrowDownLeft className="text-emerald-600 w-[14px] h-[14px] xl:w-4 xl:h-4" strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Credit</div>
+                                                <div className="text-[12px] xl:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.income, preferences.currency)}</div>
+                                            </div>
+                                        </div>
+                                        {/* Closing */}
+                                        <div className="flex items-center gap-2 lg:gap-3 shrink-0">
+                                            <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-lg border border-slate-200/60 bg-slate-100 flex items-center justify-center shrink-0">
+                                                <Activity className="text-slate-700 w-[14px] h-[14px] xl:w-4 xl:h-4" strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Closing</div>
+                                                <div className="text-[12px] xl:text-[15px] font-bold text-slate-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.closingBalance, preferences.currency)}</div>
+                                            </div>
                                         </div>
                                     </div>
-                                    {/* Debit */}
-                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-white/60 bg-rose-50 flex items-center justify-center shrink-0">
-                                            <ArrowUpRight size={16} className="text-rose-600" strokeWidth={2.5} />
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Debit</div>
-                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.expense + reportData.summary.investment, preferences.currency)}</div>
-                                        </div>
-                                    </div>
-                                    {/* Credit */}
-                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-white/60 bg-emerald-50 flex items-center justify-center shrink-0">
-                                            <ArrowDownLeft size={16} className="text-emerald-600" strokeWidth={2.5} />
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Credit</div>
-                                            <div className="text-[14px] lg:text-[15px] font-bold text-gray-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.income, preferences.currency)}</div>
-                                        </div>
-                                    </div>
-                                    {/* Closing */}
-                                    <div className="flex items-center gap-2 lg:gap-3 shrink-0">
-                                        <div className="w-8 h-8 lg:w-9 lg:h-9 rounded-lg border border-slate-200/60 bg-slate-100 flex items-center justify-center shrink-0">
-                                            <Activity size={16} className="text-slate-700" strokeWidth={2.5} />
-                                        </div>
-                                        <div>
-                                            <div className="text-[10px] lg:text-[11px] font-semibold text-gray-500 mb-0.5 uppercase tracking-wider">Closing</div>
-                                            <div className="text-[14px] lg:text-[15px] font-bold text-slate-800 tracking-tight whitespace-nowrap">{formatCurrency(reportData.summary.closingBalance, preferences.currency)}</div>
-                                        </div>
-                                    </div>
+                                    {profitLossCompactControlsRow}
                                 </div>
+                            ) : showProfitLossCompactControls ? (
+                                profitLossCompactControlsRow
                             ) : (
                                 <div className="hidden xl:block flex-1" />
                             )}
 
                             {/* RIGHT SIDE: FILTERS */}
-                            <div className="flex flex-col md:flex-row items-end md:items-center gap-2 md:gap-3 w-full xl:w-auto shrink-0 justify-end">
-                                <div className="w-full sm:w-auto">
+                            {!showProfitLossCompactControls && (
+                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-3 w-full 2xl:w-auto shrink-0 justify-start 2xl:justify-end">
+                                <div className="w-full sm:flex-1 sm:min-w-[220px]">
                                 <DateRangePicker
                                     ref={dateRangeRef}
                                     startDate={filters.startDate}
@@ -984,14 +2110,15 @@ const Reports = () => {
                                         }));
                                     }}
                                     onKeyDown={(e) => handleKeyDown(e, 0)}
-                                    buttonLabelClassName="text-[14px] !important" dropdownItemClassName="text-[14px] !important" className="reports-tablet-filter-input w-full min-w-[220px]"
+                                    buttonLabelClassName="!text-[12px] " dropdownItemClassName="!text-[12px] " className="reports-tablet-filter-input w-full min-w-[220px]"
                                 />
                             </div>
-                            <div className="w-full sm:w-auto mt-1 lg:mt-0 lg:ml-1">
-                                <BranchSelector />
+                            <div className="w-full sm:w-auto mt-1 lg:mt-0 2xl:ml-1">
+                                <BranchSelector compactLaptop hideSettings />
                             </div>
                             {isDesktopView && extraFiltersNode}
                         </div>
+                            )}
                         </div>
 
                         {/* Report Content */}

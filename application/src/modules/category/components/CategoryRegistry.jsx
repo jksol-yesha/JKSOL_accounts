@@ -255,7 +255,7 @@ const CategoryRegistry = ({
                 <div className="flex items-center gap-3">
                     <button
                         onClick={onCreateCategory}
-                        className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
+                        className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium"
                         title="Add Category"
                     >
                         <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
@@ -268,18 +268,18 @@ const CategoryRegistry = ({
                     <div className="relative" ref={dropdownAreaRef}>
                         <button
                             onClick={() => setActiveDropdown(prev => prev === 'export' ? null : 'export')}
-                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[13px] font-medium"
+                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium"
                         >
                             <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
                             <span>Export</span>
                         </button>
                         {activeDropdown === 'export' && (
                             <div className="absolute top-full mt-2 right-0 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-50 py-2 animate-in slide-in-from-top-2 duration-200">
-                                <button className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                                <button className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
                                     <FileSpreadsheet size={14} className="text-emerald-500" />
                                     <span>Export to Excel</span>
                                 </button>
-                                <button className="w-full text-left px-4 py-2 text-xs font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
+                                <button className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
                                     <FileText size={14} className="text-rose-500" />
                                     <span>Export to PDF</span>
                                 </button>
@@ -300,13 +300,16 @@ const CategoryRegistry = ({
             </div>
 
             {/* Grid Container */}
-            <div className="relative flex-1 min-h-[400px] w-full px-5 pb-1 flex flex-col">
+            <div
+                className="category-grid-shell relative w-full px-5 pb-1 flex flex-col"
+                style={{ height: '760px' }}
+            >
                 {showInitialLoader ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 backdrop-blur-sm">
                         <LoadingOverlay label="Loading Categories..." />
                     </div>
                 ) : (
-                    <div className="flex-1 w-full relative">
+                    <div className="h-full w-full relative">
                         <div className="absolute inset-0">
                             <AgGridReact
                                 ref={gridRef}
@@ -321,6 +324,9 @@ const CategoryRegistry = ({
                                 suppressCellFocus={true}
                                 suppressRowClickSelection={true}
                                 domLayout="normal"
+                                pagination={true}
+                                paginationPageSize={50}
+                                paginationPageSizeSelector={[25, 50, 100, 200]}
                                 overlayNoRowsTemplate={
                                     '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No categories found</span>'
                                 }

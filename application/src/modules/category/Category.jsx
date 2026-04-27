@@ -366,8 +366,8 @@ const Category = () => {
                     onBack={() => navigate('/transactions')}
                 />
             )}
-            className="category-laptop-page-shell !overflow-visible lg:!overflow-visible"
-            contentClassName="category-laptop-page-content flex flex-col p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
+            className="category-laptop-page-shell bg-white !overflow-visible lg:!overflow-visible"
+            contentClassName="category-laptop-page-content bg-white flex flex-col p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
             cardClassName="bg-white border-none shadow-none rounded-none overflow-visible lg:overflow-visible"
         >
             <style>{`
@@ -379,7 +379,7 @@ const Category = () => {
                     .print\\:block { display: block !important; }
                 }
             `}</style>
-            <div className="flex-1 min-h-0 flex flex-col items-stretch pt-2">
+            <div className="flex-1 min-h-0 flex flex-col items-stretch bg-white pt-2">
                 <div className="w-full h-full min-h-[400px] print:w-full category-laptop-right-panel flex flex-col">
                     <CategoryRegistry
                         categories={categories}

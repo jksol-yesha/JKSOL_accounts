@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { X, Building2, Check, XCircle, Loader2 } from 'lucide-react';
+import { X, Building2, Check, XCircle } from 'lucide-react';
 import apiService from '../../services/api';
 import { useOrganization } from '../../context/OrganizationContext';
+import { Loader } from '../../components/common/Loader';
 
 const InvitationNotification = ({ invitation, onClose }) => {
     const [isProcessing, setIsProcessing] = useState(false);
@@ -101,7 +102,7 @@ const InvitationNotification = ({ invitation, onClose }) => {
                         disabled={isProcessing}
                         className="flex-1 bg-white border-2 border-gray-900 text-gray-900 py-2.5 px-4 rounded-md font-semibold text-sm hover:bg-gray-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={16} />}
+                        {isProcessing ? <Loader className="h-4 w-4 text-gray-900" /> : <XCircle size={16} />}
                         Decline
                     </button>
                     <button
@@ -109,7 +110,7 @@ const InvitationNotification = ({ invitation, onClose }) => {
                         disabled={isProcessing}
                         className="flex-1 bg-gray-900 text-white py-2.5 px-4 rounded-md font-semibold text-sm hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                     >
-                        {isProcessing ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                        {isProcessing ? <Loader className="h-4 w-4 text-white" /> : <Check size={16} />}
                         Accept
                     </button>
                 </div>

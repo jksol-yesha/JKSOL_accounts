@@ -5,7 +5,7 @@ import LoadingOverlay from '../../../components/common/LoadingOverlay';
 import useDelayedOverlayLoader from '../../../hooks/useDelayedOverlayLoader';
 import isIgnorableRequestError from '../../../utils/isIgnorableRequestError';
 import { cn } from '../../../utils/cn';
-import { Loader2, Wallet } from 'lucide-react';
+import { Wallet, TrendingUp } from 'lucide-react';
 import apiService from '../../../services/api';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
@@ -13,6 +13,7 @@ import { usePreferences } from '../../../context/PreferenceContext';
 import { useOrganization } from '../../../context/OrganizationContext';
 import { useAuth } from '../../../context/AuthContext';
 import AccountNameTooltip from '../../../components/common/AccountNameTooltip';
+import { Loader } from '../../../components/common/Loader';
 
 // --- BANK AVATAR LOGIC ---
 const bankLogoModules = import.meta.glob('../../../assets/bank-logos/*.{png,jpg,jpeg,svg}', {
@@ -107,7 +108,7 @@ const isInvestmentAccount = (account) => {
 const CardShell = ({ title, headerRight, children, className, headerClassName }) => (
     <div className={cn("bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden", className)}>
         <div className={cn("px-5 py-4 border-b border-slate-100 bg-slate-100 shrink-0 flex items-center justify-between gap-4", headerClassName)}>
-            <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
+            <h3 className="text-[13px] 2xl:text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
                 {title}
             </h3>
             {headerRight && (
@@ -157,7 +158,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
         <div className="flex items-center gap-1.5" title="Total Available Balance">
             <Wallet className="w-4 h-4 text-slate-400" />
             <span className={cn(
-                "text-[14px] font-semibold tracking-tight",
+                "text-[12px] 2xl:text-[14px] font-semibold tracking-tight",
                 isTotalPositive ? "text-slate-800" : "text-rose-600"
             )}>
                 {formatCurrency(totalAvailableBalance)}
@@ -174,7 +175,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
             <div className="flex-1 overflow-y-auto relative no-scrollbar pt-2">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                        <Loader className="h-5 w-5 text-[#4A8AF4]" />
                     </div>
                 ) : topAccounts.length > 0 ? (
                     <div className="divide-y divide-slate-100">
@@ -196,11 +197,11 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                         <AccountNameTooltip 
                                             name={cat.displayName}
                                             className="min-w-0 flex-1"
-                                            textClassName="text-[13px] font-medium text-slate-800"
+                                            textClassName="text-[12px] font-medium text-slate-800"
                                         />
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
-                                        <span className="w-32 text-right text-[13px] font-medium text-slate-800">
+                                        <span className="w-32 text-right text-[12px] font-medium text-slate-800">
                                             {formatCurrency(cat.amount)}
                                         </span>
                                         <span className="w-8 text-right text-[12px] text-slate-400">
@@ -212,7 +213,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                         })}
                     </div>
                 ) : hasFetchedOnce ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-medium text-slate-400">
+                    <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
                         No accounts found
                     </div>
                 ) : null}
@@ -256,7 +257,7 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
             <div className="flex-1 overflow-y-auto px-6 relative no-scrollbar flex flex-col justify-center py-5">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                        <Loader className="h-5 w-5 text-[#4A8AF4]" />
                     </div>
                 ) : (
                     <div className="flex flex-col xl:flex-row mx-auto items-center justify-center w-full gap-5 xl:gap-8">
@@ -296,13 +297,13 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                            <div className="flex flex-col">
                                <div className="flex items-center gap-2 mb-1">
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80]"></span>
-                                   <span className="text-[14px] font-medium text-slate-600">Income</span>
+                                   <span className="text-[12px] font-medium text-slate-600">Income</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div className="text-[16px] xl:text-[17px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
+                                   <div className="text-[12px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalIncomeApp)}
                                    </div>
-                                   <div className="text-[14px] xl:text-[15px] font-medium text-slate-500 shrink-0">
+                                   <div className="text-[12px] font-medium text-slate-500 shrink-0">
                                        {incomePercent}%
                                    </div>
                                </div>
@@ -312,13 +313,13 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                            <div className="flex flex-col">
                                <div className="flex items-center gap-2 mb-1">
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#f87171]"></span>
-                                   <span className="text-[14px] font-medium text-slate-600">Expenses</span>
+                                   <span className="text-[12px] font-medium text-slate-600">Expenses</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div className="text-[16px] xl:text-[17px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
+                                   <div className="text-[12px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalExpenseApp)}
                                    </div>
-                                   <div className="text-[14px] xl:text-[15px] font-medium text-slate-500 shrink-0">
+                                   <div className="text-[12px] font-medium text-slate-500 shrink-0">
                                        {expensePercent}%
                                    </div>
                                </div>
@@ -356,26 +357,42 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
         }))
         .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount));
 
-    const investments = (investmentAccounts.length > 0 ? investmentAccounts : investmentCategories)
-        .slice(0, 3);
+    const allInvestments = investmentAccounts.length > 0 ? investmentAccounts : investmentCategories;
+    const investments = allInvestments.slice(0, 3);
+
+    const totalAvailableInvestment = allInvestments.reduce((sum, item) => sum + item.amount, 0);
+    const isTotalPositive = totalAvailableInvestment >= 0;
+
+    const totalInvestmentBadge = allInvestments.length > 0 ? (
+        <div className="flex items-center gap-1.5" title="Total Investment">
+            <TrendingUp className="w-4 h-4 text-slate-400" />
+            <span className={cn(
+                "text-[12px] 2xl:text-[14px] font-semibold tracking-tight",
+                isTotalPositive ? "text-slate-800" : "text-rose-600"
+            )}>
+                {formatCurrency(totalAvailableInvestment)}
+            </span>
+        </div>
+    ) : null;
 
     return (
         <CardShell
-            title="Investment Performance"
+            title="Investment Overview"
+            headerRight={totalInvestmentBadge}
             headerClassName="bg-[#F9F9FB] border-b border-slate-200"
         >
             <div className="flex-1 overflow-y-auto relative no-scrollbar">
                 {initialLoading ? (
                     <div className="absolute inset-0 flex items-center justify-center">
-                        <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                        <Loader className="h-5 w-5 text-[#4A8AF4]" />
                     </div>
                 ) : investments.length > 0 ? (
                     <div className="divide-y divide-slate-100">
                         {investments.map((cat, i) => {
                             return (
                                 <div key={i} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
-                                    <span className="text-[13px] font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
-                                    <span className="text-[13px] font-medium text-slate-800 mt-0.5 shrink-0">
+                                    <span className="text-[12px] font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
+                                    <span className="text-[12px] font-medium text-slate-800 mt-0.5 shrink-0">
                                         {formatCurrency(cat.amount)}
                                     </span>
                                 </div>
@@ -383,7 +400,7 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
                         })}
                     </div>
                 ) : hasFetchedOnce ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-[13px] font-medium text-slate-400">
+                    <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
                         No active investments
                     </div>
                 ) : null}

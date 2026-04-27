@@ -1309,7 +1309,7 @@ export class TransactionService {
             const entries: any[] = [];
             const amount = isTaxableFlag && data.finalAmount != null ? Number(data.finalAmount) : Number(totalAmount);
 
-            if (typeName === 'expense') {
+            if (typeName === 'expense' || data.txnTypeId === 2) {
                 if (data.categoryId === null || data.categoryId === undefined || data.accountId === null || data.accountId === undefined) throw new Error('Expense requires Category (Expense Account) and Paid From Account');
 
                 entries.push({
@@ -1328,7 +1328,7 @@ export class TransactionService {
                     description: 'Paid From'
                 });
 
-            } else if (typeName === 'income') {
+            } else if (typeName === 'income' || data.txnTypeId === 1) {
                 if (data.categoryId === null || data.categoryId === undefined || data.accountId === null || data.accountId === undefined) throw new Error('Income requires Category (Income Account) and Deposit To Account');
 
                 entries.push({
@@ -1347,7 +1347,7 @@ export class TransactionService {
                     description: 'Income Source'
                 });
 
-            } else if (typeName === 'transfer') {
+            } else if (typeName === 'transfer' || data.txnTypeId === 4) {
                 // Logic for transfer might come as fromAccountId/toAccountId fields
                 // If frontend sends 'categoryId' as null, checks other fields
                 const fromId = data.fromAccountId || data.accountId; // Frontend might send 'from' as 'accountId'
@@ -1375,8 +1375,9 @@ export class TransactionService {
                     credit: amount.toFixed(2),
                     description: 'Transfer Out'
                 });
-            } else if (typeName === 'investment') {
+            } else if (typeName === 'investment' || data.txnTypeId === 3) {
                 if (data.toAccountId === null || data.toAccountId === undefined || data.accountId === null || data.accountId === undefined) throw new Error('Investment requires Investment Account and Paid From Account');
+                if (data.toAccountId === data.accountId) throw new Error('Investment Account and Paid From Account cannot be the same account');
 
                 entries.push({
                     transactionId,
@@ -1831,7 +1832,7 @@ export class TransactionService {
             const amount = isTxnTaxable && txnFinalAmt != null ? Number(txnFinalAmt) : Number(mergedData.amountLocal);
 
             // Reuse logic (duplicated for now to avoid refactoring 'create' into helper in this step)
-            if (typeName === 'expense') {
+            if (typeName === 'expense' || txnTypeId === 2) {
                 // Need categoryId and accountId.
                 // In 'update', data might contain 'categoryId'
                 const catId = data.categoryId || (existing as any).entries?.find((e: any) => e.debit > 0)?.accountId; // Heuristic?
@@ -1842,7 +1843,7 @@ export class TransactionService {
                     entries.push({ transactionId: id, accountId: data.categoryId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Expense' });
                     entries.push({ transactionId: id, accountId: data.accountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Paid From' });
                 }
-            } else if (typeName === 'income') {
+            } else if (typeName === 'income' || txnTypeId === 1) {
                 if (data.categoryId === null || data.categoryId === undefined || data.accountId === null || data.accountId === undefined) {
                     throw new Error('Income requires Category (Income Account) and Deposit To Account');
                 }
@@ -1850,7 +1851,7 @@ export class TransactionService {
                     entries.push({ transactionId: id, accountId: data.accountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Deposit To' });
                     entries.push({ transactionId: id, accountId: data.categoryId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Income Source' });
                 }
-            } else if (typeName === 'transfer') {
+            } else if (typeName === 'transfer' || txnTypeId === 4) {
                 if (data.fromAccountId === null || data.fromAccountId === undefined || data.toAccountId === null || data.toAccountId === undefined) {
                     throw new Error('Transfer requires From Account and To Account');
                 }
@@ -1858,9 +1859,12 @@ export class TransactionService {
                     entries.push({ transactionId: id, accountId: data.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Transfer In' });
                     entries.push({ transactionId: id, accountId: data.fromAccountId, debit: (0).toFixed(2), credit: amount.toFixed(2), description: 'Transfer Out' });
                 }
-            } else if (typeName === 'investment') {
+            } else if (typeName === 'investment' || txnTypeId === 3) {
                 if (data.toAccountId === null || data.toAccountId === undefined || data.accountId === null || data.accountId === undefined) {
                     throw new Error('Investment requires Investment Account and Paid From Account');
+                }
+                if (data.toAccountId === data.accountId) {
+                    throw new Error('Investment Account and Paid From Account cannot be the same account');
                 }
                 if (data.toAccountId !== undefined && data.accountId !== undefined) {
                     entries.push({ transactionId: id, accountId: data.toAccountId, debit: amount.toFixed(2), credit: (0).toFixed(2), description: 'Investment' });

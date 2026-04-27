@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Building2, Check, ArrowLeft, Trash2, AlertCircle, Plus, ChevronRight, ChevronDown, Users, Mail, UserPlus, Shield, Loader2, Settings, Edit, Power, GitBranch } from 'lucide-react';
+import { X, Building2, Check, ArrowLeft, Trash2, AlertCircle, Plus, ChevronRight, ChevronDown, Users, Mail, UserPlus, Shield, Settings, Edit, Power, GitBranch } from 'lucide-react';
 import apiService from '../../services/api';
 import { useOrganization } from '../../context/OrganizationContext';
 import { useAuth } from '../../context/AuthContext';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 import CustomSelect from '../common/CustomSelect';
+import { Loader } from '../common/Loader';
 import { cn } from '../../utils/cn';
 import { isValidEmail } from '../../utils/validation';
 
@@ -662,7 +663,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                 <Building2 size={14} strokeWidth={2.5} />
                             </div>
                             <div className="flex flex-col">
-                                <h2 className="text-[13px] font-bold text-slate-900 tracking-tight leading-tight">
+                                <h2 className="text-[14px] font-bold text-slate-900 tracking-tight leading-tight">
                                     Manage Organization
                                 </h2>
                                 <p className="text-[10px] text-slate-500 font-bold tracking-wider">
@@ -849,7 +850,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 disabled={isLoading || !createFormData.name.trim()}
                                                 className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                {isLoading ? <Loader2 size={16} className="animate-spin" /> : 'Create'}
+                                                {isLoading ? <Loader className="h-4 w-4 text-white" /> : 'Create'}
                                             </button>
                                         </div>
                                     </div>
@@ -1037,7 +1038,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                     disabled={inviteLoading || !inviteName.trim() || Boolean(getInviteOwnerEmailError(inviteEmail))}
                                     className="flex-1 py-3.5 rounded-md text-[13px] font-extrabold text-white bg-black hover:bg-black/90 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
-                                    {inviteLoading && <Loader2 size={16} className="animate-spin" />}
+                                    {inviteLoading && <Loader className="h-4 w-4 text-white" />}
                                     Send Invite
                                 </button>
                             </div>
@@ -1263,10 +1264,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                         className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
                                                         {inviteLoading ? (
-                                                            <Loader2
-                                                                size={16}
-                                                                className="animate-spin"
-                                                            />
+                                                            <Loader className="h-4 w-4 text-white" />
                                                         ) : (
                                                             'Invite Member'
                                                         )}
@@ -1290,10 +1288,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                     <div className="flex-1 bg-white overflow-hidden divide-y divide-slate-100 min-h-[400px]">
                                         {loadingMembers && members.length === 0 ? (
                                             <div className="py-20 flex justify-center">
-                                                <Loader2
-                                                    size={24}
-                                                    className="animate-spin text-slate-300"
-                                                />
+                                                <Loader className="h-6 w-6 text-slate-300" />
                                             </div>
                                         ) : members.length > 0 ? (
                                             members.map((member) => (
@@ -1598,10 +1593,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                     className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
                                                     {isLoading ? (
-                                                        <Loader2
-                                                            size={18}
-                                                            className="animate-spin"
-                                                        />
+                                                        <Loader className="h-[18px] w-[18px] text-white" />
                                                     ) : (
                                                         'Update'
                                                     )}

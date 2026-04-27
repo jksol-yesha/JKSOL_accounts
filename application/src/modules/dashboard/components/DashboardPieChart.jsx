@@ -1,10 +1,11 @@
 import React, { useState, useMemo, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import apiService from '../../../services/api';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
 import { usePreferences } from '../../../context/PreferenceContext';
+import { Loader } from '../../../components/common/Loader';
 
 const COLORS = ['#2dd4bf', '#fb923c', '#3b82f6', '#fcd34d', '#818cf8', '#38bdf8', '#fb7185'];
 const MAX_VISIBLE_SEGMENTS = 8;
@@ -28,6 +29,16 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const [categories, setCategories] = React.useState([]);
     const [loading, setLoading] = useState(false);
     const echartsRef = useRef(null);
+    const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024);
+
+    React.useEffect(() => {
+        const handleResize = () => setWindowWidth(window.innerWidth);
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    const isMobile = windowWidth < 768;
+    const isDesktop = windowWidth >= 1500;
 
     const contextReady = Boolean(!branchLoading && !yearLoading && selectedYear?.id);
 
@@ -92,9 +103,30 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const echartsOption = {
         animationDuration: 500,
         animationEasing: 'cubicOut',
+        tooltip: {
+            trigger: 'item',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            borderColor: '#e2e8f0',
+            borderWidth: 1,
+            borderRadius: 8,
+            padding: 12,
+            shadowColor: 'rgba(0, 0, 0, 0.08)',
+            shadowBlur: 12,
+            textStyle: { color: '#0f172a', fontSize: 12 },
+            formatter: (params) => {
+                const amountStr = formatFullAmount(params.data.value, dashboardFilters?.currency || preferences.currency);
+                return `<div style="display:flex;flex-direction:column;gap:4px">
+                            <div style="display:flex;align-items:center;gap:6px">
+                                <span style="width:8px;height:8px;border-radius:50%;background-color:${params.color}"></span>
+                                <span style="color:#64748b;font-weight:500">${params.data.name}</span>
+                            </div>
+                            <div style="margin-left:14px;font-weight:600;color:#0f172a;font-size:13px">${amountStr} <span style="color:#64748b;font-weight:500;margin-left:2px">(${params.data.percent}%)</span></div>
+                        </div>`;
+            }
+        },
         series: [{
             type: 'pie',
-            radius: ['0%', '60%'],
+            radius: isMobile ? ['0%', '30%'] : isDesktop ? ['0%', '55%'] : ['0%', '48%'],
             center: ['50%', '50%'],
             startAngle: 90, 
             clockwise: true,
@@ -107,11 +139,12 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             label: {
                 show: true,
                 position: 'outside',
+                distanceToLabelLine: isMobile ? 6 : 10,
                 backgroundColor: '#ffffff',
                 borderColor: '#e2e8f0',
                 borderWidth: 1,
                 borderRadius: 6,
-                padding: [10, 14],
+                padding: isMobile ? [8, 10] : [8, 12],
                 shadowColor: 'rgba(0, 0, 0, 0.08)',
                 shadowBlur: 8,
                 shadowOffsetX: 0,
@@ -122,21 +155,21 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                 },
                 rich: {
                     amount: {
-                        fontSize: 16,
+                        fontSize: 11,
                         fontWeight: 500,
                         color: '#0f172a',
-                        padding: [0, 0, 6, 0]
+                        padding: [0, 0, 4, 0]
                     },
                     name: {
-                        fontSize: 12,
+                        fontSize: 10,
                         color: '#475569'
                     }
                 }
             },
             labelLine: {
                 show: true,
-                length: 25,
-                length2: 35,
+                length: isMobile ? 12 : isDesktop ? 34 : 22,
+                length2: isMobile ? 14 : isDesktop ? 48 : 34,
                 smooth: false,
                 lineStyle: {
                     width: 1.5,
@@ -158,9 +191,9 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const headerTitle = `Top ${selectedType === 'income' ? 'Income' : 'Expenses'}`;
 
     return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 min-h-[460px]">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 min-h-[380px] 2xl:min-h-[460px]">
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
-                <h3 className="text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
+                <h3 className="text-[13px] 2xl:text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
                     {headerTitle}
                 </h3>
 
@@ -181,14 +214,14 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             <div className="flex-1 relative bg-white flex flex-col items-center justify-center p-4">
                 {loading ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white z-20">
-                        <Loader2 className="w-6 h-6 text-indigo-500 animate-spin" />
+                        <Loader className="h-6 w-6 text-[#4A8AF4]" />
                     </div>
                 ) : chartData.length === 0 ? (
                     <div className="absolute inset-0 flex items-center justify-center text-[15px] font-medium text-slate-400">
                         No {selectedType} data found
                     </div>
                 ) : (
-                    <div className="w-full h-[350px] md:h-[400px]">
+                    <div className="w-full h-[320px] md:h-[350px] 2xl:h-[400px]">
                         <ReactECharts
                             ref={echartsRef}
                             option={echartsOption}

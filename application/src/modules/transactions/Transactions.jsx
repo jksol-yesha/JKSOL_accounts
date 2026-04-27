@@ -12,13 +12,14 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Loader2, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, Folders
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, ShoppingBag
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
+import { Loader } from '../../components/common/Loader';
 
 import { useWebSocket } from '../../hooks/useWebSocket';
 import { useAuth } from '../../context/AuthContext';
@@ -51,6 +52,7 @@ const createInitialDeleteDialog = () => ({
 });
 
 const TXN_TABLE_COLUMN_STORAGE_KEY = 'transactions:tableColumns:v2';
+const TXN_COLUMN_DROPDOWN_VISIBLE_OPTION_COUNT = 4;
 const TXN_TABLE_COLUMNS = [
     { key: 'id', label: 'Id', defaultVisible: false },
     { key: 'party', label: 'Party', defaultVisible: true },
@@ -115,18 +117,33 @@ const BranchTooltip = ({ branchNames }) => {
     );
 };
 
-const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }) => {
+const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, defaultVisibleColumns }) => {
     const [isOpen, setIsOpen] = useState(false);
     const buttonRef = useRef(null);
     const popupRef = useRef(null);
     const [position, setPosition] = useState(null);
+    const popupWidth = 144;
 
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
+    const resetButtonIndex = columns.length;
+    const totalInteractiveItems = columns.length + 1;
 
     useLayoutEffect(() => {
-        if (!isOpen) return;
-        const rect = buttonRef.current.getBoundingClientRect();
-        setPosition({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+        if (!isOpen) {
+            setPosition(null);
+            return;
+        }
+
+        const updatePosition = () => {
+            if (!buttonRef.current) return;
+            const rect = buttonRef.current.getBoundingClientRect();
+            setPosition({
+                top: rect.bottom + 8,
+                left: Math.max(8, rect.right - popupWidth),
+            });
+        };
+
+        updatePosition();
 
         const handleClickOutside = (e) => {
             if (!buttonRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) {
@@ -134,12 +151,24 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
                 setHighlightedIndex(-1);
             }
         };
+
         window.addEventListener('mousedown', handleClickOutside);
-        return () => window.removeEventListener('mousedown', handleClickOutside);
+        window.addEventListener('resize', updatePosition);
+        window.addEventListener('scroll', updatePosition, true);
+
+        return () => {
+            window.removeEventListener('mousedown', handleClickOutside);
+            window.removeEventListener('resize', updatePosition);
+            window.removeEventListener('scroll', updatePosition, true);
+        };
     }, [isOpen]);
 
     const toggleColumn = (key) => {
         setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const resetColumns = () => {
+        setVisibleColumns({ ...defaultVisibleColumns });
     };
 
     const handleKeyDown = (e) => {
@@ -155,16 +184,18 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
         switch (e.key) {
             case 'ArrowDown':
                 e.preventDefault();
-                setHighlightedIndex(prev => (prev + 1) % columns.length);
+                setHighlightedIndex(prev => (prev + 1) % totalInteractiveItems);
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                setHighlightedIndex(prev => (prev - 1 + columns.length) % columns.length);
+                setHighlightedIndex(prev => (prev - 1 + totalInteractiveItems) % totalInteractiveItems);
                 break;
             case 'Enter':
                 e.preventDefault();
-                if (highlightedIndex >= 0 && columns[highlightedIndex]) {
+                if (highlightedIndex >= 0 && highlightedIndex < columns.length && columns[highlightedIndex]) {
                     toggleColumn(columns[highlightedIndex].key);
+                } else if (highlightedIndex === resetButtonIndex) {
+                    resetColumns();
                 }
                 break;
             case 'Escape':
@@ -183,50 +214,65 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns }
     return (
         <div className="relative inline-block text-left whitespace-nowrap">
             <button
+                type="button"
                 ref={buttonRef}
                 onClick={() => {
                     const next = !isOpen;
                     setIsOpen(next);
-                    setHighlightedIndex(next ? 0 : -1);
+                    setHighlightedIndex(-1);
                 }}
                 onKeyDown={handleKeyDown}
-                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                className="group h-[32px] px-2.5 flex items-center gap-1 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
             >
                 <Settings2 size={14} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 <span className="hidden sm:inline">Columns</span>
             </button>
-            {isOpen && createPortal(
+            {isOpen && position && createPortal(
                 <div
                     ref={popupRef}
-                    style={{ position: 'fixed', top: position?.top, right: position?.right, zIndex: 9999 }}
-                    className="w-48 bg-white border border-gray-200 rounded-lg shadow-xl shadow-gray-200/50 py-1.5 z-[100]"
+                    style={{ position: 'fixed', top: position.top, left: position.left, zIndex: 9999 }}
+                    className="w-36 bg-white border border-gray-200 rounded-lg shadow-xl shadow-gray-200/50 py-1 z-[100]"
                 >
-                    <div className="px-3 py-2 border-b border-gray-100 mb-1">
-                        <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">Toggle Columns</span>
+                    <div
+                        className="overflow-y-auto"
+                        style={{ maxHeight: `${TXN_COLUMN_DROPDOWN_VISIBLE_OPTION_COUNT * 34}px` }}
+                    >
+                        {columns.map((col, idx) => {
+                            const isHighlighted = highlightedIndex === idx;
+                            return (
+                                <button
+                                    key={col.key}
+                                    type="button"
+                                    onClick={() => toggleColumn(col.key)}
+                                    onMouseEnter={() => setHighlightedIndex(idx)}
+                                    onMouseLeave={() => setHighlightedIndex(-1)}
+                                    className={`w-full flex items-center px-1.5 pr-1 py-1.5 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                >
+                                    <div className="flex items-center gap-1 flex-1 min-w-0">
+                                        <div className="w-2.5 flex justify-center shrink-0">
+                                            {visibleColumns[col.key] && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
+                                        </div>
+                                        <div className="flex items-center gap-1 min-w-0 truncate">
+                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${visibleColumns[col.key] ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                {col.label}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </button>
+                            );
+                        })}
                     </div>
-                    {columns.map((col, idx) => {
-                        const isHighlighted = highlightedIndex === idx;
-                        return (
-                            <button
-                                key={col.key}
-                                onClick={() => toggleColumn(col.key)}
-                                onMouseEnter={() => setHighlightedIndex(idx)}
-                                onMouseLeave={() => setHighlightedIndex(-1)}
-                                className={`w-full flex items-center justify-between px-3 py-2 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
-                            >
-                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                                    <div className="w-4 flex justify-center shrink-0">
-                                        {visibleColumns[col.key] && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 min-w-0 truncate">
-                                        <p className={`min-w-0 truncate tracking-tight text-[13px] ${visibleColumns[col.key] ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
-                                            {col.label}
-                                        </p>
-                                    </div>
-                                </div>
-                            </button>
-                        );
-                    })}
+                    <div className="mt-1 pt-1 border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 pb-0.5">
+                        <button
+                            type="button"
+                            onClick={resetColumns}
+                            onMouseEnter={() => setHighlightedIndex(resetButtonIndex)}
+                            onMouseLeave={() => setHighlightedIndex(-1)}
+                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === resetButtonIndex ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
+                        >
+                            Reset
+                        </button>
+                    </div>
                 </div>,
                 document.body
             )}
@@ -261,7 +307,7 @@ const PartyTooltip = ({ partyName }) => {
 
 const DescriptionTooltip = ({ description }) => {
     const [visible, setVisible] = useState(false);
-    if (!description || description === '-') return <span className="text-[13px] font-medium text-gray-400">-</span>;
+    if (!description || description === '-') return <span className="text-[12px] font-medium text-gray-400">-</span>;
     const needsTooltip = description.length > 25;
     return (
         <span
@@ -269,7 +315,7 @@ const DescriptionTooltip = ({ description }) => {
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}
         >
-            <span className="block truncate text-[13px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
+            <span className="block truncate text-[12px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
                 {description}
             </span>
             {needsTooltip && visible && (
@@ -343,6 +389,8 @@ const FilterDropdown = ({
     showOptionTicksWhenAllSelected = false,
     flatSelectAll = false,
     showApplyFooter = false,
+    keepButtonNeutral = false,
+    neutralCountBadge = false,
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [highlightedIndex, setHighlightedIndex] = useState(-1);
@@ -431,7 +479,40 @@ const FilterDropdown = ({
     const internalOptions = isMultiSelect ? options : (showSelectAll ? [{ isSelectAll: true }, ...options] : options);
     const isStagedAll = isMultiSelect && (stagedValues.includes(allValue) || stagedValues.length === options.length);
     const renderedSingleValue = showApplyFooter ? stagedSingleValue : value;
+    const hasFooter = isMultiSelect ? !hideApplyButton : showApplyFooter;
+    const isAllPartiesDropdown = selectAllLabel === 'All Parties' || allDisplayLabel === 'All Parties';
     const isRenderedSelectAllActive = !isMultiSelect && renderedSingleValue === allValue;
+    const triggerClassName = !isTitleVar
+        ? keepButtonNeutral || isSelectAllActive
+            ? "bg-white text-gray-600 border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"
+            : "bg-white border-[#BAE6FD] text-[#4A8AF4] hover:bg-[#F0F9FF]"
+        : "";
+    const getInitialHighlightedIndex = () => {
+        if (isMultiSelect) {
+            if (isSelectAllActive) {
+                return showSelectAll ? 0 : -1;
+            }
+
+            const selectedValues = Array.isArray(value)
+                ? value
+                : value != null && value !== allValue
+                    ? [value]
+                    : [];
+            const firstSelectedIndex = options.findIndex((option) => selectedValues.includes(option.value));
+
+            if (firstSelectedIndex >= 0) {
+                return showSelectAll ? firstSelectedIndex + 1 : firstSelectedIndex;
+            }
+
+            return showSelectAll ? 0 : 0;
+        }
+
+        const activeValue = showApplyFooter ? stagedSingleValue : value;
+        const activeSelectAll = showApplyFooter ? value === allValue : isSelectAllActive;
+        const matchedIndex = internalOptions.findIndex((option) => option.isSelectAll ? activeSelectAll : option.value === activeValue);
+
+        return matchedIndex >= 0 ? matchedIndex : 0;
+    };
 
     const handleApply = () => {
         if (isMultiSelect) {
@@ -472,8 +553,7 @@ const FilterDropdown = ({
             if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
                 e.preventDefault();
                 setIsOpen(true);
-                const idx = internalOptions.findIndex(o => o.isSelectAll ? isSelectAllActive : o.value === value);
-                setHighlightedIndex(idx >= 0 ? idx : 0);
+                setHighlightedIndex(getInitialHighlightedIndex());
             }
             return;
         }
@@ -545,23 +625,33 @@ const FilterDropdown = ({
                     const nextIsOpen = !isOpen;
                     setIsOpen(nextIsOpen);
                     if (nextIsOpen) {
-                        const activeValue = value;
-                        const activeSelectAll = showApplyFooter ? value === allValue : isSelectAllActive;
-                        const idx = internalOptions.findIndex(o => o.isSelectAll ? activeSelectAll : o.value === activeValue);
-                        setHighlightedIndex(idx >= 0 ? idx : 0);
+                        setHighlightedIndex(getInitialHighlightedIndex());
                     } else {
                         setHighlightedIndex(-1);
                     }
                 }}
                 onKeyDown={handleKeyDown}
-                className={cn(`group relative flex items-center justify-between gap-1 transition-colors focus:outline-none ${isTitleVar ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary" : `h-[32px] px-3 text-[13px] font-medium rounded-md transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] border focus-visible:ring-2 focus-visible:ring-blue-100 ${!isSelectAllActive ? "bg-white border-[#BAE6FD] text-[#4A8AF4] hover:bg-[#F0F9FF]" : "bg-white text-gray-600 border-gray-200 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4]"}`}`, buttonClassName)}
+                className={cn(
+                    "group relative flex items-center justify-between gap-1 transition-colors focus:outline-none",
+                    isTitleVar
+                        ? "px-1 py-1 text-[18px] md:text-[20px] font-extrabold text-slate-800 hover:text-primary"
+                        : `h-[32px] px-3 text-[12px] font-medium rounded-md transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)] border focus-visible:ring-2 focus-visible:ring-blue-100 ${triggerClassName}`,
+                    buttonClassName,
+                )}
             >
                 <div
                     className={`flex items-center gap-1.5 min-w-0 ${!isTitleVar ? "" : "font-extrabold"}`}
                 >
                     <span className={`max-w-[120px] truncate ${!isTitleVar ? "transition-colors text-inherit" : ""}`}>{selectedOption?.label}</span>
                     {selectedOption?.remainingCount > 0 && (
-                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-blue-100/50 text-[10px] font-bold text-[#4A8AF4] leading-none shrink-0 group-hover:bg-blue-100/80 transition-colors">
+                        <span
+                            className={cn(
+                                "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[12px] font-bold leading-none shrink-0 transition-colors",
+                                neutralCountBadge
+                                    ? "bg-slate-100 text-slate-500 group-hover:bg-slate-200/70"
+                                    : "bg-blue-100/50 text-[#4A8AF4] group-hover:bg-blue-100/80",
+                            )}
+                        >
                             <span>{selectedOption.remainingCount}</span>
                             <Plus size={9} strokeWidth={3} />
                         </span>
@@ -581,7 +671,7 @@ const FilterDropdown = ({
                 createPortal(
                     <div
                         ref={dropdownMenuRef}
-                        className="fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 py-1.5 z-[9999] animate-in fade-in zoom-in-95 duration-200"
+                        className={`fixed bg-white rounded-lg shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-slate-100 ${hasFooter ? (isAllPartiesDropdown ? 'pt-1 pb-0' : 'pt-1.5 pb-0') : 'py-1.5'} z-[9999] animate-in fade-in zoom-in-95 duration-200`}
                         style={{
                             top: dropdownPosition.top,
                             left: dropdownPosition.left,
@@ -591,7 +681,7 @@ const FilterDropdown = ({
                         {isMultiSelect ? (
                             <>
                                 {showSelectAll && (
-                                    <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
+                                    <div className={`px-3 border-b border-slate-100 flex items-center justify-between ${isAllPartiesDropdown ? 'py-1' : 'py-1.5'}`}>
                                         <button
                                             onClick={() => {
                                                 const nextVal = isStagedAll ? [] : [allValue];
@@ -600,7 +690,7 @@ const FilterDropdown = ({
                                                     onChange(nextVal.length === 0 ? allValue : nextVal);
                                                 }
                                             }}
-                                            className={`group flex items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isStagedAll ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} ${!flatSelectAll && highlightedIndex === 0 ? 'bg-slate-200/50' : ''}`}
+                                            className={`group flex items-center gap-1.5 font-bold transition-colors uppercase tracking-wider rounded-md px-2 ${isAllPartiesDropdown ? 'py-0.5 text-[11px]' : 'py-1 text-[12px]'} ${isStagedAll ? 'text-[#2F5FC6]' : 'text-slate-500 hover:text-slate-800'} ${!flatSelectAll && highlightedIndex === 0 ? 'bg-slate-200/50' : ''}`}
                                         >
                                             <div className="w-4 flex justify-center shrink-0">
                                                 <Check
@@ -628,7 +718,7 @@ const FilterDropdown = ({
                                                         {isStaged && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
                                                     </div>
                                                     <div className="flex items-center gap-1.5 min-w-0 truncate">
-                                                        <p className={`min-w-0 truncate tracking-tight text-[13px] ${isStaged ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
+                                                        <p className={`min-w-0 truncate tracking-tight text-[12px] ${isStaged ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
                                                             {option.label}
                                                         </p>
                                                     </div>
@@ -638,10 +728,10 @@ const FilterDropdown = ({
                                     })}
                                 </div>
                                 {!hideApplyButton && (
-                                    <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
+                                    <div className={`border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 ${isAllPartiesDropdown ? 'py-1.5' : 'py-1'}`}>
                                         <button
                                             onClick={handleApply}
-                                            className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === options.length + 1 ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === options.length + 1 ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
                                         >
                                             Apply
                                         </button>
@@ -649,7 +739,8 @@ const FilterDropdown = ({
                                 )}
                             </>
                         ) : (
-                            internalOptions.map((option, idx) => {
+                            <div className="py-1 max-h-[145px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200 hover:scrollbar-thumb-gray-300">
+                            {internalOptions.map((option, idx) => {
                                 const isHighlighted = idx === highlightedIndex;
                                 if (option.isSelectAll) {
                                     return (
@@ -664,7 +755,7 @@ const FilterDropdown = ({
                                                         setIsOpen(false);
                                                     }
                                                 }}
-                                                className={`group flex w-full items-center gap-1.5 text-[11px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isRenderedSelectAllActive ? "text-[#2F5FC6]" : "text-slate-500 hover:text-slate-800"} ${!flatSelectAll && isHighlighted ? 'bg-slate-200/50' : ''}`}
+                                                className={`group flex w-full items-center gap-1.5 text-[12px] font-bold transition-colors uppercase tracking-wider rounded-md px-2 py-1 ${isRenderedSelectAllActive ? "text-[#2F5FC6]" : "text-slate-500 hover:text-slate-800"} ${!flatSelectAll && isHighlighted ? 'bg-slate-200/50' : ''}`}
                                             >
                                                 <div className="w-4 flex justify-center shrink-0">
                                                     <Check
@@ -697,7 +788,7 @@ const FilterDropdown = ({
                                         className={`flex items-center gap-2 w-full text-left px-3 py-2 transition-colors ${isHighlighted ? "bg-[#EEF0FC]" : "hover:bg-[#EEF0FC]"} group`}
                                     >
                                         <span
-                                            className={`text-[13px] w-full flex items-center gap-2 ${(renderedSingleValue === option.value && !isRenderedSelectAllActive) || isHighlighted ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
+                                            className={`text-[12px] w-full flex items-center gap-2 ${(renderedSingleValue === option.value && !isRenderedSelectAllActive) || isHighlighted ? "font-bold text-[#4A8AF4]" : "font-medium text-slate-700"}`}
                                         >
                                             <div className="w-4 flex justify-center shrink-0">
                                                 {isOptionVisuallySelected && (
@@ -712,13 +803,14 @@ const FilterDropdown = ({
                                         </span>
                                     </button>
                                 );
-                            })
+                            })}
+                            </div>
                         )}
                         {!isMultiSelect && showApplyFooter && (
-                            <div className="px-2 pt-1.5 pb-1 border-t border-slate-100 bg-white flex justify-end">
+                            <div className="mt-1 pt-1 border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 pb-0.5">
                                 <button
                                     onClick={handleApply}
-                                    className={`bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all ${highlightedIndex === internalOptions.length ? 'ring-2 ring-offset-1 ring-primary' : ''}`}
+                                    className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === internalOptions.length ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
                                 >
                                     Apply
                                 </button>
@@ -735,7 +827,7 @@ const DateCellRenderer = (props) => {
     const { value, data, context } = props;
     if (!value) return null;
     return (
-        <span className="text-[11px] font-medium text-gray-600">
+        <span className="text-[12px] font-medium text-gray-600">
             {context.formatDate ? context.formatDate(value) : value}
         </span>
     );
@@ -762,7 +854,7 @@ const AmountCellRenderer = (props) => {
 
     return (
         <div className={cn(props.className, "flex items-center justify-end gap-2.5 w-full h-full")}>
-            <span className={cn(baseColor, "font-bold shrink-0 tabular-nums relative text-[13px]")}>
+            <span className={cn(baseColor, "font-bold shrink-0 tabular-nums relative text-[12px]")}>
                 {context.formatCurrency ? context.formatCurrency(displayAmount) : displayAmount}
             </span>
         </div>
@@ -848,13 +940,13 @@ const Transactions = () => {
             },
             { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1.5, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
             { field: 'date', headerName: 'Date', hide: !visibleColumns.date, valueGetter: params => params.data?.txnDate, cellRenderer: DateCellRenderer, minWidth: 120, flex: 1, sort: 'desc' },
-            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, flex: 1, cellRenderer: (params) => <span className="text-[11px] font-bold uppercase tracking-wider text-gray-500">{params.value}</span> },
+            { field: 'type', headerName: 'Type', hide: !visibleColumns.type, valueGetter: params => params.data?.transactionType?.name || params.data?.txnType || '-', minWidth: 120, flex: 1, cellRenderer: (params) => <span className="text-[12px] font-medium text-gray-700">{params.value}</span> },
             { field: 'branch', headerName: 'Branch', hide: !visibleColumns.branch, cellRenderer: (params) => <BranchTooltip branchNames={params.data?.branchNames} />, minWidth: 140, flex: 1 },
             { field: 'account', headerName: 'Account', hide: !visibleColumns.account, valueGetter: params => params.data?.account?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} /> },
-            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} textClassName="text-[11px] font-medium text-gray-700" /> },
+            { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} textClassName="text-[12px] font-medium text-gray-700" /> },
             { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 2, minWidth: 200 },
             { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned' },
-            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[11px] font-medium text-gray-400', minWidth: 130 },
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[12px] font-medium text-gray-400', minWidth: 130 },
             { headerName: 'Actions', field: 'actions', minWidth: 100, maxWidth: 100, cellRenderer: ActionCellRenderer, sortable: false, filter: false }
         ];
     }, [visibleColumns]);
@@ -864,7 +956,9 @@ const Transactions = () => {
         filter: true,
         resizable: true,
         suppressMovable: true,
-        menuTabs: []
+        menuTabs: [],
+        cellClass: 'font-medium text-gray-600',
+        cellStyle: { fontSize: '12px' }
     }), []);
 
 
@@ -1081,77 +1175,25 @@ const Transactions = () => {
     const groupedTransactions = useMemo(() => {
         // We bypass the global filter, so it's intrinsically ALWAYS 'multi' mode in terms of grouping logic
         const raw = Array.isArray(transactions) ? transactions : [];
-        const groups = [];
 
-        raw.forEach(txn => {
-            const date = txn.txnDate ? new Date(txn.txnDate).toISOString().split('T')[0] : '';
-            const amount = Number(txn.amountLocal ?? txn.amountBaseCurrency ?? txn.finalAmountLocal ?? txn.amountBase ?? 0);
-            const amountKey = amount.toFixed(2);
-            const party = (txn.contact || txn.payee || txn.counterpartyName || '').trim().toLowerCase();
-            const type = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
-            const notes = (txn.notes || txn.description || '').trim().toLowerCase();
+        return raw.map((txn, index) => {
+            const rawBranchId = txn.branchId || txn.branch_id || txn.branch?.id || 0;
+            const branchName = txn.branch?.name || (branches || []).find(b => String(b.id) === String(rawBranchId))?.name || 'Unknown';
+            const branchId = Number(rawBranchId);
 
-            const dataKey = `${date}|${amountKey}|${party}|${type}|${notes}`;
-            const branchName = txn.branch?.name || (branches || []).find(b => String(b.id) === String(txn.branchId))?.name || 'Unknown';
-            const branchId = Number(txn.branchId || 0);
-
-            const baseKey = `${dataKey}`;
-            let foundGroup = groups.find(g => g.baseKey === baseKey);
-
-            if (foundGroup) {
-                if (!foundGroup.branchNames.includes(branchName)) {
-                    foundGroup.branchNames.push(branchName);
-                }
-                if (!foundGroup.originalTxnIds) foundGroup.originalTxnIds = [];
-                if (!foundGroup.groupBranchIds) foundGroup.groupBranchIds = [];
-                foundGroup.originalTxnIds.push(txn.id);
-                if (branchId) foundGroup.groupBranchIds.push(branchId);
-            } else {
-                const newTxn = {
-                    ...txn,
-                    baseKey,
-                    branchNames: [branchName],
-                    originalTxnIds: [txn.id],
-                    groupBranchIds: branchId ? [branchId] : []
-                };
-                groups.push(newTxn);
-            }
+            return {
+                ...txn,
+                baseKey: `txn_${txn.id}_${index}`, // Ensures uniqueness even if the ID is missing
+                branchNames: [branchName],
+                originalTxnIds: [txn.id],
+                groupBranchIds: branchId ? [branchId] : []
+            };
         });
-
-        return groups;
     }, [transactions, selectedBranch?.id, branches]);
 
-    // Filtering & Sorting Logic
-    const filteredTransactions = useMemo(() => {
+    // Page-level filters feed both the table and the insights charts.
+    const scopedTransactions = useMemo(() => {
         let result = [...groupedTransactions];
-
-        // 1. Search Logic
-        if (searchTerm) {
-            const term = searchTerm.toLowerCase();
-            result = result.filter(txn =>
-                (txn.contact || '').toLowerCase().includes(term) ||
-                (txn.counterpartyName || '').toLowerCase().includes(term) ||
-                (txn.payee || '').toLowerCase().includes(term) ||
-                (txn.name || '').toLowerCase().includes(term) ||
-                (txn.notes || '').toLowerCase().includes(term) ||
-                (txn.account?.name || '').toLowerCase().includes(term) ||
-                (txn.transactionType?.name || txn.txnType || '').toLowerCase().includes(term) ||
-                String(txn.status || '').toLowerCase().includes(term) ||
-                (txn.txnDate || '').toLowerCase().includes(term) ||
-                String(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal ?? '').includes(term.replace(/,/g, '').trim())
-            );
-        }
-
-        // 2. Toolbar Macro Filters
-        if (Array.isArray(appliedFilters.type) ? appliedFilters.type.length > 0 : appliedFilters.type !== 'all') {
-            const types = Array.isArray(appliedFilters.type) ? appliedFilters.type : [appliedFilters.type];
-            if (!types.includes('all')) {
-                result = result.filter(t => {
-                    const typeName = (t.transactionType?.name || t.txnType || '').toLowerCase();
-                    return types.includes(typeName);
-                });
-            }
-        }
 
         // Time Period via DateRange
         if (appliedFilters.dateRange?.startDate) {
@@ -1160,7 +1202,7 @@ const Transactions = () => {
 
             result = result.filter(t => {
                 if (!t.txnDate) return false;
-                
+
                 let txnDateStr = String(t.txnDate);
                 // Standardize to YYYY-MM-DD
                 if (txnDateStr.includes('T')) {
@@ -1184,12 +1226,30 @@ const Transactions = () => {
             const allowed = Array.isArray(selectedBranchIds) && selectedBranchIds.length > 0
                 ? selectedBranchIds.map(String)
                 : [String(selectedBranch?.id)];
+            
+            const allowedNames = (branches || [])
+                .filter(b => allowed.includes(String(b.id)))
+                .map(b => String(b.name).toLowerCase().trim());
+
+            // Support reverse lookup if DB IDs shifted
+            const allowedIdsFromName = (branches || [])
+                .filter(b => allowedNames.includes(String(b.name).toLowerCase().trim()))
+                .map(b => String(b.id));
 
             if (!allowed.includes('all') && !allowed.includes('multi')) {
                 result = result.filter(t => {
-                    const groupBranchIds = t.groupBranchIds || t.originalBranchIds || (t.siblingMap ? Object.keys(t.siblingMap) : [t.branchId]);
-                    const hasAllowedBranch = groupBranchIds.some(id => allowed.includes(String(id)));
-                    return hasAllowedBranch || allowed.includes(String(t.branchId));
+                    const rawTBranchId = String(t.branchId || t.branch_id || t.branch?.id || "");
+                    const groupBranchIds = t.groupBranchIds || t.originalBranchIds || (t.siblingMap ? Object.keys(t.siblingMap) : [rawTBranchId]);
+                    
+                    const hasAllowedBranchId = groupBranchIds.some(id => allowed.includes(String(id)) || allowedIdsFromName.includes(String(id)));
+                    const directMatch = allowed.includes(rawTBranchId) || allowedIdsFromName.includes(rawTBranchId);
+                    const nestedBranchMatch = t.branch?.id && (allowed.includes(String(t.branch.id)) || allowedIdsFromName.includes(String(t.branch.id)));
+                    
+                    const txnBranchNameRaw = t.branchNames?.length ? t.branchNames[0] : (t.branch?.name || (branches || []).find(b => String(b.id) === String(rawTBranchId))?.name || '');
+                    const normalizedTxnName = String(txnBranchNameRaw).toLowerCase().trim();
+                    const hasAllowedBranchName = allowedNames.includes(normalizedTxnName) || t.branchNames?.some(name => allowedNames.includes(String(name).toLowerCase().trim()));
+                    
+                    return hasAllowedBranchId || directMatch || hasAllowedBranchName || nestedBranchMatch;
                 });
             }
         }
@@ -1225,7 +1285,39 @@ const Transactions = () => {
 
         return result;
 
-    }, [groupedTransactions, searchTerm, appliedFilters]);
+    }, [groupedTransactions, appliedFilters, selectedBranchIds, selectedBranch, branches]);
+
+    // Table-only filters should not affect the insights charts above the grid.
+    const filteredTransactions = useMemo(() => {
+        let result = [...scopedTransactions];
+
+        if (Array.isArray(appliedFilters.type) ? appliedFilters.type.length > 0 : appliedFilters.type !== 'all') {
+            const types = Array.isArray(appliedFilters.type) ? appliedFilters.type : [appliedFilters.type];
+            if (!types.includes('all')) {
+                result = result.filter((txn) => {
+                    const typeName = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
+                    return types.includes(typeName);
+                });
+            }
+        }
+
+        if (!searchTerm) return result;
+
+        const term = searchTerm.toLowerCase();
+        return result.filter(txn =>
+            (txn.contact || '').toLowerCase().includes(term) ||
+            (txn.counterpartyName || '').toLowerCase().includes(term) ||
+            (txn.payee || '').toLowerCase().includes(term) ||
+            (txn.name || '').toLowerCase().includes(term) ||
+            (txn.notes || '').toLowerCase().includes(term) ||
+            (txn.account?.name || '').toLowerCase().includes(term) ||
+            (txn.category?.name || '').toLowerCase().includes(term) ||
+            (txn.transactionType?.name || txn.txnType || '').toLowerCase().includes(term) ||
+            String(txn.status || '').toLowerCase().includes(term) ||
+            (txn.txnDate || '').toLowerCase().includes(term) ||
+            String(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal ?? '').includes(term.replace(/,/g, '').trim())
+        );
+    }, [scopedTransactions, appliedFilters.type, searchTerm]);
 
     const insightsData = useMemo(() => {
         const trendMap = {};
@@ -1239,7 +1331,7 @@ const Transactions = () => {
         let totalSgstPaid = 0;
         let totalIgstPaid = 0;
 
-        filteredTransactions.forEach(t => {
+        scopedTransactions.forEach(t => {
             const rawDate = new Date(t.txnDate || new Date());
             const dateStr = !isNaN(rawDate) ? rawDate.toISOString().split('T')[0] : 'Unknown';
             const amount = Number(t.amountBaseCurrency ?? t.finalAmountLocal ?? t.amountBase ?? 0);
@@ -1320,7 +1412,7 @@ const Transactions = () => {
             taxableExpenseCount,
             netFlow: totalIncome - totalExpense
         };
-    }, [filteredTransactions]);
+    }, [scopedTransactions]);
 
     const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
@@ -1348,6 +1440,9 @@ const Transactions = () => {
         const normalizedBranchIds = Array.isArray(selectedBranchIds)
             ? selectedBranchIds.map(Number).filter(Boolean)
             : [];
+        const normalizedPartyFilter = Array.isArray(appliedFilters.party)
+            ? appliedFilters.party.filter(Boolean).join(',')
+            : appliedFilters.party;
 
         const exportBranchId = normalizedBranchIds.length > 1
             ? normalizedBranchIds
@@ -1358,8 +1453,7 @@ const Transactions = () => {
                     : 'all';
 
         const normalizedAppliedFilters = {
-            ...(appliedFilters.type !== 'all' ? { scope: appliedFilters.type } : {}),
-            ...(appliedFilters.party !== 'all' ? { payee: appliedFilters.party } : {}),
+            ...(normalizedPartyFilter && normalizedPartyFilter !== 'all' ? { payee: normalizedPartyFilter } : {}),
             ...(appliedFilters.dateRange?.startDate
                 ? {
                     timePeriod: 'Custom Range',
@@ -1395,7 +1489,7 @@ const Transactions = () => {
     // Export Handlers
     const handleClientExportExcel = () => {
         if (!gridRef.current || !gridRef.current.api) return;
-        
+
         // Dynamically load xlsx from CDN to generate native .xlsx without backend
         if (!window.XLSX) {
             const script = document.createElement('script');
@@ -1416,7 +1510,7 @@ const Transactions = () => {
         const fileName = `transactions_export_${yyyy}-${mm}-${dd}.xlsx`;
 
         let rowData = [];
-        
+
         // Push Header Row
         const headers = TXN_TABLE_COLUMNS.filter(col => visibleColumns[col.key]).map(col => col.label);
         rowData.push(headers);
@@ -1427,10 +1521,10 @@ const Transactions = () => {
             if (!node.data) return;
             const txn = node.data;
             let row = [];
-            
+
             TXN_TABLE_COLUMNS.forEach(col => {
                 if (!visibleColumns[col.key]) return;
-                
+
                 let val = '-';
                 if (col.key === 'date') val = formatDate(txn.txnDate);
                 if (col.key === 'party') val = txn.contact || txn.payee || txn.counterpartyName || txn.party || '-';
@@ -1442,7 +1536,7 @@ const Transactions = () => {
                 if (col.key === 'amount') val = Number(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal) || 0;
                 if (col.key === 'createdBy') val = txn.createdByName || txn.createdByDisplayName || txn.creatorName || '-';
                 if (col.key === 'id') val = count + 1;
-                
+
                 row.push(val);
             });
             rowData.push(row);
@@ -1473,7 +1567,7 @@ const Transactions = () => {
                 html += '<tr>';
                 TXN_TABLE_COLUMNS.forEach(col => {
                     if (!visibleColumns[col.key]) return;
-                    
+
                     let val = '-';
                     if (col.key === 'date') val = formatDate(txn.txnDate);
                     if (col.key === 'party') val = `<span class="truncate block max-w-[200px]">${txn.contact || txn.payee || txn.counterpartyName || txn.party || '-'}</span>`;
@@ -1485,7 +1579,7 @@ const Transactions = () => {
                     if (col.key === 'amount') val = `<span class="font-medium">${formatCurrency(txn.amountBaseCurrency ?? txn.amountBase ?? txn.finalAmountLocal ?? txn.amountLocal)}</span>`;
                     if (col.key === 'createdBy') val = txn.createdByName || txn.createdByDisplayName || txn.creatorName || '-';
                     if (col.key === 'id') val = count + 1;
-                    
+
                     html += `<td class="${col.key === 'amount' ? 'text-right' : ''}">${val}</td>`;
                 });
                 html += '</tr>';
@@ -1493,8 +1587,8 @@ const Transactions = () => {
             });
 
             if (count === 0) {
-                 const colCount = Object.values(visibleColumns).filter(Boolean).length || 1;
-                 html += `<tr><td colspan="${colCount}" class="text-center py-4">No transactions found</td></tr>`;
+                const colCount = Object.values(visibleColumns).filter(Boolean).length || 1;
+                html += `<tr><td colspan="${colCount}" class="text-center py-4">No transactions found</td></tr>`;
             }
             html += '</tbody></table>';
             printContainer.innerHTML = html;
@@ -1641,14 +1735,14 @@ const Transactions = () => {
     // Calculate totals grouped by currency
     const currencyTotals = useMemo(() => {
         const totals = {};
-        filteredTransactions.forEach(t => {
+        scopedTransactions.forEach(t => {
             const currency = t.baseCurrency || t.currencyCode || 'INR';
             const unitAmount = Number(t.amountBaseCurrency || t.finalAmountLocal || t.amountBase || 0);
             const replicationCount = t.branchNames?.length || 1;
             totals[currency] = (totals[currency] || 0) + (unitAmount * replicationCount);
         });
         return totals;
-    }, [filteredTransactions]);
+    }, [scopedTransactions]);
 
     const hasBranchColumn = selectedBranch?.id === 'all' || selectedBranch?.id === 'multi';
 
@@ -1783,7 +1877,7 @@ const Transactions = () => {
                                 className="h-[32px]"
                             />
 
-                            <BranchSelector flatSelectAll />
+                            <BranchSelector flatSelectAll hideSettings />
 
                             <CurrencySelector
                                 value={appliedFilters.currency}
@@ -1791,6 +1885,8 @@ const Transactions = () => {
                                     setAppliedFilters(prev => ({ ...prev, currency: val }));
                                     updatePreferences({ currency: val });
                                 }}
+                                triggerTextClassName="text-[12px]"
+                                optionTextClassName="text-[12px]"
                             />
 
                             <FilterDropdown
@@ -1798,10 +1894,11 @@ const Transactions = () => {
                                 onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
                                 placeholder="Party"
                                 options={availableParties}
+                                isMultiSelect
                                 showSelectAll
-                                showOptionTicksWhenAllSelected
                                 flatSelectAll
-                                showApplyFooter
+                                keepButtonNeutral
+                                neutralCountBadge
                                 selectAllLabel="All Parties"
                                 allDisplayLabel="All Parties"
                                 buttonClassName="w-[120px] text-slate-800 font-semibold"
@@ -1812,15 +1909,15 @@ const Transactions = () => {
                                 onClick={() => navigate('/parties')}
                                 className="group flex items-center gap-1.5 px-3 py-1.5 outline-none"
                             >
-                                <Users size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" /> 
-                                <span className="hidden sm:inline text-[13px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Parties</span>
+                                <Users size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                <span className="hidden sm:inline text-[12px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Parties</span>
                             </button>
                             <button
                                 onClick={() => navigate('/category')}
                                 className="group flex items-center gap-1.5 px-3 py-1.5 outline-none ml-1"
                             >
-                                <Folders size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" /> 
-                                <span className="hidden sm:inline text-[13px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Categories</span>
+                                <ShoppingBag size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                <span className="hidden sm:inline text-[12px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Categories</span>
                             </button>
                         </div>
                     </div>
@@ -1834,7 +1931,7 @@ const Transactions = () => {
                                         <ArrowDownLeft size={18} className="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Inflow</div>
+                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Inflow</div>
                                         <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
                                     </div>
                                 </div>
@@ -1843,7 +1940,7 @@ const Transactions = () => {
                                         <ArrowUpRight size={18} className="text-rose-600" />
                                     </div>
                                     <div>
-                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Total Outflow</div>
+                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Outflow</div>
                                         <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
                                     </div>
                                 </div>
@@ -1852,7 +1949,7 @@ const Transactions = () => {
                                         <Activity size={18} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
                                     </div>
                                     <div>
-                                        <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-0.5">Net Flow</div>
+                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Net Flow</div>
                                         <div className={cn("text-[15px] font-extrabold whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
                                             {formatCurrency(insightsData.netFlow)}
                                         </div>
@@ -1986,7 +2083,7 @@ const Transactions = () => {
                         <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
                             <button
                                 onClick={() => setDrawerState({ open: true, transaction: null })}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px]"
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px]"
                                 title="Add Transaction"
                             >
                                 <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
@@ -1998,11 +2095,11 @@ const Transactions = () => {
                                 className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
                                 title="Refresh table data"
                             >
-                                <RefreshCcw
-                                    size={14}
-                                    strokeWidth={2}
-                                    className={cn(loading && "animate-spin text-primary")}
-                                />
+                                {loading ? (
+                                    <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
+                                ) : (
+                                    <RefreshCcw size={14} strokeWidth={2} />
+                                )}
                             </button>
                         </div>
 
@@ -2011,109 +2108,113 @@ const Transactions = () => {
                             <div className="flex items-center gap-2">
                                 <button
                                     onClick={() => setIsImportModalOpen(true)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                                 >
-                                    <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                    <span className="hidden sm:inline">Import</span>
+                                    <span className="font-medium">Import</span>
                                 </button>
 
-                            <div className="relative" ref={exportDropdownRef}>
-                                <button
-                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[13px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                >
-                                    <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                    <span className="hidden sm:inline">Export</span>
-                                </button>
+                                <div className="relative" ref={exportDropdownRef}>
+                                    <button
+                                        onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                        className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                    >
+                                        <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                        <span className="hidden sm:inline">Export</span>
+                                    </button>
 
-                                {isExportDropdownOpen && (
-                                    <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                handleClientExportExcel();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
-                                        >
-                                            <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Export as Excel
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                handleClientExportPDF();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[13px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
-                                        >
-                                            <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Export as PDF
-                                        </button>
-                                    </div>
-                                )}
+                                    {isExportDropdownOpen && (
+                                        <div className="absolute right-0 mt-1.5 w-28 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button
+                                                onClick={() => {
+                                                    setIsExportDropdownOpen(false);
+                                                    handleClientExportExcel();
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                            >
+                                                Excel
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsExportDropdownOpen(false);
+                                                    handleClientExportPDF();
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                            >
+                                                PDF
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            <FilterDropdown
+                                value={appliedFilters.type}
+                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
+                                placeholder="Type"
+                                options={[
+                                    { label: "Income", value: "income" },
+                                    { label: "Expense", value: "expense" },
+                                    { label: "Transfer", value: "transfer" },
+                                    { label: "Investment", value: "investment" },
+                                ]}
+                                isMultiSelect={true}
+                                showSelectAll={false}
+                                hideApplyButton={true}
+                                keepButtonNeutral
+                                neutralCountBadge
+                                allDisplayLabel="All Types"
+                                buttonClassName="w-[110px]"
+                            />
+
+                            <ColumnVisibilityDropdown
+                                columns={TXN_TABLE_COLUMNS}
+                                visibleColumns={visibleColumns}
+                                setVisibleColumns={setVisibleColumns}
+                                defaultVisibleColumns={DEFAULT_VISIBLE_TXN_COLUMNS}
+                            />
+
+                            <div className="relative group w-full xl:w-[240px] max-w-[300px]">
+                                <Search
+                                    size={14}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
+                                />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search"
+                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                />
                             </div>
                         </div>
-
-                        <FilterDropdown
-                            value={appliedFilters.type}
-                            onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
-                            placeholder="Type"
-                            options={[
-                                { label: "Income", value: "income" },
-                                { label: "Expense", value: "expense" },
-                                { label: "Transfer", value: "transfer" },
-                                { label: "Investment", value: "investment" },
-                            ]}
-                            isMultiSelect={true}
-                            showSelectAll={false}
-                            hideApplyButton={true}
-                            allDisplayLabel="All Types"
-                            buttonClassName="w-[110px]"
-                        />
-
-                        <ColumnVisibilityDropdown
-                            columns={TXN_TABLE_COLUMNS}
-                            visibleColumns={visibleColumns}
-                            setVisibleColumns={setVisibleColumns}
-                        />
-
-                        <div className="relative group w-full xl:w-[240px] max-w-[300px]">
-                            <Search
-                                size={14}
-                                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
-                            />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                placeholder="Search"
-                                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            />
-                        </div>
                     </div>
-                </div>
 
-                <div className="w-full px-5 pb-1 relative flex-1 min-h-[400px] flex flex-col print:hidden" aria-busy={loading}>
-                    <div className="flex-1 w-full relative">
-                        <div className="absolute inset-0">
-                            <AgGridReact
-                                ref={gridRef}
-                                theme={themeQuartz}
-                                rowData={filteredTransactions}
-                                columnDefs={colDefs}
-                                defaultColDef={defaultColDef}
-                                rowSelection="multiple"
-                                rowHeight={42}
-                                headerHeight={44}
-                                animateRows={true}
-                                pagination={true}
-                                paginationPageSize={50}
-                                paginationPageSizeSelector={[25, 50, 100, 200]}
-                                context={{
-                                    handleEdit,
-                                    handleDelete,
-                                    canEditTxn,
-                                    setFullScreenAttachment,
-                                    formatCurrency,
+                    <div
+                        className="transactions-grid-shell w-full px-5 pb-1 relative flex flex-col print:hidden"
+                        style={{ height: '600px' }}
+                        aria-busy={loading}
+                    >
+                        <div className="h-full w-full relative">
+                            <div className="absolute inset-0">
+                                <AgGridReact
+                                    ref={gridRef}
+                                    theme={themeQuartz}
+                                    rowData={filteredTransactions}
+                                    columnDefs={colDefs}
+                                    defaultColDef={defaultColDef}
+                                    rowSelection="multiple"
+                                    rowHeight={42}
+                                    headerHeight={44}
+                                    animateRows={true}
+                                    pagination={true}
+                                    paginationPageSize={50}
+                                    paginationPageSizeSelector={[25, 50, 100, 200]}
+                                    context={{
+                                        handleEdit,
+                                        handleDelete,
+                                        canEditTxn,
+                                        setFullScreenAttachment,
+                                        formatCurrency,
                                         formatDate
                                     }}
                                     overlayNoRowsTemplate={

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Save, Check, Building2, ChevronDown } from 'lucide-react';
 import PageHeader from '../../components/layout/PageHeader';
 import Card from '../../components/common/Card';
+import { Loader } from '../../components/common/Loader';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 import apiService from '../../services/api';
 
@@ -232,7 +233,7 @@ const CreateOrganization = () => {
                                 className="w-full sm:w-auto px-6 py-2.5 rounded-xl text-sm font-bold text-white bg-black hover:bg-black/90 transition-all shadow-lg active:scale-95 flex items-center justify-center space-x-2"
                             >
                                 {isLoading ? (
-                                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <Loader className="h-4 w-4 text-white" />
                                 ) : (
                                     <>
                                         <Save size={18} />

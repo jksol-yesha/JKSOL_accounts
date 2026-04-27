@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Save, Building2, Link as LinkIcon, ChevronDown, Check } from 'lucide-react';
+import { Loader } from '../../../components/common/Loader';
 
 const COUNTRY_CODES = [
     { code: '+33', country: 'France', flag: '🇫🇷' },
@@ -729,7 +730,7 @@ const CreateParty = () => {
                             >
                                 {isSubmitting ? (
                                     <>
-                                        <div className="w-4 h-4 border-[2px] border-white/30 border-t-white rounded-full animate-spin" />
+                                        <Loader className="h-4 w-4 text-white" />
                                         <span>Saving...</span>
                                     </>
                                 ) : (
