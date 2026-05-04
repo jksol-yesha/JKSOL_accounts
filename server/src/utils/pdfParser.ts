@@ -1,4 +1,5 @@
-import pdf from 'pdf-parse';
+// @ts-ignore
+import pdf from 'pdf-parse/lib/pdf-parse.js';
 import crypto from 'crypto';
 
 export interface ParsedTransaction {
@@ -19,7 +20,7 @@ export interface ParsedStatementResult {
 export async function parseBankStatement(buffer: Buffer): Promise<ParsedStatementResult> {
     const data = await pdf(buffer);
     const text = data.text;
-    const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+    const lines = text.split('\n').map((line: string) => line.trim()).filter((line: string) => line.length > 0);
 
     // 1. Heuristic Account Metadata Extraction
     let accountNumber = null;
