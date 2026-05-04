@@ -53,7 +53,7 @@ const METRIC_FILL_COLOR = 'rgba(107, 114, 128, 0.14)';
 const formatDate = (date) => {
     if (!date) return null;
     if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
-    
+
     // Timezone safe YYYY-MM-DD extraction
     const d = new Date(date);
     const year = d.getFullYear();
@@ -66,7 +66,7 @@ const calculatePreviousRange = (startDate, endDate, preset) => {
     if (!startDate || !endDate) return null;
     const start = new Date(startDate);
     const end = new Date(endDate);
-    
+
     // For specific month presets, shift by calendar months
     if (preset === 'last_month' || preset === 'current' || (preset && preset.includes('months'))) {
         let months = 1;
@@ -75,10 +75,10 @@ const calculatePreviousRange = (startDate, endDate, preset) => {
 
         const prevStart = new Date(start);
         prevStart.setMonth(prevStart.getMonth() - months);
-        
+
         const prevEnd = new Date(start);
         prevEnd.setDate(prevEnd.getDate() - 1);
-        
+
         return { startDate: formatDate(prevStart), endDate: formatDate(prevEnd) };
     }
 
@@ -86,7 +86,7 @@ const calculatePreviousRange = (startDate, endDate, preset) => {
     const durationMs = end.getTime() - start.getTime();
     const prevEnd = new Date(start.getTime() - 86400000);
     const prevStart = new Date(prevEnd.getTime() - durationMs);
-    
+
     return { startDate: formatDate(prevStart), endDate: formatDate(prevEnd) };
 };
 
@@ -305,7 +305,7 @@ const Dashboard = () => {
                         branchId: branchFilter,
                         financialYearId,
                         targetCurrency: dashboardFilters.currency,
-                        ...(customRange 
+                        ...(customRange
                             ? { startDate: formatDate(customRange.startDate), endDate: formatDate(customRange.endDate) }
                             : (dashboardFilters.dateRange?.startDate ? { startDate: formatDate(dashboardFilters.dateRange.startDate), endDate: formatDate(dashboardFilters.dateRange.endDate) } : {})
                         )
@@ -398,12 +398,12 @@ const Dashboard = () => {
     const previousMetrics = getMetricSnapshot(previousStats);
     const metricSeries = trends?.current?.metrics || EMPTY_TRENDS.current.metrics;
     const comparisonLabels = trends?.labels || [];
-    
+
     const incomeChange = formatPercentageIndicator(currentMetrics.totalIncome, previousMetrics.totalIncome);
     const expenseChange = formatPercentageIndicator(currentMetrics.totalExpense, previousMetrics.totalExpense);
     const netProfitChange = formatPercentageIndicator(currentMetrics.netProfit, previousMetrics.netProfit);
     const investmentChange = formatPercentageIndicator(currentMetrics.investmentBalance, previousMetrics.investmentBalance);
-    
+
     const allStats = [
         {
             title: 'Net Profit',
@@ -461,13 +461,13 @@ const Dashboard = () => {
 
     return (
         <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-white">
-            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pt-1 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
+            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto overflow-x-hidden px-4 md:px-4 xl:px-6 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
                 {/* Top Action Row */}
-                <div className="sticky top-0 z-20 -mx-4 -mt-1 mb-0 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 md:-mx-4 xl:-mx-6">
-                    <div className="dashboard-header-pattern px-4 pt-2 pb-1 md:px-4 xl:px-6">
+                <div className="sticky top-0 z-30 -mx-4 mb-0 bg-white border-b border-slate-100/50 md:-mx-4 xl:-mx-6" style={{ zIndex: 40 }}>
+                    <div className="dashboard-header-pattern px-4 pt-4 pb-2 md:px-4 xl:px-6">
                         <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
                             <div className="flex-shrink-0">
-                                <DateRangePicker 
+                                <DateRangePicker
                                     startDate={dashboardFilters.dateRange?.startDate}
                                     endDate={dashboardFilters.dateRange?.endDate}
                                     selectedPreset={dashboardFilters.dateRange?.preset}
@@ -476,13 +476,13 @@ const Dashboard = () => {
                                     className=""
                                 />
                             </div>
-                            
+
                             <div className="flex-shrink-0">
                                 <BranchSelector />
                             </div>
-                            
+
                             <div className="flex-shrink-0">
-                                <CurrencySelector 
+                                <CurrencySelector
                                     value={dashboardFilters.currency}
                                     onChange={(val) => {
                                         setDashboardFilters(prev => ({ ...prev, currency: val }));

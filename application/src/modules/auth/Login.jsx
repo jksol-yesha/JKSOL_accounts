@@ -98,7 +98,7 @@ const Login = () => {
             <form onSubmit={handleSubmit} className="w-full" noValidate>
 
                 <div className="mb-4">
-                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">Email</label>
+                    <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wide mb-1.5">Email Address</label>
                     <input
                         ref={emailRef}
                         onKeyDown={(e) => handleKeyDown(e, 0)}

@@ -4,10 +4,10 @@ import type { AuthenticatedUser, ElysiaContext } from '../../shared/auth.middlew
 import { db } from '../../db';
 import { accounts } from '../../db/schema';
 import { eq, and } from 'drizzle-orm';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import { isNotDeleted } from '../../shared/soft-delete';
 
-export const getAccounts = async ({ user, orgId, body, headers }: ElysiaContext & { body: { status?: 1 | 2, financialYearId?: number } }) => {
+export const getAccounts = async ({ user, orgId, body, headers }: ElysiaContext & { body: { status?: 1 | 2 | null, financialYearId?: number | null } }) => {
     if (!user || !orgId) throw new Error("Unauthorized: User or Organization not identified");
 
     const targetCurrency = headers['x-base-currency'];
@@ -15,7 +15,7 @@ export const getAccounts = async ({ user, orgId, body, headers }: ElysiaContext 
     // Pass orgId and user to service
     const accounts = await AccountService.getAllAccounts(
         orgId,
-        body.status,
+        body.status as 1 | 2 | 3 | undefined,
         targetCurrency,
         user,
         body.financialYearId ? Number(body.financialYearId) : undefined
@@ -54,11 +54,7 @@ export const createAccount = async ({ body, user, orgId, headers, set }: ElysiaC
             branchId: body.branchId ? Number(body.branchId) : null
         });
 
-        // 🔥 Broadcast to all users in the org
-        WebSocketService.broadcastToOrg(orgId, {
-            event: 'account:created',
-            data: newAccount
-        });
+
 
         return successResponse('Account created successfully', newAccount);
     } catch (error: any) {
@@ -208,11 +204,7 @@ export const updateAccount = async ({ params, body, user, orgId, set }: ElysiaCo
         }
     };
 
-    // 🔥 Broadcast to all users in the org
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'account:updated',
-        data: updatedWithEditor
-    });
+
 
     return successResponse('Account updated successfully', updatedWithEditor);
 };
@@ -258,11 +250,7 @@ export const deleteAccount = async ({ body, user, orgId, set }: ElysiaContext & 
 
         await AccountService.deleteAccount(id, orgId, user.id);
 
-        // 🔥 Broadcast to all users in the org
-        WebSocketService.broadcastToOrg(orgId, {
-            event: 'account:deleted',
-            data: { id }
-        });
+
 
         return successResponse('Account archived successfully');
     } catch (e: any) {

@@ -3,7 +3,7 @@ import { db } from '../../db';
 import { transactions } from '../../db/schema';
 import { eq, and } from 'drizzle-orm';
 import type { ElysiaContext } from '../../shared/auth.middleware';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { resolve } from 'node:path';
@@ -117,10 +117,7 @@ export const createTransaction = async ({ body, set, user, orgId, branchId }: El
 
         const transaction = await TransactionService.create(payload);
 
-        WebSocketService.broadcastToBranch(bid, {
-            event: 'transaction:created',
-            data: transaction
-        });
+
 
         return { success: true, data: transaction };
     } catch (error: any) {
@@ -184,10 +181,7 @@ export const updateTransaction = async ({ params, body, set, user, orgId }: Elys
         const result = await TransactionService.update(id, orgId, requestData, user.id);
 
         if (existingTxn.branchId) {
-            WebSocketService.broadcastToBranch(existingTxn.branchId, {
-                event: 'transaction:updated',
-                data: result
-            });
+
         }
 
         return { success: true, data: result };
@@ -222,10 +216,7 @@ export const deleteTransaction = async ({ params, set, user, orgId }: ElysiaCont
         await TransactionService.delete(id, orgId, user.id);
 
         if (transaction.branchId) {
-            WebSocketService.broadcastToBranch(transaction.branchId, {
-                event: 'transaction:deleted',
-                data: { id }
-            });
+
         }
 
         return { success: true, message: 'Transaction archived successfully' };
@@ -329,7 +320,7 @@ export const getTransactions = async ({ body, set, user, orgId, branchId, header
             return { success: false, message: 'Financial Year ID is required' };
         }
 
-        const effectiveBranchId = rawBranchId === 'all'
+        let effectiveBranchId: number | number[] | 'all' | null = rawBranchId === 'all'
             ? 'all'
             : (Array.isArray(rawBranchId) ? rawBranchId.map(Number).filter(Boolean) : Number(rawBranchId));
         const targetCurrency = headers['x-base-currency'] || body.targetCurrency;
@@ -341,6 +332,7 @@ export const getTransactions = async ({ body, set, user, orgId, branchId, header
                     set.status = 403;
                     return { success: false, message: 'Forbidden: You have no assigned branches' };
                 }
+                effectiveBranchId = user.branchIds;
             } else if (Array.isArray(effectiveBranchId)) {
                 const allowed = effectiveBranchId.some(bid => user.branchIds.includes(Number(bid)));
                 if (!allowed) {
@@ -431,7 +423,7 @@ export const exportTransactions = async ({ body, set, user, orgId, branchId, hea
             });
         }
 
-        if (format === 'excel' || format === 'xlsx') {
+        if (format === 'xlsx') {
             const excelBuffer = TransactionService.buildExportExcel(groupedTransactions, body.visibleColumns);
             const fileName = `transactions-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
 
@@ -471,5 +463,66 @@ export const getTransactionTypes = async ({ set }: ElysiaContext) => {
         console.error('Get Transaction Types Error:', error);
         set.status = 500;
         return { success: false, message: error.message || 'Failed to fetch transaction types' };
+    }
+};
+
+export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { body: { rows: any[], accountId?: number, branchId?: number, financialYearId?: number, filename?: string } }) => {
+    try {
+        const { rows, accountId, branchId, financialYearId, filename } = body;
+        
+        if (!rows || !Array.isArray(rows)) {
+            set.status = 400;
+            return { success: false, message: 'Invalid data format. Expected array of rows.' };
+        }
+
+        const result = await TransactionService.processImportedRows(
+            rows,
+            orgId!,
+            user,
+            financialYearId ? Number(financialYearId) : undefined,
+            branchId ? Number(branchId) : undefined,
+            filename
+        );
+
+        if (result.success || result.insertedRows > 0) {
+            return result;
+        } else {
+            set.status = 400;
+            return result;
+        }
+    } catch (error: any) {
+        console.error('Error in importJson controller:', error);
+        set.status = 500;
+        return { success: false, message: 'Internal server error during JSON import', error: error.message };
+    }
+};
+
+export const getImportedStatements = async ({ query, set, user, orgId, branchId }: ElysiaContext & { query: { financialYearId?: number, branchId?: number } }) => {
+    if (!user || !orgId) throw new Error("Unauthorized");
+    try {
+        const fyId = query.financialYearId ? Number(query.financialYearId) : undefined;
+        const bId = query.branchId ? Number(query.branchId) : (branchId ? Number(branchId) : undefined);
+        
+        const history = await TransactionService.getImportedStatements(orgId, bId, fyId);
+        return { success: true, data: history };
+    } catch (error: any) {
+        console.error('Error fetching imported statements:', error);
+        set.status = 500;
+        return { success: false, message: 'Failed to fetch imported statements' };
+    }
+};
+
+export const revertImportedStatement = async ({ params, set, user, orgId }: ElysiaContext & { params: { id: string } }) => {
+    if (!user || !orgId) throw new Error("Unauthorized");
+    try {
+        const result = await TransactionService.revertImportedStatement(Number(params.id), orgId, user);
+        if (!result.success) {
+            set.status = 400;
+        }
+        return result;
+    } catch (error: any) {
+        console.error('Error reverting imported statement:', error);
+        set.status = 500;
+        return { success: false, message: error.message || 'Failed to revert imported statement' };
     }
 };

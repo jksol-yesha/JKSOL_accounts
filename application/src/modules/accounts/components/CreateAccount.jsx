@@ -175,8 +175,10 @@ const CreateAccount = ({
   isOpen,
   onClose,
   accountToEdit,
+  initialData,
   existingAccounts = [],
   onSuccess,
+  isInline = false,
 }) => {
   const { selectedOrg } = useOrganization();
   const { branches, selectedBranchIds } = useBranch();
@@ -279,7 +281,7 @@ const CreateAccount = ({
 
   useOverlayStack("account-sidebar", isOpen, handleClose);
 
-  const [formData, setFormData] = useState(() => getInitialFormData(null));
+  const [formData, setFormData] = useState(() => getInitialFormData(accountToEdit || initialData || null));
 
   const nameSuggestions = useMemo(() => {
     const searchTerm = String(formData.name || "").trim().toLowerCase();
@@ -397,11 +399,11 @@ const CreateAccount = ({
   // Reset state when drawer opens
   useEffect(() => {
     if (isOpen) {
-      const initial = getInitialFormData(accountToEdit);
+      const initial = getInitialFormData(accountToEdit || initialData);
       
       // If editing and we have currencyOptions, ensure ID is mapped if missing
       if (
-        accountToEdit &&
+        (accountToEdit || initialData) &&
         currencyOptions.length > 0 &&
         !initial.currencyId &&
         initial.currencyCode
@@ -1030,17 +1032,21 @@ const CreateAccount = ({
   return (
     <>
       {/* Backdrop */}
-      <div
-        className={cn(
-          "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]"
-        )}
-        onClick={handleClose}
-      ></div>
+      {!isInline && (
+        <div
+          className={cn(
+            "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]"
+          )}
+          onClick={handleClose}
+        ></div>
+      )}
 
       {/* Sliding Drawer */}
       <div
         className={cn(
-          "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden"
+          isInline
+            ? "flex-1 flex flex-col h-full bg-white relative z-10"
+            : "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden"
         )}
       >
         <form
@@ -1049,30 +1055,32 @@ const CreateAccount = ({
           className="flex flex-col h-full bg-[#f8fafc]"
         >
           {/* Drawer Header */}
-          <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
-            <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
-                  <Landmark size={14} strokeWidth={2.5} />
+          {!isInline && (
+            <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
+              <div className="flex items-start justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
+                    <Landmark size={14} strokeWidth={2.5} />
+                  </div>
+                  <div className="flex flex-col">
+                    <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                      {isEditMode ? "Edit Ledger Account" : "New Ledger Account"}
+                    </h2>
+                    <p className="text-[10px] font-semibold text-slate-500">
+                      Chart of Accounts • Financial Statement Mapping
+                    </p>
+                  </div>
                 </div>
-                <div className="flex flex-col">
-                  <h2 className="text-[14px] font-extrabold text-slate-900 tracking-tight leading-tight">
-                    {isEditMode ? "Edit Ledger Account" : "New Ledger Account"}
-                  </h2>
-                  <p className="text-[10px] font-semibold text-slate-500">
-                    Chart of Accounts • Financial Statement Mapping
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
+                >
+                  <X size={14} strokeWidth={2.5} />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleClose}
-                className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
-              >
-                <X size={14} strokeWidth={2.5} />
-              </button>
             </div>
-          </div>
+          )}
 
           {/* Drawer Content */}
           <div className="flex-1 overflow-y-auto px-5 py-4 no-scrollbar bg-white">

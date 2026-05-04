@@ -517,6 +517,12 @@ const apiService = {
         importPDF: (formData) => api.post('/transactions/import-pdf', formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
         }),
+        uploadStatement: (formData) => api.post('/transactions/upload-statement', formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+        }),
+        importJson: (data) => api.post('/transactions/import-json', data),
+        getImports: (params) => api.get('/transactions/imports', { params }),
+        revertImport: (id) => api.delete(`/transactions/imports/${id}/revert`),
     },
 
     financialYears: {

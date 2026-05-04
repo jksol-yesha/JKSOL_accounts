@@ -83,6 +83,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const [showDeleteOption, setShowDeleteOption] = React.useState(false);
     const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
     const [showSidebarControlMenu, setShowSidebarControlMenu] = React.useState(false);
+    const [expandedMenus, setExpandedMenus] = React.useState({});
     const sidebarRef = React.useRef(null);
     const profileMenuRef = React.useRef(null);
     const sidebarControlRef = React.useRef(null);
@@ -617,10 +618,45 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const menuItems = [
         { icon: Home, label: 'Home', path: '/dashboard', permission: 'DASHBOARD_VIEW' },
         { icon: Landmark, label: 'Accounts', path: '/accounts' },
-        { icon: ArrowRightLeft, label: 'Transactions', path: '/transactions', permission: 'TXN_VIEW' },
+        { 
+            icon: ArrowRightLeft, 
+            label: 'Transactions', 
+            path: '/transactions', 
+            permission: 'TXN_VIEW',
+            subItems: [
+                { icon: Users, label: 'Parties', path: '/parties' },
+                { icon: ShoppingBag, label: 'Categories', path: '/category' },
+            ]
+        },
         { icon: BarChart2, label: 'Reports', path: '/reports', permission: 'REPORT_VIEW' },
         { icon: History, label: 'Activity', path: '/audit-logs' },
     ];
+
+    // Auto-expand/collapse menus based on current route
+    React.useEffect(() => {
+        setExpandedMenus(prev => {
+            const newExpanded = { ...prev };
+            let changed = false;
+            menuItems.forEach(item => {
+                if (item.subItems) {
+                    const isActive = item.subItems.some(sub => location.pathname.startsWith(sub.path)) || location.pathname.startsWith(item.path);
+                    if (isActive && !newExpanded[item.label]) {
+                        newExpanded[item.label] = true;
+                        changed = true;
+                    } else if (!isActive && newExpanded[item.label]) {
+                        newExpanded[item.label] = false;
+                        changed = true;
+                    }
+                }
+            });
+            return changed ? newExpanded : prev;
+        });
+    }, [location.pathname]);
+
+    const toggleMenu = (label, event) => {
+        if (event) event.preventDefault();
+        setExpandedMenus(prev => ({ ...prev, [label]: !prev[label] }));
+    };
 
     const filteredMenuItems = menuItems.filter(item => {
         // specific role check for Audit Log
@@ -975,7 +1011,105 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     {/* Menu Label Removed for Minimalism */}
 
                     {filteredMenuItems.map((item) => {
-                        const isActive = location.pathname.startsWith(item.path);
+                        const hasSubItems = item.subItems && item.subItems.length > 0;
+                        const isExactParentActive = location.pathname === item.path || location.pathname === item.path + '/';
+                        const isChildActive = hasSubItems && item.subItems.some(sub => location.pathname.startsWith(sub.path));
+                        const isExpanded = expandedMenus[item.label];
+
+                        let parentBgClass = "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]";
+                        let parentTextClass = "font-medium text-slate-900";
+                        let parentIconClass = "text-slate-900 group-hover:text-slate-900";
+
+                        if (isExactParentActive) {
+                            parentBgClass = "bg-[#4A8AF4] text-white border-[#4A8AF4]";
+                            parentTextClass = "font-semibold text-white";
+                            parentIconClass = "text-white";
+                        } else if (isChildActive || isExpanded) {
+                            parentBgClass = "bg-[#EEF0FC] text-[#4A8AF4] border-[#EEF0FC]";
+                            parentTextClass = "font-semibold text-[#4A8AF4]";
+                            parentIconClass = "text-[#4A8AF4]";
+                        }
+
+                        if (hasSubItems) {
+                            return (
+                                <div key={item.label} className="flex flex-col space-y-0.5">
+                                    <button
+                                        onClick={(e) => {
+                                            handleSidebarItemActivate(e, item.path);
+                                        }}
+                                        data-sidebar-focusable="true"
+                                        onMouseEnter={(event) => handleItemHover(event, item, isExactParentActive || isChildActive)}
+                                        onMouseLeave={clearHoveredItem}
+                                        className={cn(
+                                            "flex items-center gap-3 px-3 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent w-full text-left",
+                                            parentBgClass,
+                                            effectiveCollapsed && "mx-auto h-9 w-9 justify-center px-0 py-0",
+                                            showHoverExpandPanel && "overflow-visible"
+                                        )}
+                                    >
+                                        <item.icon
+                                            size={18}
+                                            strokeWidth={1.5}
+                                            className={cn(
+                                                "shrink-0 transition-colors",
+                                                parentIconClass
+                                            )}
+                                        />
+
+                                        {!effectiveCollapsed && (
+                                            <span className={cn(
+                                                "text-[13px] tracking-tight sidebar-laptop-item-label flex-1",
+                                                parentTextClass
+                                            )}>{item.label}</span>
+                                        )}
+
+                                        {effectiveCollapsed && !showHoverExpandPanel && (
+                                            <div className="absolute left-full ml-2.5 px-1.5 py-px bg-gray-800 text-white text-[9px] font-medium rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
+                                                {item.label}
+                                            </div>
+                                        )}
+                                    </button>
+
+                                    {/* Expanded SubItems */}
+                                    {!effectiveCollapsed && (
+                                        <div 
+                                            className={cn(
+                                                "grid transition-all duration-300 ease-in-out",
+                                                isExpanded ? "grid-rows-[1fr] opacity-100 mt-1" : "grid-rows-[0fr] opacity-0 mt-0 pointer-events-none"
+                                            )}
+                                        >
+                                            <div className="overflow-hidden">
+                                                <div className="flex flex-col space-y-0.5 py-1">
+                                                    {item.subItems.map((subItem) => {
+                                                        const isSubActive = location.pathname.startsWith(subItem.path);
+                                                        return (
+                                                            <NavLink
+                                                                key={subItem.path}
+                                                                to={subItem.path}
+                                                                onClick={(event) => handleSidebarItemActivate(event, subItem.path)}
+                                                                className={() => cn(
+                                                                    "flex items-center gap-2 pl-[42px] pr-3 py-1.5 rounded-md transition-all duration-200 text-[13px]",
+                                                                    isSubActive
+                                                                        ? "bg-[#4A8AF4] text-white font-semibold shadow-sm"
+                                                                        : "text-slate-600 font-medium hover:bg-slate-100 hover:text-slate-900"
+                                                                )}
+                                                            >
+                                                                {subItem.icon && <subItem.icon size={15} strokeWidth={2} className={cn("shrink-0", isSubActive ? "text-white" : "text-slate-400")} />}
+                                                                <span>{subItem.label}</span>
+                                                            </NavLink>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            );
+                        }
+
+                        // Standard single item
+                        const isItemActive = location.pathname.startsWith(item.path);
+                        
                         return (
                             <NavLink
                                 key={item.path}
@@ -983,11 +1117,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 onClick={(event) => handleSidebarItemActivate(event, item.path)}
                                 onKeyDown={(event) => handleSidebarItemKeyDown(event, item.path)}
                                 data-sidebar-focusable="true"
-                                onMouseEnter={(event) => handleItemHover(event, item, isActive)}
+                                onMouseEnter={(event) => handleItemHover(event, item, isItemActive)}
                                 onMouseLeave={clearHoveredItem}
                                 className={() => cn(
                                     "flex items-center gap-3 px-3 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent",
-                                    isActive
+                                    isItemActive
                                         ? "bg-[#4A8AF4] text-white border-[#4A8AF4]"
                                         : "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
                                     effectiveCollapsed && "mx-auto h-9 w-9 justify-center px-0 py-0",
@@ -999,14 +1133,14 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     strokeWidth={1.5}
                                     className={cn(
                                         "shrink-0 transition-colors",
-                                        isActive ? "text-white" : "text-slate-900 group-hover:text-slate-900"
+                                        isItemActive ? "text-white" : "text-slate-900 group-hover:text-slate-900"
                                     )}
                                 />
 
                                 {!effectiveCollapsed && (
                                     <span className={cn(
                                         "text-[13px] tracking-tight sidebar-laptop-item-label",
-                                        isActive ? "font-semibold" : "font-medium"
+                                        isItemActive ? "font-semibold" : "font-medium"
                                     )}>{item.label}</span>
                                 )}
 

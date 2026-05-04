@@ -4,7 +4,7 @@ import type { ElysiaContext } from '../../shared/auth.middleware';
 import { db } from '../../db';
 import { parties } from '../../db/schema';
 import { eq } from 'drizzle-orm';
-import { WebSocketService } from '../../shared/websocket.service';
+
 
 export const getParties = async ({ user, orgId, body }: ElysiaContext & { body: { status?: 1 | 2 | number } }) => {
     if (!user || !orgId) throw new Error("Unauthorized: User or Organization not identified");
@@ -23,10 +23,7 @@ export const createParty = async ({ body, user, orgId }: ElysiaContext & { body:
         isActive: body.isActive !== undefined ? body.isActive : true,
     });
 
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'party:created',
-        data: newParty
-    });
+
 
     return successResponse('Party created successfully', newParty);
 };
@@ -37,10 +34,7 @@ export const updateParty = async ({ params, body, user, orgId, set }: ElysiaCont
 
     const updated = await PartyService.updateParty(id, body, orgId, user.id);
 
-    WebSocketService.broadcastToOrg(orgId, {
-        event: 'party:updated',
-        data: updated
-    });
+
 
     return successResponse('Party updated successfully', updated);
 };
@@ -57,10 +51,7 @@ export const deleteParty = async ({ body, user, orgId, set }: ElysiaContext & { 
 
         await PartyService.deleteParty(id, orgId, user.id);
 
-        WebSocketService.broadcastToOrg(orgId, {
-            event: 'party:deleted',
-            data: { id }
-        });
+
 
         return successResponse('Party archived successfully');
     } catch (e: any) {

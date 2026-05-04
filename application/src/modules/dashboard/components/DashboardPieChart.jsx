@@ -8,8 +8,8 @@ import { usePreferences } from '../../../context/PreferenceContext';
 import { Loader } from '../../../components/common/Loader';
 
 const COLORS = ['#2dd4bf', '#fb923c', '#3b82f6', '#fcd34d', '#818cf8', '#38bdf8', '#fb7185'];
-const MAX_VISIBLE_SEGMENTS = 8;
-const TOP_CATEGORY_COUNT = MAX_VISIBLE_SEGMENTS - 1;
+const MAX_VISIBLE_SEGMENTS = 6;
+const TOP_CATEGORY_COUNT = 5;
 
 const formatFullAmount = (amount, currency) => {
     return new Intl.NumberFormat('en-US', {
@@ -43,35 +43,45 @@ const DashboardPieChart = ({ dashboardFilters }) => {
     const contextReady = Boolean(!branchLoading && !yearLoading && selectedYear?.id);
 
     React.useEffect(() => {
+        const controller = new AbortController();
         const fetchCategories = async () => {
             if (!contextReady) return;
             setLoading(true);
             try {
                 const branchFilter = getBranchFilterValue();
-                const response = await apiService.dashboard.getCategoryRankings({
+                const rankingsResponse = await apiService.dashboard.getCategoryRankings({
                     branchId: branchFilter,
                     financialYearId: selectedYear.id,
                     targetCurrency: dashboardFilters?.currency || preferences.currency,
-                    ...(dashboardFilters?.dateRange?.startDate ? {
-                        startDate: dashboardFilters.dateRange.startDate,
-                        endDate: dashboardFilters.dateRange.endDate
-                    } : {})
-                });
+                    ...(dashboardFilters?.dateRange?.startDate ? { startDate: dashboardFilters.dateRange.startDate, endDate: dashboardFilters.dateRange.endDate } : {})
+                }, { signal: controller.signal });
 
-                if (response?.success && Array.isArray(response.data)) {
-                    setCategories(response.data.map((category) => ({
-                        ...category,
-                        type: String(category?.type ?? category?.txnType ?? '').trim().toLowerCase(),
-                        amount: Number(category?.amount || 0)
-                    })));
+                if (!controller.signal.aborted) {
+                    if (rankingsResponse.success) {
+                        const normalizedRankings = (Array.isArray(rankingsResponse.data) ? rankingsResponse.data : []).map(item => ({
+                            ...item, 
+                            type: String(item?.type ?? item?.txnType ?? '').trim().toLowerCase(), 
+                            name: String(item?.name ?? '').trim(), 
+                            amount: Number(item?.amount || 0)
+                        }));
+                        // Filter out 'account' type if any, just like CategoryRankings does
+                        setCategories(normalizedRankings.filter((item) => item.type !== 'account'));
+                    } else {
+                        setCategories([]);
+                    }
                 }
             } catch (error) {
-                console.error('Failed to fetch categories', error);
+                if (error.name !== 'AbortError') {
+                    console.error('Failed to fetch categories', error);
+                }
             } finally {
-                setLoading(false);
+                if (!controller.signal.aborted) {
+                    setLoading(false);
+                }
             }
         };
         fetchCategories();
+        return () => controller.abort();
     }, [contextReady, selectedBranch?.id, selectedYear?.id, dashboardFilters, preferences.currency, getBranchFilterValue]);
 
     const chartData = useMemo(() => {
@@ -89,13 +99,33 @@ const DashboardPieChart = ({ dashboardFilters }) => {
             items = [...filtered];
         }
 
-        return items.map((item, idx) => {
+        // Interleave items (Largest, Smallest, 2nd Largest, 2nd Smallest...)
+        // This distributes the physical area of the slices evenly around the 360 degree circle.
+        // As a result, the label anchor points are naturally distributed vertically from Top to Bottom
+        // on both the left and right edges, perfectly filling the 4 corners of the UI.
+        const interleaved = [];
+        let left = 0;
+        let right = items.length - 1;
+        while (left <= right) {
+            if (left === right) {
+                interleaved.push(items[left]);
+            } else {
+                interleaved.push(items[left]);
+                interleaved.push(items[right]);
+            }
+            left++;
+            right--;
+        }
+
+        return interleaved.map((item, idx) => {
             const percent = total > 0 ? (Math.abs(item.amount) / total) * 100 : 0;
             return {
                 ...item,
                 value: item.amount,
                 percent: percent.toFixed(2),
-                color: COLORS[idx % COLORS.length]
+                itemStyle: {
+                    color: item.name === 'Others' ? '#94a3b8' : COLORS[idx % COLORS.length]
+                }
             };
         });
     }, [categories, selectedType]);
@@ -126,65 +156,70 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         },
         series: [{
             type: 'pie',
-            radius: isMobile ? ['0%', '30%'] : isDesktop ? ['0%', '55%'] : ['0%', '48%'],
+            radius: isMobile ? ['0%', '40%'] : isDesktop ? ['0%', '55%'] : ['0%', '48%'],
             center: ['50%', '50%'],
-            startAngle: 90, 
+            startAngle: 210, // Fixed start angle combined with interleaving spreads labels across all 4 quadrants
             clockwise: true,
             avoidLabelOverlap: true,
             itemStyle: {
                 borderWidth: 2,
-                borderColor: '#fff',
-                color: (params) => chartData[params.dataIndex]?.color
+                borderColor: '#fff'
+            },
+            labelLayout: {
+                hideOverlap: false,
+                moveOverlap: 'shiftY'
             },
             label: {
                 show: true,
                 position: 'outside',
-                distanceToLabelLine: isMobile ? 6 : 10,
+                distanceToLabelLine: 5,
                 backgroundColor: '#ffffff',
                 borderColor: '#e2e8f0',
                 borderWidth: 1,
                 borderRadius: 6,
-                padding: isMobile ? [8, 10] : [8, 12],
+                padding: isMobile ? [6, 8] : [8, 12],
                 shadowColor: 'rgba(0, 0, 0, 0.08)',
                 shadowBlur: 8,
                 shadowOffsetX: 0,
                 shadowOffsetY: 4,
                 formatter: (params) => {
                     const amountStr = formatFullAmount(params.data.value, dashboardFilters?.currency || preferences.currency);
-                    return `{amount|${amountStr}}\n{name|${params.data.name} (${params.data.percent}%)}`;
+                    let nameStr = params.data.name;
+                    if (isMobile && nameStr.length > 15) {
+                        nameStr = nameStr.substring(0, 12) + '...';
+                    }
+                    return `{amount|${amountStr}}\n{name|${nameStr} (${params.data.percent}%)}`;
                 },
                 rich: {
                     amount: {
-                        fontSize: 11,
-                        fontWeight: 500,
+                        fontSize: isMobile ? 10 : 11,
+                        fontWeight: 600,
                         color: '#0f172a',
-                        padding: [0, 0, 4, 0]
+                        padding: [0, 0, 2, 0]
                     },
                     name: {
-                        fontSize: 10,
+                        fontSize: isMobile ? 9 : 10,
                         color: '#475569'
                     }
                 }
             },
             labelLine: {
                 show: true,
-                length: isMobile ? 12 : isDesktop ? 34 : 22,
-                length2: isMobile ? 14 : isDesktop ? 48 : 34,
+                length: isMobile ? 15 : 20,
+                length2: isMobile ? 15 : 30,
+                maxSurfaceAngle: 80,
                 smooth: false,
                 lineStyle: {
                     width: 1.5,
                     color: '#cbd5e1'
                 }
             },
-            emphasis: {
-                scale: true,
-                scaleSize: 10,
-                itemStyle: {
-                    shadowBlur: 20,
-                    shadowColor: 'rgba(0, 0, 0, 0.15)'
-                }
-            },
-            data: chartData
+            data: chartData.map(item => ({
+                value: item.value,
+                name: item.name,
+                percent: item.percent,
+                itemStyle: { color: item._color }
+            }))
         }]
     };
 

@@ -1,6 +1,7 @@
 import { Elysia, t } from 'elysia';
 import * as TransactionController from './transactions.controller';
 import { authMiddleware } from '../../shared/auth.middleware';
+import { parseBankStatement } from '../../utils/pdfParser';
 
 // GET /types - Public endpoint for transaction types
 // Defined before authMiddleware to allow access without token (or with invalid token during debugging)
@@ -101,6 +102,16 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             financialYearId: t.Optional(t.String()) // FormData sends as string
         })
     })
+    .post('/import-json', TransactionController.importJson as any, {
+        validateAccess: 'org',
+        body: t.Object({
+            rows: t.Array(t.Any()),
+            accountId: t.Optional(t.Numeric()),
+            branchId: t.Optional(t.Numeric()),
+            financialYearId: t.Optional(t.Numeric()),
+            filename: t.Optional(t.String())
+        })
+    })
     .post('/transaction-list', TransactionController.getTransactions as any, {
         validateAccess: 'branch',
         body: t.Object({
@@ -137,5 +148,45 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             })),
             mappedRows: t.Optional(t.Array(t.Any())),
             visibleColumns: t.Optional(t.Array(t.String()))
+        })
+    })
+    .post('/upload-statement', async ({ body, set }) => {
+        try {
+            if (!body || typeof body !== 'object' || !('file' in body)) {
+                set.status = 400;
+                return { success: false, message: 'No file provided' };
+            }
+            
+            const file = (body as any).file as File;
+            if (file.type !== 'application/pdf') {
+                set.status = 400;
+                return { success: false, message: 'Only PDF files are supported' };
+            }
+
+            const buffer = Buffer.from(await file.arrayBuffer());
+            const parsedData = await parseBankStatement(buffer);
+
+            return {
+                success: true,
+                message: `Successfully parsed ${parsedData.transactions.length} transactions`,
+                data: parsedData
+            };
+        } catch (error: any) {
+            console.error('Error parsing bank statement:', error);
+            set.status = 500;
+            return { success: false, message: 'Failed to parse bank statement: ' + error.message };
+        }
+    })
+    .get('/imports', TransactionController.getImportedStatements as any, {
+        validateAccess: 'org',
+        query: t.Object({
+            financialYearId: t.Optional(t.Numeric()),
+            branchId: t.Optional(t.Numeric())
+        })
+    })
+    .delete('/imports/:id/revert', TransactionController.revertImportedStatement as any, {
+        validateAccess: 'org',
+        params: t.Object({
+            id: t.String()
         })
     });

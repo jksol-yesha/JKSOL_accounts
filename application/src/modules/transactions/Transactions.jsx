@@ -12,7 +12,7 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, ShoppingBag
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, ShoppingBag, History
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
@@ -21,7 +21,7 @@ import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
 import { Loader } from '../../components/common/Loader';
 
-import { useWebSocket } from '../../hooks/useWebSocket';
+
 import { useAuth } from '../../context/AuthContext';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
 
@@ -35,7 +35,7 @@ import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CustomSelect from '../../components/common/CustomSelect';
 import ImportTransactionModal from './ImportTransactionModal';
 import CreateTransaction from './components/CreateTransaction';
-// import ImportPDFModal from './ImportPDFModal';
+import ImportReviewModal from './ImportReviewModal';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import BranchSelector from '../../components/layout/BranchSelector';
 import CurrencySelector from '../../components/layout/CurrencySelector';
@@ -43,6 +43,7 @@ import { generateDatePresets } from '../../utils/constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
 import AccountNameTooltip from '../../components/common/AccountNameTooltip';
 import { notifyTransactionDataChanged } from './transactionDataSync';
+import ImportHistoryPanel from './ImportHistoryPanel';
 
 const createInitialDeleteDialog = () => ({
     open: false,
@@ -918,9 +919,6 @@ const Transactions = () => {
     const [loading, setLoading] = useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
 
-    // 🔥 WebSocket Integration
-    const socketBranchId = typeof selectedBranch?.id === 'number' ? selectedBranch.id : null;
-    const { on } = useWebSocket(socketBranchId);
 
     // Toolbar States
     const [searchTerm, setSearchTerm] = useState('');
@@ -966,6 +964,11 @@ const Transactions = () => {
     const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+    const [isImportReviewModalOpen, setIsImportReviewModalOpen] = useState(false);
+    const [isImportHistoryOpen, setIsImportHistoryOpen] = useState(false);
+    const [parsedStatementData, setParsedStatementData] = useState(null);
+    const [uploadedFile, setUploadedFile] = useState(null);
+    const [isUploadingStatement, setIsUploadingStatement] = useState(false);
     const [activeAttachmentTxnId, setActiveAttachmentTxnId] = useState(null); // Keep for legacy if needed, but we use object now
     const [attachmentViewer, setAttachmentViewer] = useState({ isOpen: false, txnId: null, path: null, position: { top: 0, right: 0 } });
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
@@ -1025,6 +1028,18 @@ const Transactions = () => {
     }, [selectedYear, datePresets]);
 
     const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
+    const [pagingPanel, setPagingPanel] = useState(null);
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const panel = document.querySelector('.transactions-grid-shell .ag-paging-panel');
+            if (panel && !pagingPanel) {
+                setPagingPanel(panel);
+                clearInterval(interval);
+            }
+        }, 100);
+        return () => clearInterval(interval);
+    }, [pagingPanel]);
     const cacheKey = `transactions:list:v2:${selectedYear?.id || 'fy'}:${appliedFilters.currency || 'INR'}`;
     const columnSettingsKey = `${TXN_TABLE_COLUMN_STORAGE_KEY}:${user?.id || 'user'}`;
     const showInitialLoader = loading && !hasFetchedOnce;
@@ -1142,29 +1157,7 @@ const Transactions = () => {
         return () => controller.abort();
     }, [fetchTransactions]);
 
-    // 🔥 Listen for real-time transaction updates
-    useEffect(() => {
-        // Listen for new transactions
-        const unsubscribeCreate = on('transaction:created', () => {
-            fetchTransactions();
-        });
 
-        // Listen for updated transactions
-        const unsubscribeUpdate = on('transaction:updated', () => {
-            fetchTransactions();
-        });
-
-        // Listen for deleted transactions
-        const unsubscribeDelete = on('transaction:deleted', () => {
-            fetchTransactions();
-        });
-
-        return () => {
-            unsubscribeCreate();
-            unsubscribeUpdate();
-            unsubscribeDelete();
-        };
-    }, [fetchTransactions, on]); // Only depend on stable fetcher and listener binder
 
     // Sorting Handlers
 
@@ -1708,7 +1701,7 @@ const Transactions = () => {
         const handleGlobalKeyDown = (e) => {
             // Prevent intercepting if they are actively working in an open modal
             if (e.key === 'Escape') {
-                if (isImportModalOpen || deleteDialog.open || drawerState.open || attachmentViewer.isOpen || fullScreenAttachment.isOpen) {
+                if (isImportModalOpen || isImportReviewModalOpen || deleteDialog.open || drawerState.open || attachmentViewer.isOpen || fullScreenAttachment.isOpen) {
                     return;
                 }
 
@@ -1730,7 +1723,7 @@ const Transactions = () => {
 
         document.addEventListener('keydown', handleGlobalKeyDown);
         return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-    }, [isImportModalOpen, deleteDialog.open, drawerState.open, attachmentViewer.isOpen, fullScreenAttachment.isOpen]);
+    }, [isImportModalOpen, isImportReviewModalOpen, deleteDialog.open, drawerState.open, attachmentViewer.isOpen, fullScreenAttachment.isOpen]);
 
     // Calculate totals grouped by currency
     const currencyTotals = useMemo(() => {
@@ -1865,9 +1858,10 @@ const Transactions = () => {
                         <h1 className="text-2xl font-bold text-gray-900 uppercase tracking-widest">Transactions List</h1>
                     </div>
 
-                    {/* Global Filters Row */}
-                    <div className="px-5 pt-3 pb-1.5 flex flex-col md:flex-row justify-between md:items-center gap-3 print:hidden relative z-20 w-full bg-transparent">
-                        <div className="flex flex-wrap items-center gap-3 flex-1 min-w-0">
+                    {/* Global Filters & Actions Row */}
+                    <div className="px-5 pt-3 pb-4 flex flex-col xl:flex-row justify-between xl:items-center gap-4 print:hidden relative z-20 w-full bg-transparent border-b border-gray-100">
+                        {/* LEFT SIDE: Core Filters */}
+                        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
                             <DateRangePicker
                                 startDate={appliedFilters.dateRange?.startDate}
                                 endDate={appliedFilters.dateRange?.endDate}
@@ -1901,67 +1895,39 @@ const Transactions = () => {
                                 neutralCountBadge
                                 selectAllLabel="All Parties"
                                 allDisplayLabel="All Parties"
-                                buttonClassName="w-[120px] text-slate-800 font-semibold"
+                                buttonClassName="w-[120px] text-slate-800 font-semibold h-[32px]"
                             />
-                        </div>
-                        <div className="shrink-0 flex items-center justify-start md:justify-end gap-1 flex-none mt-2 md:mt-0">
-                            <button
-                                onClick={() => navigate('/parties')}
-                                className="group flex items-center gap-1.5 px-3 py-1.5 outline-none"
-                            >
-                                <Users size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span className="hidden sm:inline text-[12px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Parties</span>
-                            </button>
-                            <button
-                                onClick={() => navigate('/category')}
-                                className="group flex items-center gap-1.5 px-3 py-1.5 outline-none ml-1"
-                            >
-                                <ShoppingBag size={15} className="text-slate-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span className="hidden sm:inline text-[12px] font-semibold text-slate-600 group-hover:text-[#4A8AF4] group-hover:underline underline-offset-[3px] transition-all">Categories</span>
-                            </button>
-                        </div>
-                    </div>
 
-                    {/* Always-Visible KPI Strip & Conditionally Visible Charts */}
-                    <div className="px-5 pt-4 pb-2 w-full animate-in fade-in duration-300 print:hidden">
-                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-100 pb-4">
-                            <div className="flex flex-wrap items-center gap-8">
-                                <div className="flex items-center gap-3 min-w-fit">
-                                    <div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center shrink-0">
-                                        <ArrowDownLeft size={18} className="text-emerald-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Inflow</div>
-                                        <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalIncome)}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3 min-w-fit">
-                                    <div className="w-10 h-10 rounded-full bg-rose-50 flex items-center justify-center shrink-0">
-                                        <ArrowUpRight size={18} className="text-rose-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Total Outflow</div>
-                                        <div className="text-[15px] font-extrabold text-gray-900 whitespace-nowrap">{formatCurrency(insightsData.totalExpense)}</div>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-3 min-w-fit pl-6 border-l border-gray-100">
-                                    <div className={cn("w-10 h-10 rounded-full flex items-center justify-center shrink-0", insightsData.netFlow >= 0 ? "bg-primary/10" : "bg-red-50")}>
-                                        <Activity size={18} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
-                                    </div>
-                                    <div>
-                                        <div className="text-[11px] font-semibold text-gray-500 mb-0.5">Net Flow</div>
-                                        <div className={cn("text-[15px] font-extrabold whitespace-nowrap", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
-                                            {formatCurrency(insightsData.netFlow)}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div className="mt-4 flex justify-between items-center">
+                            <FilterDropdown
+                                value={appliedFilters.type}
+                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
+                                placeholder="Type"
+                                options={[
+                                    { label: "Income", value: "income" },
+                                    { label: "Expense", value: "expense" },
+                                    { label: "Transfer", value: "transfer" },
+                                    { label: "Investment", value: "investment" },
+                                ]}
+                                isMultiSelect={true}
+                                showSelectAll={false}
+                                hideApplyButton={true}
+                                keepButtonNeutral
+                                neutralCountBadge
+                                allDisplayLabel="All Types"
+                                buttonClassName="w-[110px] h-[32px]"
+                            />
+
+                            <ColumnVisibilityDropdown
+                                columns={TXN_TABLE_COLUMNS}
+                                visibleColumns={visibleColumns}
+                                setVisibleColumns={setVisibleColumns}
+                                defaultVisibleColumns={DEFAULT_VISIBLE_TXN_COLUMNS}
+                            />
+
                             <button
                                 type="button"
                                 onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
+                                className="flex items-center gap-1.5 px-2 py-1 rounded-md ml-1 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all h-[32px]"
                             >
                                 <TrendingUp size={14} />
                                 {isInsightsExpanded ? "Hide Chart" : "Show Chart"}
@@ -1972,16 +1938,112 @@ const Transactions = () => {
                                 )}
                             </button>
                             {isInsightsExpanded && (
-                                <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold">
+                                <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold ml-1">
                                     <Calendar size={13} />
                                     <span>Last 30 days</span>
                                 </div>
                             )}
                         </div>
 
+                        {/* RIGHT SIDE: Utilities & Search */}
+                        <div className="shrink-0 flex flex-wrap items-center justify-start xl:justify-end gap-2 flex-none mt-2 xl:mt-0">
+                            <label className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-within:bg-[#F0F9FF] focus-within:border-[#BAE6FD] focus-within:text-[#4A8AF4] focus-within:ring-2 focus-within:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer">
+                                <input 
+                                    type="file" 
+                                    accept=".pdf" 
+                                    className="hidden" 
+                                    onChange={async (e) => {
+                                        const file = e.target.files[0];
+                                        if (file) {
+                                            setIsUploadingStatement(true);
+                                            const formData = new FormData();
+                                            formData.append('file', file);
+                                            try {
+                                                const res = await apiService.transactions.uploadStatement(formData);
+                                                if (res.success) {
+                                                    setUploadedFile(file);
+                                                    setParsedStatementData(res.data);
+                                                    setIsImportReviewModalOpen(true);
+                                                }
+                                            } catch (error) {
+                                                console.error('Failed to parse statement', error);
+                                                alert(error.response?.data?.message || 'Failed to parse statement');
+                                            } finally {
+                                                setIsUploadingStatement(false);
+                                                e.target.value = null;
+                                            }
+                                        }
+                                    }}
+                                />
+                                {isUploadingStatement ? (
+                                    <span className="font-medium text-slate-400">Parsing...</span>
+                                ) : (
+                                    <span className="font-medium">Import</span>
+                                )}
+                            </label>
+
+                            <button
+                                onClick={() => setIsImportHistoryOpen(true)}
+                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                            >
+                                <History size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                <span className="hidden sm:inline">History</span>
+                            </button>
+
+                            <div className="relative" ref={exportDropdownRef}>
+                                <button
+                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                >
+                                    <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                    <span className="hidden sm:inline">Export</span>
+                                </button>
+
+                                {isExportDropdownOpen && (
+                                    <div className="absolute right-0 mt-1.5 w-28 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <button
+                                            onClick={() => {
+                                                setIsExportDropdownOpen(false);
+                                                handleClientExportExcel();
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                        >
+                                            Excel
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsExportDropdownOpen(false);
+                                                handleClientExportPDF();
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                        >
+                                            PDF
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="relative group w-full xl:w-[240px] max-w-[300px]">
+                                <Search
+                                    size={14}
+                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
+                                />
+                                <input
+                                    type="text"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                    placeholder="Search"
+                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Conditionally Visible Charts */}
+                    <div className="px-5 w-full animate-in fade-in duration-300 print:hidden">
                         {/* Charts Area */}
                         {isInsightsExpanded && (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-6 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
+                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
                                 <div className="lg:col-span-6">
                                     <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
                                         <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
@@ -2072,126 +2134,14 @@ const Transactions = () => {
                                         )}
                                     </div>
                                 </div>
-
                             </div>
                         )}
                     </div>
 
-                    {/* Custom List Header (Table Actions) */}
-                    <div className="px-5 pb-4 pt-1.5 flex flex-col xl:flex-row xl:items-center justify-between print:hidden gap-4 relative z-10 w-full">
-                        {/* LEFT SIDE: Actions */}
-                        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto shrink-0">
-                            <button
-                                onClick={() => setDrawerState({ open: true, transaction: null })}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px]"
-                                title="Add Transaction"
-                            >
-                                <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Transaction</span>
-                            </button>
-
-                            <button
-                                onClick={() => fetchTransactions()}
-                                className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
-                                title="Refresh table data"
-                            >
-                                {loading ? (
-                                    <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
-                                ) : (
-                                    <RefreshCcw size={14} strokeWidth={2} />
-                                )}
-                            </button>
-                        </div>
-
-                        {/* RIGHT SIDE: Filters & View Controls */}
-                        <div className="flex flex-wrap items-center justify-start xl:justify-end gap-2 w-full xl:w-auto">
-                            <div className="flex items-center gap-2">
-                                <button
-                                    onClick={() => setIsImportModalOpen(true)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                >
-                                    <span className="font-medium">Import</span>
-                                </button>
-
-                                <div className="relative" ref={exportDropdownRef}>
-                                    <button
-                                        onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                        className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                    >
-                                        <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                        <span className="hidden sm:inline">Export</span>
-                                    </button>
-
-                                    {isExportDropdownOpen && (
-                                        <div className="absolute right-0 mt-1.5 w-28 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <button
-                                                onClick={() => {
-                                                    setIsExportDropdownOpen(false);
-                                                    handleClientExportExcel();
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
-                                            >
-                                                Excel
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    setIsExportDropdownOpen(false);
-                                                    handleClientExportPDF();
-                                                }}
-                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
-                                            >
-                                                PDF
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <FilterDropdown
-                                value={appliedFilters.type}
-                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
-                                placeholder="Type"
-                                options={[
-                                    { label: "Income", value: "income" },
-                                    { label: "Expense", value: "expense" },
-                                    { label: "Transfer", value: "transfer" },
-                                    { label: "Investment", value: "investment" },
-                                ]}
-                                isMultiSelect={true}
-                                showSelectAll={false}
-                                hideApplyButton={true}
-                                keepButtonNeutral
-                                neutralCountBadge
-                                allDisplayLabel="All Types"
-                                buttonClassName="w-[110px]"
-                            />
-
-                            <ColumnVisibilityDropdown
-                                columns={TXN_TABLE_COLUMNS}
-                                visibleColumns={visibleColumns}
-                                setVisibleColumns={setVisibleColumns}
-                                defaultVisibleColumns={DEFAULT_VISIBLE_TXN_COLUMNS}
-                            />
-
-                            <div className="relative group w-full xl:w-[240px] max-w-[300px]">
-                                <Search
-                                    size={14}
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
-                                />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search"
-                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                />
-                            </div>
-                        </div>
-                    </div>
 
                     <div
                         className="transactions-grid-shell w-full px-5 pb-1 relative flex flex-col print:hidden"
-                        style={{ height: '600px' }}
+                        style={{ height: 'calc(100vh - 135px)', minHeight: '400px' }}
                         aria-busy={loading}
                     >
                         <div className="h-full w-full relative">
@@ -2223,6 +2173,42 @@ const Transactions = () => {
                                 />
                             </div>
                         </div>
+
+                        {/* Summary Overlay portalled into AG Grid Footer */}
+                        {pagingPanel && createPortal(
+                            <div className="flex items-center gap-6 print:hidden mr-auto pl-5 h-full pointer-events-auto" style={{ order: -1 }}>
+                                <div className="flex items-center gap-2.5 min-w-fit">
+                                    <div className="">
+                                        <ArrowDownLeft size={16} className="text-emerald-600" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
+                                        <div className="text-[13px] font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCurrency(insightsData.totalIncome)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2.5 min-w-fit">
+                                    <div className="">
+                                        <ArrowUpRight size={16} className="text-rose-600" />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
+                                        <div className="text-[13px] font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCurrency(insightsData.totalExpense)}</div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2.5 min-w-fit pl-5 border-l border-gray-200">
+                                    <div className="">
+                                        <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
+                                        <div className={cn("text-[13px] font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                            {formatCurrency(insightsData.netFlow)}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>,
+                            pagingPanel
+                        )}
                     </div>
 
                     {/* Print Only Simple HTML Table (Dynamically Built) */}
@@ -2253,6 +2239,33 @@ const Transactions = () => {
                     fetchTransactions();
                 }}
             />
+
+            {isImportReviewModalOpen && (
+                <ImportReviewModal
+                    isOpen={isImportReviewModalOpen}
+                    onClose={() => {
+                        setIsImportReviewModalOpen(false);
+                        setParsedStatementData(null);
+                        setUploadedFile(null);
+                    }}
+                    parsedData={parsedStatementData}
+                    file={uploadedFile}
+                    onSuccess={() => {
+                        setIsImportReviewModalOpen(false);
+                        setParsedStatementData(null);
+                        setUploadedFile(null);
+                        fetchTransactions();
+                    }}
+                />
+            )}
+
+            {isImportHistoryOpen && (
+                <ImportHistoryPanel
+                    isOpen={isImportHistoryOpen}
+                    onClose={() => setIsImportHistoryOpen(false)}
+                    onRefresh={fetchTransactions}
+                />
+            )}
 
             {/* Import PDF Modal - Commented out
             <ImportPDFModal

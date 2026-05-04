@@ -54,6 +54,7 @@ export const accountsRoutes = new Elysia({ prefix: '/accounts' })
             description: t.Optional(t.String()),
             openingBalance: t.Optional(t.String()),
             openingBalanceDate: t.Optional(t.String()),
+            branchId: t.Optional(t.Union([t.Numeric(), t.Null()])),
             orgId: t.Optional(t.Numeric())
         })
     })

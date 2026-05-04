@@ -31,7 +31,7 @@ import {
 import { useBranch } from "../../context/BranchContext";
 import { useYear } from "../../context/YearContext";
 import { usePreferences } from "../../context/PreferenceContext";
-import { useWebSocket } from "../../hooks/useWebSocket";
+
 import useDelayedOverlayLoader from "../../hooks/useDelayedOverlayLoader";
 import LoadingOverlay from "../../components/common/LoadingOverlay";
 import ConfirmDialog from "../../components/common/ConfirmDialog";
@@ -971,9 +971,7 @@ const Accounts = () => {
   const { selectedYear } = useYear();
   const { showToast } = useToast();
   const { formatCurrency, formatDate, preferences } = usePreferences();
-  const socketBranchId =
-    typeof selectedBranch?.id === "number" ? selectedBranch.id : null;
-  const { on } = useWebSocket(socketBranchId);
+
 
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1321,70 +1319,9 @@ const Accounts = () => {
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  //  Listen for real-time account updates
-  useEffect(() => {
-    const refreshAccounts = () => {
-      setDataRefreshTick((current) => current + 1);
-    };
 
-    const unsubscribeTransactionCreate = on(
-      "transaction:created",
-      refreshAccounts,
-    );
-    const unsubscribeTransactionUpdate = on(
-      "transaction:updated",
-      refreshAccounts,
-    );
-    const unsubscribeTransactionDelete = on(
-      "transaction:deleted",
-      refreshAccounts,
-    );
 
-    return () => {
-      unsubscribeTransactionCreate();
-      unsubscribeTransactionUpdate();
-      unsubscribeTransactionDelete();
-    };
-  }, [on]);
 
-  useEffect(() => {
-    // Listen for new accounts
-    const unsubscribeCreate = on("account:created", (newAccount) => {
-      const normalized = normalizeAccount(newAccount);
-
-      // Add the new account to the list
-      setAccounts((prev) => {
-        // Check if account already exists (avoid duplicates)
-        const exists = prev.some((a) => a.id === normalized.id);
-        if (exists) return prev;
-
-        // Add new account at the beginning
-        return [normalized, ...prev];
-      });
-    });
-
-    // Listen for updated accounts
-    const unsubscribeUpdate = on("account:updated", (updatedAccount) => {
-      const normalized = normalizeAccount(updatedAccount);
-
-      // Update the account in the list
-      setAccounts((prev) =>
-        prev.map((a) => (a.id === normalized.id ? normalized : a)),
-      );
-    });
-
-    // Listen for deleted accounts
-    const unsubscribeDelete = on("account:deleted", (data) => {
-      // Remove the account from the list
-      setAccounts((prev) => prev.filter((a) => a.id !== data.id));
-    });
-
-    return () => {
-      unsubscribeCreate();
-      unsubscribeUpdate();
-      unsubscribeDelete();
-    };
-  }, [on]);
 
   const [searchTerm, setSearchTerm] = useState("");
 

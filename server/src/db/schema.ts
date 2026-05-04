@@ -240,6 +240,8 @@ export const transactions = mysqlTable("transactions", {
 
   status: int("status").notNull().default(0), // 0 for draft, 1 for posted, 2 for void
 
+  importedStatementId: bigint("imported_statement_id", { mode: "number", unsigned: true }),
+
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
@@ -401,6 +403,10 @@ export const transactionsRelations = relations(transactions, ({ one, many }) => 
     fields: [transactions.createdBy],
     references: [users.id],
   }),
+  importedStatement: one(importedStatements, {
+    fields: [transactions.importedStatementId],
+    references: [importedStatements.id],
+  }),
 }));
 
 export const transactionEntriesRelations = relations(transactionEntries, ({ one }) => ({
@@ -466,3 +472,41 @@ export const countries = mysqlTable("countries", {
   countryCode: char("country_code", { length: 2 }).notNull(),
   countryCurrency: char("country_currency", { length: 3 }),
 });
+
+export const importedStatements = mysqlTable("imported_statements", {
+  id: bigint("id", { mode: "number", unsigned: true }).primaryKey().autoincrement(),
+  orgId: bigint("org_id", { mode: "number", unsigned: true }).notNull().references(() => organizations.id),
+  branchId: bigint("branch_id", { mode: "number", unsigned: true }).notNull().references(() => branches.id),
+  financialYearId: bigint("financial_year_id", { mode: "number", unsigned: true }).notNull().references(() => financialYears.id),
+  filename: varchar("filename", { length: 255 }).notNull(),
+  targetAccountId: bigint("target_account_id", { mode: "number", unsigned: true }),
+  importedBy: bigint("imported_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
+  importedAt: datetime("imported_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  transactionCount: int("transaction_count").notNull().default(0),
+  status: int("status").notNull().default(1), // 1: Active, 0: Reverted
+}, (table) => {
+  return {
+    idxImpStmtOrgBranch: index("idx_imp_stmt_org_branch").on(table.orgId, table.branchId),
+    idxImpStmtFy: index("idx_imp_stmt_fy").on(table.financialYearId),
+  }
+});
+
+export const importedStatementsRelations = relations(importedStatements, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [importedStatements.orgId],
+    references: [organizations.id],
+  }),
+  branch: one(branches, {
+    fields: [importedStatements.branchId],
+    references: [branches.id],
+  }),
+  financialYear: one(financialYears, {
+    fields: [importedStatements.financialYearId],
+    references: [financialYears.id],
+  }),
+  user: one(users, {
+    fields: [importedStatements.importedBy],
+    references: [users.id],
+  }),
+  transactions: many(transactions),
+}));

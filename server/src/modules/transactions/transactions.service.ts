@@ -1,13 +1,13 @@
 
 import { db } from '../../db';
-import { transactions, transactionEntries, accounts, auditLogs, transactionTypes, categories, subCategories, currencies, financialYears, branches, organizations, users, parties } from '../../db/schema';
+import { transactions, transactionEntries, accounts, auditLogs, transactionTypes, categories, subCategories, currencies, financialYears, branches, organizations, users, parties, importedStatements } from '../../db/schema';
 import { eq, and, or, desc, lte, gte, inArray, sql } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { read, utils, write } from 'xlsx';
-import { WebSocketService } from '../../shared/websocket.service';
+
 import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
 
 interface ImportError {
@@ -245,7 +245,7 @@ export class TransactionService {
         user?: any,
         filters: TransactionExportFilters = {}
     ) {
-        let transactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user, undefined, filters.appliedFilters?.dateRange);
+        let transactions = await this.getAll(orgId, branchId, financialYearId, undefined, targetCurrency, user, undefined, filters.appliedFilters?.startDate ? { startDate: filters.appliedFilters.startDate, endDate: filters.appliedFilters.endDate } : undefined);
         
         if (filters.appliedFilters && filters.appliedFilters.activeIds && Array.isArray(filters.appliedFilters.activeIds)) {
             const allowedIds = new Set(filters.appliedFilters.activeIds.map(Number));
@@ -301,8 +301,8 @@ export class TransactionService {
             { key: 'account', header: 'Account', width: 30, extract: (txn: any) => txn.accountName || '' },
             { key: 'category', header: 'Category', width: 30, extract: (txn: any) => txn.categoryName || '' },
             { key: 'notes', header: 'Notes', width: 50, extract: (txn: any) => txn.notes || '' },
-            { key: 'amount', header: 'Amount', width: 15, htmlAlign: 'right', extract: (txn: any) => Number(txn.amount || 0).toFixed(2), extractValue: (txn: any) => Number(txn.amount || 0) },
-            { key: 'branch', header: 'Branches', width: 70, extract: (txn: any) => Array.isArray(txn.branchNames) ? txn.branchNames.join(', ') : (txn.branchNames || ''), extractHtml: (txn: any) => Array.isArray(txn.branchNames) ? txn.branchNames.join('<br />') : (txn.branchNames || '') },
+            { key: 'amount', header: 'Amount', width: 15, htmlAlign: 'right', extract: (txn: any) => Number(txn.amount || 0).toFixed(2), extractValue: (txn: any, index?: number) => Number(txn.amount || 0) },
+            { key: 'branch', header: 'Branches', width: 70, extract: (txn: any) => Array.isArray(txn.branchNames) ? txn.branchNames.join(', ') : (txn.branchNames || ''), extractHtml: (txn: any, index?: number) => Array.isArray(txn.branchNames) ? txn.branchNames.join('<br />') : (txn.branchNames || '') },
             { key: 'createdBy', header: 'Created By', width: 25, extract: (txn: any) => txn.createdByName || txn.createdByDisplayName || txn.creatorName || '' }
         ];
 
@@ -687,6 +687,10 @@ export class TransactionService {
                     contact: party || null,
                     notes: (row.notes || row.description || '').trim(),
                     amountLocal: Math.abs(Number(amount)),
+                    isTaxable: row.is_taxable === 1 || row.is_taxable === true || row.isTaxable === 1 || row.isTaxable === true,
+                    isGstInclusive: row.is_gst_inclusive === 1 || row.is_gst_inclusive === true || row.isGstInclusive === 1 || row.isGstInclusive === true,
+                    gstType: row.gst_type || row.gstType || 1,
+                    gstRate: row.gst_rate || row.gstRate || 0,
                     currencyCode: row.currency || row.currencycode || (branch ? branch.currencyCode : 'USD'),
                     fxRate: Number(row.fxrate || 1),
                     status: 1,
@@ -737,8 +741,7 @@ export class TransactionService {
             }
         }
 
-        const branchesToNotify = new Set(validTransactions.map(t => t.branchId));
-        branchesToNotify.forEach(bid => WebSocketService.broadcastToBranch(bid, { event: 'transaction_created', data: { count: validTransactions.length } }));
+
 
         const partialSuccess = successCount > 0 && errors.length > 0;
         if (successCount === 0) {
@@ -834,12 +837,13 @@ export class TransactionService {
     /**
      * Common processing logic for imported rows (used by both Excel and PDF imports)
      */
-    private static async processImportedRows(
+    static async processImportedRows(
         rows: any[],
         orgId: number,
         user: any,
         defaultFinancialYearId?: number,
-        defaultBranchId?: number
+        defaultBranchId?: number,
+        filename?: string
     ) {
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
         if (!org || !isActiveStatus(org.status)) throw new Error('Organization is inactive or not found');
@@ -854,6 +858,12 @@ export class TransactionService {
         });
         let accountMap = new Map(allAccounts.map(a => [a.id, a]));
         let accountNameMap = new Map(allAccounts.map(a => [a.name.toLowerCase(), a]));
+
+        let allCategories = await db.query.categories.findMany({
+            where: and(eq(categories.orgId, orgId), isNotDeleted(categories))
+        });
+        let categoryMap = new Map(allCategories.map(c => [c.id, c]));
+        let categoryNameMap = new Map(allCategories.map(c => [c.name.toLowerCase(), c]));
 
         const allTxnTypes = await db.select().from(transactionTypes);
         const typeMap = new Map(allTxnTypes.map(t => [t.name.toLowerCase(), t.id]));
@@ -872,6 +882,7 @@ export class TransactionService {
             if (!branchId) {
                 rowErrors.push('Missing branch_id');
             } else {
+                branchId = Number(branchId);
                 const branch = branchMap.get(branchId);
                 if (!branch) {
                     rowErrors.push(`Branch ID ${branchId} not found`);
@@ -940,9 +951,65 @@ export class TransactionService {
             if (!accId) {
                 rowErrors.push('Missing account (ID or Name)');
             } else {
+                accId = Number(accId);
                 const account = accountMap.get(accId);
                 if (!account) {
                     rowErrors.push(`Account ID ${accId} not found`);
+                }
+            }
+
+            // 6. Extract Category and Contact
+            let categoryId = row.category_id || row.categoryId || null;
+            if (categoryId) {
+                categoryId = Number(categoryId);
+                if (!categoryMap.has(categoryId)) {
+                    categoryId = null; // Fallback to auto-create if ID is invalid
+                }
+            } 
+            
+            if (!categoryId) {
+                const normalizedType = typeVal ? String(typeVal).toLowerCase() : '';
+                const isExpense = normalizedType === 'expense' || txnTypeId === 2;
+                const isIncome = normalizedType === 'income' || txnTypeId === 1;
+                
+                if (isExpense || isIncome) {
+                    const defaultCatName = isExpense ? 'Uncategorized Expense' : 'Uncategorized Income';
+                    let matchedCat = categoryNameMap.get(defaultCatName.toLowerCase());
+                    
+                    if (matchedCat) {
+                        categoryId = matchedCat.id;
+                    } else {
+                        const tid = typeMap.get(isExpense ? 'expense' : 'income');
+                        const [newCat] = await db.insert(categories).values({
+                            name: defaultCatName,
+                            orgId: orgId as number,
+                            txnTypeId: tid,
+                            status: 1
+                        } as any).$returningId();
+                        
+                        categoryId = newCat?.id || 0;
+                        categoryMap.set(categoryId, { id: categoryId, name: defaultCatName } as any);
+                        categoryNameMap.set(defaultCatName.toLowerCase(), { id: categoryId, name: defaultCatName } as any);
+                    }
+                }
+            }
+            
+            let contactId = row.contact_id || row.contactId || null;
+            if (contactId) contactId = Number(contactId);
+
+            const normalizedType = typeVal ? String(typeVal).toLowerCase() : '';
+            const isTransfer = normalizedType === 'transfer' || txnTypeId === 4;
+
+            let fromAccountId = null;
+            let toAccountId = null;
+
+            if (isTransfer) {
+                fromAccountId = accId;
+                toAccountId = categoryId; // For transfers, category dropdown acts as the other account
+                if (!fromAccountId || !toAccountId) {
+                    rowErrors.push('Transfer requires both accounts');
+                } else if (fromAccountId === toAccountId) {
+                    rowErrors.push('Source and Destination accounts must be different');
                 }
             }
 
@@ -954,12 +1021,19 @@ export class TransactionService {
                     branchId,
                     txnDate,
                     txnTypeId: txnTypeId!,
-                    categoryId: null,
+                    categoryId: isTransfer ? null : categoryId,
                     subCategoryId: null,
                     accountId: accId,
+                    fromAccountId,
+                    toAccountId,
+                    contact: contactId ? String(contactId) : null,
                     payee: row.payee || row.Payee || row.counterparty_name || row.counterpartyName || row.Counterparty || null,
                     notes: row.notes || row.Notes || row.description || row.Description || '',
                     amountLocal: amount,
+                    isTaxable: row.is_taxable === 1 || row.is_taxable === true || row.isTaxable === 1 || row.isTaxable === true,
+                    isGstInclusive: row.is_gst_inclusive === 1 || row.is_gst_inclusive === true || row.isGstInclusive === 1 || row.isGstInclusive === true,
+                    gstType: row.gst_type || row.gstType || 1,
+                    gstRate: row.gst_rate || row.gstRate || 0,
                     currencyCode: row.currency || row.currencyCode || branchMap.get(branchId)!.currencyCode,
                     fxRate: row.fx_rate || row.fxRate || 1,
                     status: 1, // Posted
@@ -977,17 +1051,74 @@ export class TransactionService {
             };
         }
 
+        // --- DUPLICATE CHECKING ---
+        let skippedRows = 0;
+        let newValidTransactions = validTransactions;
+
+        if (validTransactions.length > 0) {
+            const dates = validTransactions.map(t => new Date(t.txnDate).getTime());
+            const minDateObj = new Date(Math.min(...dates));
+            const maxDateObj = new Date(Math.max(...dates));
+            const minDate = minDateObj.toISOString().split('T')[0];
+            const maxDate = maxDateObj.toISOString().split('T')[0];
+
+            const generateHash = (txnDate: string, amount: string | number, notes: string) => {
+                const cleanNotes = (notes || '').toLowerCase().replace(/\s+/g, '').trim();
+                const cleanAmount = Number(amount).toFixed(2);
+                return `${txnDate}_${cleanAmount}_${cleanNotes}`;
+            };
+
+            const existingTxns = await db.select({
+                txnDate: transactions.txnDate,
+                amountLocal: transactions.amountLocal,
+                notes: transactions.notes,
+            }).from(transactions).where(and(
+                eq(transactions.orgId, orgId),
+                gte(transactions.txnDate, minDate as any),
+                lte(transactions.txnDate, maxDate as any),
+                isNotDeleted(transactions)
+            ));
+
+            const existingHashes = new Set(existingTxns.map(t => generateHash(t.txnDate as string, t.amountLocal, t.notes || '')));
+
+            newValidTransactions = validTransactions.filter(txn => {
+                const hash = generateHash(txn.txnDate, txn.amountLocal, txn.notes || '');
+                return !existingHashes.has(hash);
+            });
+            
+            skippedRows = validTransactions.length - newValidTransactions.length;
+        }
+        // --- END DUPLICATE CHECKING ---
+
         // Bulk Insert
         try {
             const fys = await db.query.financialYears.findMany({
                 where: eq(financialYears.orgId, orgId)
             });
 
+            let importedStatementId: number | undefined;
+            if (filename && newValidTransactions.length > 0) {
+                const fyToUse = defaultFinancialYearId || fys[0]?.id;
+                const branchToUse = defaultBranchId || newValidTransactions[0]?.branchId;
+                if (fyToUse && branchToUse) {
+                    const stmtResult = await db.insert(importedStatements).values({
+                        orgId,
+                        branchId: branchToUse,
+                        financialYearId: fyToUse,
+                        filename,
+                        importedBy: user.id,
+                        transactionCount: newValidTransactions.length,
+                        status: 1
+                    });
+                    importedStatementId = Number(stmtResult[0].insertId);
+                }
+            }
+
             const createdTxns = [];
             // Use serial execution for safety with shared resources/logic, 
             // though parallel Promise.all could be used if strict ordering isn't required.
             // Serial is safer for debugging and rate limits.
-            for (const txn of validTransactions) {
+            for (const txn of newValidTransactions) {
                 try {
                     const fy = fys.find(f => f.startDate <= txn.txnDate && f.endDate >= txn.txnDate);
                     if (!fy) continue;
@@ -998,6 +1129,7 @@ export class TransactionService {
                         amountLocal: txn.amountLocal,
                         fxRate: txn.fxRate,
                         txnTypeId: txn.txnTypeId,
+                        importedStatementId,
                         // Pass account IDs mapping
                         // import logic mapped these to: categoryId, accountId, fromAccountId, toAccountId
                     };
@@ -1010,18 +1142,13 @@ export class TransactionService {
             }
 
             // Broadcast
-            const affectedBranchIds = new Set(validTransactions.map(t => t.branchId));
-            affectedBranchIds.forEach(bid => {
-                WebSocketService.broadcastToBranch(bid, {
-                    event: 'transaction_created',
-                    data: { count: createdTxns.length, message: 'New transactions imported' }
-                });
-            });
+
 
             return {
                 success: true,
                 totalRows: rows.length,
                 insertedRows: createdTxns.length,
+                skippedRows: skippedRows,
                 errors: []
             };
 
@@ -1065,6 +1192,7 @@ export class TransactionService {
             fxRate: data.fxRate || '1',
             attachmentPath: data.attachmentPath || null,
             status,
+            importedStatementId: normalizeNumber(data.importedStatementId),
         };
     }
 
@@ -1456,7 +1584,7 @@ export class TransactionService {
 
         const limitClause = limit === -1 ? undefined : (limit ? limit : (accountId ? undefined : 50));
 
-        const txns = await db.select({
+        let txnsQuery = db.select({
             transaction: transactions,
             transactionType: transactionTypes,
             category: categories,
@@ -1511,7 +1639,13 @@ export class TransactionService {
             .leftJoin(parties, eq(transactions.contactId, parties.id))
             .where(and(...filters))
             .orderBy(desc(transactions.txnDate), desc(transactions.createdAt))
-            .limit(limitClause);
+            .$dynamic();
+            
+        if (limitClause !== undefined) {
+            txnsQuery = txnsQuery.limit(limitClause);
+        }
+
+        const txns = await txnsQuery;
 
         // Batch fetch entries
         const txnIds = txns.map(r => r.transaction.id);
@@ -1942,6 +2076,56 @@ export class TransactionService {
 
     static async getTransactionTypes() {
         return await db.select().from(transactionTypes);
+    }
+
+    static async getImportedStatements(orgId: number, branchId?: number, financialYearId?: number) {
+        let conditions = [eq(importedStatements.orgId, orgId)];
+        if (branchId) conditions.push(eq(importedStatements.branchId, branchId));
+        if (financialYearId) conditions.push(eq(importedStatements.financialYearId, financialYearId));
+
+        const results = await db.select({
+            id: importedStatements.id,
+            filename: importedStatements.filename,
+            importedAt: importedStatements.importedAt,
+            transactionCount: importedStatements.transactionCount,
+            status: importedStatements.status,
+            userId: users.id,
+            userName: users.fullName
+        }).from(importedStatements)
+          .leftJoin(users, eq(importedStatements.importedBy, users.id))
+          .where(and(...conditions))
+          .orderBy(desc(importedStatements.importedAt));
+
+        return results.map(row => ({
+            id: row.id,
+            filename: row.filename,
+            importedAt: row.importedAt,
+            transactionCount: row.transactionCount,
+            status: row.status,
+            user: {
+                id: row.userId,
+                name: row.userName
+            }
+        }));
+    }
+
+    static async revertImportedStatement(id: number, orgId: number, user: any) {
+        // Fetch the statement
+        const [statement] = await db.select().from(importedStatements).where(and(eq(importedStatements.id, id), eq(importedStatements.orgId, orgId)));
+        if (!statement) {
+            return { success: false, message: 'Statement not found' };
+        }
+        if (statement.status === 0) {
+            return { success: false, message: 'Statement is already reverted' };
+        }
+
+        // We can just use the existing delete logic
+        await db.delete(transactions).where(and(eq(transactions.importedStatementId, id), eq(transactions.orgId, orgId)));
+
+        // Mark statement as reverted
+        await db.update(importedStatements).set({ status: 0 }).where(eq(importedStatements.id, id));
+
+        return { success: true, message: `Successfully reverted imported statement` };
     }
 
 }
