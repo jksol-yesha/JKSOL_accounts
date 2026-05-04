@@ -12,7 +12,7 @@ import {
 ModuleRegistry.registerModules([AllCommunityModule]);
 import {
     Plus, Search, Filter, ArrowUpRight, ArrowDownLeft, Wallet, Building2, Calendar, FileText, Edit, Trash2,
-    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, ShoppingBag, History
+    Download, X, FileSpreadsheet, ChevronDown, ArrowUpDown, Paperclip, Eye, ExternalLink, User, Settings2, RefreshCcw, Check, TrendingUp, ChevronUp, PieChart as PieChartIcon, Activity, Users, ShoppingBag, History, MoreVertical
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../services/api';
@@ -95,12 +95,12 @@ const BranchTooltip = ({ branchNames }) => {
     const displayText = branchNames.join(', ');
     const needsTooltip = branchNames.length > 1 || displayText.length > 18;
     return (
-        <span
-            className="relative inline-block max-w-[120px]"
+        <div
+            className="relative flex items-center w-full min-w-0 h-full"
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}
         >
-            <span className="block truncate text-xs font-bold text-primary cursor-default hover:text-primary/80 transition-colors">
+            <span className="block truncate text-xs font-bold text-primary cursor-default hover:text-primary/80 transition-colors w-full">
                 {displayText}
             </span>
             {needsTooltip && visible && (
@@ -114,165 +114,138 @@ const BranchTooltip = ({ branchNames }) => {
                     ))}
                 </span>
             )}
-        </span>
+        </div>
     );
 };
 
-const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, defaultVisibleColumns }) => {
+const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, defaultVisibleColumns, isHeader }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const buttonRef = useRef(null);
-    const popupRef = useRef(null);
-    const [position, setPosition] = useState(null);
-    const popupWidth = 144;
+    const [isMounted, setIsMounted] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [localVisibleColumns, setLocalVisibleColumns] = useState(visibleColumns);
 
-    const [highlightedIndex, setHighlightedIndex] = useState(-1);
-    const resetButtonIndex = columns.length;
-    const totalInteractiveItems = columns.length + 1;
-
-    useLayoutEffect(() => {
-        if (!isOpen) {
-            setPosition(null);
-            return;
+    useEffect(() => {
+        let timer;
+        if (isOpen) {
+            setLocalVisibleColumns(visibleColumns);
+            setSearchQuery('');
+            timer = setTimeout(() => setIsMounted(true), 10);
+        } else {
+            setIsMounted(false);
         }
+        return () => clearTimeout(timer);
+    }, [isOpen, visibleColumns]);
 
-        const updatePosition = () => {
-            if (!buttonRef.current) return;
-            const rect = buttonRef.current.getBoundingClientRect();
-            setPosition({
-                top: rect.bottom + 8,
-                left: Math.max(8, rect.right - popupWidth),
-            });
-        };
-
-        updatePosition();
-
-        const handleClickOutside = (e) => {
-            if (!buttonRef.current?.contains(e.target) && !popupRef.current?.contains(e.target)) {
-                setIsOpen(false);
-                setHighlightedIndex(-1);
-            }
-        };
-
-        window.addEventListener('mousedown', handleClickOutside);
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-
-        return () => {
-            window.removeEventListener('mousedown', handleClickOutside);
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-        };
-    }, [isOpen]);
+    const filteredColumns = columns.filter(col => col.label.toLowerCase().includes(searchQuery.toLowerCase()));
 
     const toggleColumn = (key) => {
-        setVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+        setLocalVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
     };
 
-    const resetColumns = () => {
-        setVisibleColumns({ ...defaultVisibleColumns });
+    const handleClose = () => {
+        setIsMounted(false);
+        setTimeout(() => {
+            setIsOpen(false);
+        }, 200);
     };
 
-    const handleKeyDown = (e) => {
-        if (!isOpen) {
-            if (['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(e.key)) {
-                e.preventDefault();
-                setIsOpen(true);
-                setHighlightedIndex(0);
-            }
-            return;
-        }
-
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                setHighlightedIndex(prev => (prev + 1) % totalInteractiveItems);
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                setHighlightedIndex(prev => (prev - 1 + totalInteractiveItems) % totalInteractiveItems);
-                break;
-            case 'Enter':
-                e.preventDefault();
-                if (highlightedIndex >= 0 && highlightedIndex < columns.length && columns[highlightedIndex]) {
-                    toggleColumn(columns[highlightedIndex].key);
-                } else if (highlightedIndex === resetButtonIndex) {
-                    resetColumns();
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                setIsOpen(false);
-                setHighlightedIndex(-1);
-                buttonRef.current?.focus();
-                break;
-            case 'Tab':
-                setIsOpen(false);
-                setHighlightedIndex(-1);
-                break;
-        }
+    const handleSave = () => {
+        setIsMounted(false);
+        setTimeout(() => {
+            setVisibleColumns(localVisibleColumns);
+            setIsOpen(false);
+        }, 200);
     };
 
     return (
         <div className="relative inline-block text-left whitespace-nowrap">
             <button
                 type="button"
-                ref={buttonRef}
-                onClick={() => {
-                    const next = !isOpen;
-                    setIsOpen(next);
-                    setHighlightedIndex(-1);
-                }}
-                onKeyDown={handleKeyDown}
-                className="group h-[32px] px-2.5 flex items-center gap-1 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                onClick={() => setIsOpen(true)}
+                className={isHeader 
+                    ? "flex items-center justify-center p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-700 transition-colors"
+                    : "group h-[30px] flex items-center gap-1 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"}
             >
-                <Settings2 size={14} className="group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                <span className="hidden sm:inline">Columns</span>
+                <Settings2 size={14} className={isHeader ? "" : "group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors"} />
+                {!isHeader && <span className="hidden sm:inline">Columns</span>}
             </button>
-            {isOpen && position && createPortal(
-                <div
-                    ref={popupRef}
-                    style={{ position: 'fixed', top: position.top, left: position.left, zIndex: 9999 }}
-                    className="w-36 bg-white border border-gray-200 rounded-lg shadow-xl shadow-gray-200/50 py-1 z-[100]"
-                >
-                    <div
-                        className="overflow-y-auto"
-                        style={{ maxHeight: `${TXN_COLUMN_DROPDOWN_VISIBLE_OPTION_COUNT * 34}px` }}
-                    >
-                        {columns.map((col, idx) => {
-                            const isHighlighted = highlightedIndex === idx;
-                            return (
+            {isOpen && createPortal(
+                <div className={`fixed inset-0 z-[9999] bg-black/30 flex justify-center items-start pb-4 px-4 transition-opacity duration-200 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
+                    <div className={`bg-white rounded-lg shadow-2xl w-full max-w-[360px] flex flex-col overflow-hidden max-h-[350px] transition-all duration-200 transform ${isMounted ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/80">
+                            <div className="flex items-center gap-2">
+                                <Settings2 size={16} className="text-gray-500" />
+                                <h2 className="text-[14px] font-semibold text-gray-800">Customize Columns</h2>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                <span className="text-[11px] font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shadow-sm">
+                                    {Object.values(localVisibleColumns).filter(Boolean).length} of {columns.length} Selected
+                                </span>
+                                <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-200 rounded-md">
+                                    <X size={16} />
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div className="px-4 py-2 border-b border-gray-100">
+                            <div className="relative">
+                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                <input 
+                                    type="text" 
+                                    placeholder="Search columns..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all placeholder:text-gray-400 shadow-sm"
+                                    autoFocus
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto px-2 py-2 bg-slate-50/30">
+                            {filteredColumns.map((col) => (
                                 <button
                                     key={col.key}
-                                    type="button"
                                     onClick={() => toggleColumn(col.key)}
-                                    onMouseEnter={() => setHighlightedIndex(idx)}
-                                    onMouseLeave={() => setHighlightedIndex(-1)}
-                                    className={`w-full flex items-center px-1.5 pr-1 py-1.5 text-left transition-colors group ${isHighlighted ? 'bg-[#EEF0FC]' : 'hover:bg-[#EEF0FC]'}`}
+                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-100/80 rounded-md transition-colors text-left group border border-transparent hover:border-gray-200"
                                 >
-                                    <div className="flex items-center gap-1 flex-1 min-w-0">
-                                        <div className="w-2.5 flex justify-center shrink-0">
-                                            {visibleColumns[col.key] && <Check size={14} className="text-[#4A8AF4]" strokeWidth={2.5} />}
-                                        </div>
-                                        <div className="flex items-center gap-1 min-w-0 truncate">
-                                            <p className={`min-w-0 truncate tracking-tight text-[12px] ${visibleColumns[col.key] ? 'font-bold text-slate-800' : 'font-medium text-slate-600 group-hover:text-slate-800'}`}>
-                                                {col.label}
-                                            </p>
-                                        </div>
+                                    <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all shrink-0 ${localVisibleColumns[col.key] ? 'bg-[#4A8AF4] border-[#4A8AF4] text-white shadow-sm' : 'border-gray-300 bg-white group-hover:border-[#4A8AF4]'}`}>
+                                        {localVisibleColumns[col.key] && <Check size={12} strokeWidth={3} />}
                                     </div>
+                                    <span className={`text-[13px] ${localVisibleColumns[col.key] ? 'font-semibold text-gray-800' : 'font-medium text-gray-600'}`}>
+                                        {col.label}
+                                    </span>
                                 </button>
-                            );
-                        })}
-                    </div>
-                    <div className="mt-1 pt-1 border-t border-slate-100 bg-white flex justify-end gap-1.5 px-1 pb-0.5">
-                        <button
-                            type="button"
-                            onClick={resetColumns}
-                            onMouseEnter={() => setHighlightedIndex(resetButtonIndex)}
-                            onMouseLeave={() => setHighlightedIndex(-1)}
-                            className={`h-6 rounded-md bg-[#4A8AF4] px-4 text-[11px] font-semibold text-white shadow-sm transition-all hover:bg-[#3E79DE] hover:scale-[1.02] active:scale-[0.98] ${highlightedIndex === resetButtonIndex ? 'ring-2 ring-[#4A8AF4]/20 ring-offset-1' : ''}`}
-                        >
-                            Reset
-                        </button>
+                            ))}
+                            {filteredColumns.length === 0 && (
+                                <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
+                                    <Search size={20} className="text-gray-300" />
+                                    <span className="text-xs text-gray-500 font-medium">No columns match your search</span>
+                                </div>
+                            )}
+                        </div>
+
+                        <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
+                            <button
+                                onClick={() => setLocalVisibleColumns({ ...defaultVisibleColumns })}
+                                className="text-[12px] font-semibold text-[#4A8AF4] hover:text-[#3E79DE] transition-colors"
+                            >
+                                Reset to Default
+                            </button>
+                            <div className="flex items-center gap-2">
+                                <button
+                                    onClick={handleClose}
+                                    className="px-4 py-1.5 text-[12px] font-semibold text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:text-gray-900 transition-colors shadow-sm min-w-[70px]"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleSave}
+                                    className="px-4 py-1.5 text-[12px] font-semibold text-white bg-[#4A8AF4] border border-[#4A8AF4] rounded-md hover:bg-[#3E79DE] hover:border-[#3E79DE] transition-colors shadow-sm min-w-[70px]"
+                                >
+                                    Save
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>,
                 document.body
@@ -286,12 +259,12 @@ const PartyTooltip = ({ partyName }) => {
     if (!partyName || partyName === '-') return <span className="text-xs font-bold text-gray-700">-</span>;
     const needsTooltip = partyName.length > 15;
     return (
-        <span
-            className="relative inline-block max-w-[130px]"
+        <div
+            className="relative flex items-center w-full h-full min-w-0"
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}
         >
-            <span className="block truncate text-xs font-bold text-gray-700 cursor-default hover:text-gray-900 transition-colors">
+            <span className="truncate text-[13px] font-bold text-gray-700 cursor-default hover:text-gray-900 transition-colors">
                 {partyName}
             </span>
             {needsTooltip && visible && (
@@ -302,7 +275,7 @@ const PartyTooltip = ({ partyName }) => {
                     </span>
                 </span>
             )}
-        </span>
+        </div>
     );
 };
 
@@ -311,12 +284,12 @@ const DescriptionTooltip = ({ description }) => {
     if (!description || description === '-') return <span className="text-[12px] font-medium text-gray-400">-</span>;
     const needsTooltip = description.length > 25;
     return (
-        <span
-            className="relative inline-block w-full max-w-[250px]"
+        <div
+            className="relative flex items-center w-full h-full min-w-0"
             onMouseEnter={() => setVisible(true)}
             onMouseLeave={() => setVisible(false)}
         >
-            <span className="block truncate text-[12px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
+            <span className="truncate text-[12px] font-medium text-gray-800 cursor-default hover:text-gray-900 transition-colors">
                 {description}
             </span>
             {needsTooltip && visible && (
@@ -326,7 +299,7 @@ const DescriptionTooltip = ({ description }) => {
                     </span>
                 </span>
             )}
-        </span>
+        </div>
     );
 };
 
@@ -862,47 +835,31 @@ const AmountCellRenderer = (props) => {
     );
 };
 
-const ActionCellRenderer = (props) => {
-    const { data, context } = props;
-    if (!data) return null;
-
+const ColumnSettingsHeader = (props) => {
     return (
-        <div className="flex justify-end gap-1 px-1">
-            <div className="relative">
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        if (data.attachmentPath && context.setFullScreenAttachment) {
-                            context.setFullScreenAttachment({ isOpen: true, path: data.attachmentPath });
-                        }
-                    }}
-                    className={`p-1.5 rounded-lg transition-all ${data.attachmentPath
-                        ? "text-gray-400 hover:text-primary active:scale-95"
-                        : "text-gray-200 cursor-not-allowed"
-                        }`}
-                    title={data.attachmentPath ? "View Attachment" : "No Attachment"}
-                    disabled={!data.attachmentPath}
-                >
-                    <Paperclip size={14} strokeWidth={2.5} />
-                </button>
+        <div className="w-full h-full flex items-center justify-between gap-1 group">
+            <div className="flex items-center gap-1.5 -ml-3">
+                <ColumnVisibilityDropdown
+                    columns={TXN_TABLE_COLUMNS}
+                    visibleColumns={props.context.visibleColumns}
+                    setVisibleColumns={props.context.setVisibleColumns}
+                    defaultVisibleColumns={DEFAULT_VISIBLE_TXN_COLUMNS}
+                    isHeader={true}
+                />
+                <span className="font-medium">{props.displayName}</span>
             </div>
-            <button
-                onClick={() => context.handleEdit && context.handleEdit(data)}
-                disabled={!context.canEditTxn || !context.canEditTxn(data)}
-                className={`p-1.5 rounded-lg transition-colors ${(context.canEditTxn && context.canEditTxn(data)) ? "text-gray-400 hover:text-blue-600" : "text-gray-200 cursor-not-allowed"
-                    }`}
-                title={(context.canEditTxn && context.canEditTxn(data)) ? "Edit" : "You do not have access to edit this transaction"}
-            >
-                <Edit size={14} />
-            </button>
-            <button
-                type="button"
-                onClick={(e) => context.handleDelete && context.handleDelete(e, data)}
-                className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg transition-colors"
-                title="Delete"
-            >
-                <Trash2 size={14} />
-            </button>
+            {props.enableMenu && (
+                <button 
+                    onClick={(e) => props.showColumnMenu(e.currentTarget)} 
+                    className="text-gray-400 hover:text-gray-600 focus:outline-none transition-colors opacity-0 group-hover:opacity-100"
+                >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="4" y1="6" x2="20" y2="6"></line>
+                        <line x1="4" y1="12" x2="20" y2="12"></line>
+                        <line x1="4" y1="18" x2="20" y2="18"></line>
+                    </svg>
+                </button>
+            )}
         </div>
     );
 };
@@ -927,13 +884,14 @@ const Transactions = () => {
 
 
     const colDefs = useMemo(() => {
-        return [
+        const baseDefs = [
             {
                 field: 'id',
-                headerName: 'Id',
+                headerName: 'ID',
                 hide: !visibleColumns.id,
-                minWidth: 80,
-                maxWidth: 100,
+                minWidth: 60,
+                maxWidth: 80,
+                checkboxSelection: false,
                 valueGetter: params => (typeof params.node?.rowIndex === 'number' ? params.node.rowIndex + 1 : '')
             },
             { field: 'party', headerName: 'Party', hide: !visibleColumns.party, minWidth: 150, cellRenderer: (params) => <PartyTooltip partyName={params.value} />, flex: 1.5, valueGetter: params => params.data?.contact || params.data?.payee || params.data?.counterpartyName || params.data?.party || '-' },
@@ -944,9 +902,23 @@ const Transactions = () => {
             { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} textClassName="text-[12px] font-medium text-gray-700" /> },
             { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 2, minWidth: 200 },
             { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned' },
-            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[12px] font-medium text-gray-400', minWidth: 130 },
-            { headerName: 'Actions', field: 'actions', minWidth: 100, maxWidth: 100, cellRenderer: ActionCellRenderer, sortable: false, filter: false }
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[12px] font-medium text-gray-400', minWidth: 130 }
         ];
+
+        const firstVisibleIndex = baseDefs.findIndex(col => !col.hide);
+        if (firstVisibleIndex !== -1) {
+            const currentCellClass = baseDefs[firstVisibleIndex].cellClass;
+            baseDefs[firstVisibleIndex] = {
+                ...baseDefs[firstVisibleIndex],
+                headerComponent: ColumnSettingsHeader,
+                cellClass: (params) => {
+                    const baseClass = typeof currentCellClass === 'function' ? currentCellClass(params) : (currentCellClass || '');
+                    return `${baseClass} !pl-[36px]`.trim();
+                }
+            };
+        }
+
+        return baseDefs;
     }, [visibleColumns]);
 
     const defaultColDef = useMemo(() => ({
@@ -1895,7 +1867,7 @@ const Transactions = () => {
                                 neutralCountBadge
                                 selectAllLabel="All Parties"
                                 allDisplayLabel="All Parties"
-                                buttonClassName="w-[120px] text-slate-800 font-semibold h-[32px]"
+                                buttonClassName="w-[120px] text-slate-800 h-[32px]"
                             />
 
                             <FilterDropdown
@@ -1917,37 +1889,20 @@ const Transactions = () => {
                                 buttonClassName="w-[110px] h-[32px]"
                             />
 
-                            <ColumnVisibilityDropdown
-                                columns={TXN_TABLE_COLUMNS}
-                                visibleColumns={visibleColumns}
-                                setVisibleColumns={setVisibleColumns}
-                                defaultVisibleColumns={DEFAULT_VISIBLE_TXN_COLUMNS}
-                            />
 
                             <button
                                 type="button"
                                 onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="flex items-center gap-1.5 px-2 py-1 rounded-md ml-1 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all h-[32px]"
+                                className={`group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] ${isInsightsExpanded ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]'}`}
                             >
-                                <TrendingUp size={14} />
-                                {isInsightsExpanded ? "Hide Chart" : "Show Chart"}
-                                {isInsightsExpanded ? (
-                                    <ChevronUp size={14} />
-                                ) : (
-                                    <ChevronDown size={14} />
-                                )}
+                                <Activity size={14} className={isInsightsExpanded ? "text-blue-500" : "text-gray-400 group-hover:text-[#4A8AF4] transition-colors"} />
+                                <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
                             </button>
-                            {isInsightsExpanded && (
-                                <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold ml-1">
-                                    <Calendar size={13} />
-                                    <span>Last 30 days</span>
-                                </div>
-                            )}
                         </div>
 
                         {/* RIGHT SIDE: Utilities & Search */}
                         <div className="shrink-0 flex flex-wrap items-center justify-start xl:justify-end gap-2 flex-none mt-2 xl:mt-0">
-                            <label className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus-within:bg-[#F0F9FF] focus-within:border-[#BAE6FD] focus-within:text-[#4A8AF4] focus-within:ring-2 focus-within:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer">
+                            <label className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-blue-600 hover:bg-blue-50 hover:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer">
                                 <input 
                                     type="file" 
                                     accept=".pdf" 
@@ -1976,127 +1931,78 @@ const Transactions = () => {
                                     }}
                                 />
                                 {isUploadingStatement ? (
-                                    <span className="font-medium text-slate-400">Parsing...</span>
+                                    <span className="font-medium text-blue-400">Parsing...</span>
                                 ) : (
-                                    <span className="font-medium">Import</span>
+                                    <span className="font-medium">Import Statement</span>
                                 )}
                             </label>
-
-                            <button
-                                onClick={() => setIsImportHistoryOpen(true)}
-                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <History size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span className="hidden sm:inline">History</span>
-                            </button>
 
                             <div className="relative" ref={exportDropdownRef}>
                                 <button
                                     onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                    className="group h-[32px] px-2 flex items-center justify-center rounded-md text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
                                 >
-                                    <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                    <span className="hidden sm:inline">Export</span>
+                                    <MoreVertical size={16} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
                                 </button>
 
                                 {isExportDropdownOpen && (
-                                    <div className="absolute right-0 mt-1.5 w-28 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                        <button
+                                            onClick={() => {
+                                                setIsExportDropdownOpen(false);
+                                                setIsImportHistoryOpen(true);
+                                            }}
+                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
+                                        >
+                                            <History size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                            Import History
+                                        </button>
+                                        <div className="h-px bg-gray-100 my-1"></div>
+                                        <div className="px-4 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Export As</div>
                                         <button
                                             onClick={() => {
                                                 setIsExportDropdownOpen(false);
                                                 handleClientExportExcel();
                                             }}
-                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
                                         >
-                                            Excel
+                                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                            Excel Document
                                         </button>
                                         <button
                                             onClick={() => {
                                                 setIsExportDropdownOpen(false);
                                                 handleClientExportPDF();
                                             }}
-                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center justify-between group"
+                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
                                         >
-                                            PDF
+                                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                            PDF Document
                                         </button>
                                     </div>
                                 )}
-                            </div>
-
-                            <div className="relative group w-full xl:w-[240px] max-w-[300px]">
-                                <Search
-                                    size={14}
-                                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
-                                />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search"
-                                    className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                />
                             </div>
                         </div>
                     </div>
 
                     {/* Conditionally Visible Charts */}
-                    <div className="px-5 w-full animate-in fade-in duration-300 print:hidden">
-                        {/* Charts Area */}
-                        {isInsightsExpanded && (
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 pb-6 border-b border-gray-200 animate-in slide-in-from-top-4 fade-in duration-300">
-                                <div className="lg:col-span-6">
-                                    <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                        <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
-                                    </h3>
-                                    <div className="h-[220px] w-full">
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
-                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                                                <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
-                                                <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
-                                                    tickFormatter={(val) => {
-                                                        if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-                                                        if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
-                                                        return val;
-                                                    }}
-                                                />
-                                                <Tooltip
-                                                    cursor={{ fill: 'transparent' }}
-                                                    content={({ active, payload, label }) => {
-                                                        if (active && payload && payload.length) {
-                                                            return (
-                                                                <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
-                                                                    <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
-                                                                    {payload.map((entry, index) => (
-                                                                        <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
-                                                                            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                            <span className="text-gray-600 w-16">{entry.name}:</span>
-                                                                            <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
-                                                                                {formatCurrency(entry.value)}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    }}
-                                                />
-                                                <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                                <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    </div>
-                                </div>
-
-                                <div className="lg:col-span-6">
-                                    <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
-                                        <FileText size={14} className="text-black" /> Tax Paid
-                                    </h3>
-                                    <div className="h-[220px] w-full">
-                                        {insightsData.totalGstPaid > 0 ? (
+                    <div className="px-5 w-full print:hidden">
+                        <div 
+                            className={`grid transition-all duration-300 ease-in-out ${
+                                isInsightsExpanded 
+                                    ? "grid-rows-[1fr] opacity-100 mb-0" 
+                                    : "grid-rows-[0fr] opacity-0 mb-3"
+                            }`}
+                        >
+                            <div className="overflow-hidden">
+                                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 pt-4 pb-6 border-b border-gray-200">
+                                    <div className="lg:col-span-6">
+                                        <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                            <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
+                                        </h3>
+                                        <div className="h-[220px] w-full">
                                             <ResponsiveContainer width="100%" height="100%">
-                                                <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+                                                <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                                                     <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
                                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
@@ -2111,31 +2017,78 @@ const Transactions = () => {
                                                         content={({ active, payload, label }) => {
                                                             if (active && payload && payload.length) {
                                                                 return (
-                                                                    <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
-                                                                        <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
-                                                                        <div className="flex items-center justify-between gap-4">
-                                                                            <span className="text-[13px] font-medium text-gray-600">Tax Paid:</span>
-                                                                            <span className="text-[14px] font-bold text-black">{formatCurrency(payload[0].value)}</span>
-                                                                        </div>
+                                                                    <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
+                                                                        <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
+                                                                        {payload.map((entry, index) => (
+                                                                            <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
+                                                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                                <span className="text-gray-600 w-16">{entry.name}:</span>
+                                                                                <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
+                                                                                    {formatCurrency(entry.value)}
+                                                                                </span>
+                                                                            </div>
+                                                                        ))}
                                                                     </div>
                                                                 );
                                                             }
                                                             return null;
                                                         }}
                                                     />
-                                                    <Bar dataKey="gstPaid" name="Tax Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="income" name="Income" fill="#10b981" radius={[4, 4, 0, 0]} />
+                                                    <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                                                 </BarChart>
                                             </ResponsiveContainer>
-                                        ) : (
-                                            <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
-                                                <FileText size={24} className="text-gray-200" />
-                                                <span>No tax paid in this view</span>
-                                            </div>
-                                        )}
+                                        </div>
+                                    </div>
+
+                                    <div className="lg:col-span-6">
+                                        <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                            <FileText size={14} className="text-black" /> Tax Paid
+                                        </h3>
+                                        <div className="h-[220px] w-full">
+                                            {insightsData.totalGstPaid > 0 ? (
+                                                <ResponsiveContainer width="100%" height="100%">
+                                                    <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
+                                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                                                        <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
+                                                        <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
+                                                            tickFormatter={(val) => {
+                                                                if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
+                                                                if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                                return val;
+                                                            }}
+                                                        />
+                                                        <Tooltip
+                                                            cursor={{ fill: 'transparent' }}
+                                                            content={({ active, payload, label }) => {
+                                                                if (active && payload && payload.length) {
+                                                                    return (
+                                                                        <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
+                                                                            <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
+                                                                            <div className="flex items-center justify-between gap-4">
+                                                                                <span className="text-[13px] font-medium text-gray-600">Tax Paid:</span>
+                                                                                <span className="text-[14px] font-bold text-black">{formatCurrency(payload[0].value)}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                                return null;
+                                                            }}
+                                                        />
+                                                        <Bar dataKey="gstPaid" name="Tax Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                                                    </BarChart>
+                                                </ResponsiveContainer>
+                                            ) : (
+                                                <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
+                                                    <FileText size={24} className="text-gray-200" />
+                                                    <span>No tax paid in this view</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        )}
+                        </div>
                     </div>
 
 
@@ -2153,19 +2106,26 @@ const Transactions = () => {
                                     columnDefs={colDefs}
                                     defaultColDef={defaultColDef}
                                     rowSelection="multiple"
-                                    rowHeight={42}
+                                    rowHeight={36}
                                     headerHeight={44}
                                     animateRows={true}
                                     pagination={true}
                                     paginationPageSize={50}
                                     paginationPageSizeSelector={[25, 50, 100, 200]}
+                                    onRowClicked={(event) => {
+                                        if (canEditTxn(event.data)) {
+                                            handleEdit(event.data);
+                                        }
+                                    }}
                                     context={{
                                         handleEdit,
                                         handleDelete,
                                         canEditTxn,
                                         setFullScreenAttachment,
                                         formatCurrency,
-                                        formatDate
+                                        formatDate,
+                                        visibleColumns,
+                                        setVisibleColumns
                                     }}
                                     overlayNoRowsTemplate={
                                         loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'

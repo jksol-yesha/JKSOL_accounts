@@ -206,7 +206,7 @@ const CurrencySelector = React.forwardRef(({
                 )}
             >
                 <div className={cn(
-                    "flex items-center gap-1 text-[13px] font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors",
+                    "flex items-center gap-1 text-[13px] font-medium text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors",
                     triggerTextClassName,
                 )}>
                     {hasSymbolLabel ? (

@@ -384,12 +384,12 @@ const DateRangePicker = forwardRef(({
                 <CalendarDays size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors shrink-0" />
                 <div className="flex-1 text-left truncate">
                     {startDate ? (
-                        <span className="text-[12px]  font-semibold text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
+                        <span className="text-[12px] font-medium text-slate-800 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors">
                             {formatDisplayDate(startDate)}
                             {endDate && endDate !== startDate ? ` to ${formatDisplayDate(endDate)}` : ''}
                         </span>
                     ) : (
-                        <span className="text-[12px]  font-semibold text-slate-400">{placeholder}</span>
+                        <span className="text-[12px] font-medium text-slate-400">{placeholder}</span>
                     )}
                 </div>
             </button>

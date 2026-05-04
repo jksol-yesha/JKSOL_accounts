@@ -190,12 +190,12 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
                 >
                     <Building2 size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                     {isAllBranchesApplied ? (
-                        <span className={`${allBranchesLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                        <span className={`${allBranchesLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
                             All Branches
                         </span>
                     ) : selectedBranch?.id === 'all' || selectedBranch?.id === 'multi' ? (
                         <div className={`flex items-center gap-1.5 min-w-0 ${selectionRowCompactClassName}`}>
-                            <span className={`${selectionLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                            <span className={`${selectionLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
                                 {allBranchLabel || 'All Branches'}
                             </span>
                             {remainingBranchCount > 0 && (
@@ -206,7 +206,7 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
                             )}
                         </div>
                     ) : (
-                        <span className={`${selectionLabelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                        <span className={`${selectionLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
                             {selectedBranch?.name || 'Select Branch'}
                         </span>
                     )}
