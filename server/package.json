@@ -10,6 +10,7 @@
   "private": true,
   "devDependencies": {
     "@types/bun": "latest",
+    "@types/pdf-parse": "^1.1.5",
     "drizzle-kit": "^0.31.8"
   },
   "peerDependencies": {

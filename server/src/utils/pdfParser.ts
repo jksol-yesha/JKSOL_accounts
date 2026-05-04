@@ -1,4 +1,4 @@
-import pdf from 'pdf-parse/lib/pdf-parse.js';
+import pdf from 'pdf-parse';
 import crypto from 'crypto';
 
 export interface ParsedTransaction {
@@ -83,7 +83,7 @@ export async function parseBankStatement(buffer: Buffer): Promise<ParsedStatemen
     // Find opening balance if possible
     let runningBalance: number | null = null;
     const openingBalMatch = fullHeader.match(/(?:OPENING BALANCE|BROUGHT FORWARD|BALANCE).*?((?:\d{1,3}(?:,\d{3})*|\d+)\.\d{2})/i);
-    if (openingBalMatch) {
+    if (openingBalMatch && openingBalMatch[1]) {
         runningBalance = parseFloat(openingBalMatch[1].replace(/,/g, ''));
     }
 
@@ -94,6 +94,8 @@ export async function parseBankStatement(buffer: Buffer): Promise<ParsedStatemen
 
     for (let i = 0; i < blocks.length; i++) {
         const block = blocks[i];
+        if (!block) continue;
+        
         const dates: string[] = [];
         let dateMatch;
         while ((dateMatch = localDateRegex.exec(block)) !== null) {
@@ -103,14 +105,15 @@ export async function parseBankStatement(buffer: Buffer): Promise<ParsedStatemen
 
         let blockWithoutDates = block.replace(localDateRegex, ' ');
         const firstDateStr = dates[0];
+        if (!firstDateStr) continue;
         let [_, d, m, y] = firstDateStr.match(/(\d{2})[./-](\d{2})[./-](20\d{2}|19\d{2}|\d{2})/) || [];
-        if (y.length === 2) y = "20" + y; 
+        if (y && y.length === 2) y = "20" + y; 
         const dateObj = new Date(`${y}-${m}-${d}T00:00:00Z`);
 
         const amounts: { value: number, type: 'DR' | 'CR' | 'UNKNOWN' }[] = [];
         let amtMatch;
         while ((amtMatch = localAmountRegex.exec(blockWithoutDates)) !== null) {
-            const val = parseFloat(amtMatch[1].replace(/,/g, ''));
+            const val = parseFloat((amtMatch[1] || '0').replace(/,/g, ''));
             const suffix = amtMatch[2]?.toUpperCase();
             amounts.push({
                 value: val,
@@ -233,8 +236,8 @@ export async function parseBankStatement(buffer: Buffer): Promise<ParsedStatemen
     }
 
     return {
-        accountNumber,
-        bankName,
+        accountNumber: accountNumber || null,
+        bankName: bankName || null,
         transactions
     };
 }
