@@ -29,6 +29,23 @@ const timeZones = [
     { value: 'UTC', label: 'UTC' },
 ];
 
+const CurrencyOption = ({ symbol, code, isSelected }) => (
+    <div className="flex items-center gap-2 w-full pr-1">
+        <span className={cn(
+            "text-[12px] min-w-[16px] text-right font-medium whitespace-nowrap",
+            isSelected ? "text-slate-900" : "text-slate-400"
+        )}>
+            {symbol}
+        </span>
+        <span className={cn(
+            "text-[11px] tracking-wide whitespace-nowrap",
+            isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"
+        )}>
+            {code}
+        </span>
+    </div>
+);
+
 export const PreferenceSettingsFields = ({ draftPreferences, onChange, className = '' }) => {
     const { currencyOptions } = useCurrencyOptions();
 
@@ -43,10 +60,15 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     name="currency"
                     value={draftPreferences.currency || 'INR'}
                     onChange={onChange}
+                    showSelectedCheck
                     className="w-full py-1.5 px-3 bg-[#f1f3f9] border border-transparent rounded-xl text-sm font-medium text-gray-700 outline-none focus:bg-white focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all appearance-none cursor-pointer"
                 >
-                    {currencyOptions.map((currency) => (
-                        <option key={currency.code} value={currency.code}>{currency.label}</option>
+                    {currencyOptions
+                        .filter(c => ['INR', 'USD', 'EUR', 'GBP', 'AED'].includes(c.code))
+                        .map((currency) => (
+                        <option key={currency.code} value={currency.code}>
+                            <CurrencyOption symbol={currency.symbol} code={currency.code} isSelected={draftPreferences.currency === currency.code} />
+                        </option>
                     ))}
                 </CustomSelect>
             </div>
@@ -114,12 +136,6 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
 
 const PreferenceSettingsSection = ({ className = '' }) => {
     const { preferences, updatePreferences } = usePreferences();
-    const [saveDialog, setSaveDialog] = React.useState({
-        open: false,
-        title: '',
-        message: '',
-        tone: 'success'
-    });
     const [draftPreferences, setDraftPreferences] = React.useState(preferences);
 
     React.useEffect(() => {
@@ -143,12 +159,7 @@ const PreferenceSettingsSection = ({ className = '' }) => {
             await updatePreferences(changedPrefs);
         }
 
-        setSaveDialog({
-            open: true,
-            title: 'Settings Saved',
-            message: 'Settings saved successfully!',
-            tone: 'success'
-        });
+
         window.dispatchEvent(new Event('preferencesUpdated'));
     };
 
@@ -161,7 +172,7 @@ const PreferenceSettingsSection = ({ className = '' }) => {
                     <div className="md:col-span-8 flex justify-end">
                         <button
                             onClick={handleSave}
-                                className="w-11 h-11 rounded-full bg-black hover:bg-black/90 text-white shadow-md transition-all active:scale-95 flex items-center justify-center shadow-black/20"
+                                className="w-11 h-11 rounded-full bg-black hover:bg-black/90 text-white shadow-md transition-all flex items-center justify-center shadow-black/20"
                             >
                                 <Check size={20} strokeWidth={3.5} />
                             </button>
@@ -169,45 +180,7 @@ const PreferenceSettingsSection = ({ className = '' }) => {
                 </div>
             </Card>
 
-            {saveDialog.open && (
-                <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4 animate-in fade-in duration-200">
-                    <div className="w-full max-w-md rounded-xl bg-white shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-6">
-                            <div className="flex items-start gap-3">
-                                <div className={cn(
-                                    'flex h-12 w-12 shrink-0 items-center justify-center rounded-full',
-                                    saveDialog.tone === 'success' ? 'bg-gray-100' : 'bg-amber-50'
-                                )}>
-                                    {saveDialog.tone === 'success' ? (
-                                        <CheckCircle2 size={24} className="text-gray-700" />
-                                    ) : (
-                                        <AlertTriangle size={24} className="text-amber-600" />
-                                    )}
-                                </div>
-                                <div className="min-w-0">
-                                    <h3 className="text-lg font-semibold text-gray-900">{saveDialog.title}</h3>
-                                    <p className="mt-1 text-sm leading-6 text-gray-500">{saveDialog.message}</p>
-                                </div>
-                            </div>
 
-                            <div className="mt-6 flex justify-end">
-                                <button
-                                    type="button"
-                                    onClick={() => setSaveDialog((prev) => ({ ...prev, open: false }))}
-                                    className={cn(
-                                        'px-4 py-2.5 text-sm font-medium text-white rounded-lg transition-colors',
-                                        saveDialog.tone === 'success'
-                                            ? 'bg-gray-700 hover:bg-gray-800'
-                                            : 'bg-amber-600 hover:bg-amber-700'
-                                    )}
-                                >
-                                    OK
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
         </>
     );
 };

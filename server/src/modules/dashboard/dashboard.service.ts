@@ -353,7 +353,7 @@ export const DashboardService = {
         const displayCurrency = targetCurrency || orgBaseCurrency;
 
         console.log(`[DashboardAPI] Resolved Dates: ${startDate} to ${endDate}`);
-        
+
         const getDynamicTotal = async (
             filterFn: (t: typeof transactions) => any
         ): Promise<number> => {
@@ -373,7 +373,7 @@ export const DashboardService = {
                 .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
                 .where(and(...whereClause))
                 .groupBy(sql`${currencies.code}`);
-            
+
             let total = 0;
             for (const row of rows) {
                 const amount = Number(row.totalDisplayValue || 0);
@@ -433,7 +433,7 @@ export const DashboardService = {
         const types = await db.select().from(transactionTypes);
         const getTypeIds = (...aliases: string[]) =>
             types.filter(t => aliases.includes((t.name || '').trim().toLowerCase())).map(t => t.id);
-        
+
         const incomeIds = getTypeIds('income');
         const expenseIds = getTypeIds('expense');
         const investmentIds = getTypeIds('investment', 'invest');
@@ -471,7 +471,8 @@ export const DashboardService = {
         const accountFilters = [
             eq(accounts.orgId, orgId),
             isNotDeleted(accounts),
-            inArray(accounts.status, [1, 2])
+            inArray(accounts.status, [1, 2]),
+            inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
         ];
 
         const activeAccounts = await db.select({
@@ -516,19 +517,7 @@ export const DashboardService = {
                 sql`DATE(${t.txnDate}) <= ${endDate}`
             )
         );
-        const totalInvestmentByType = investmentIds.length > 0
-            ? await getDynamicTotal(
-                (t) => and(
-                    sql`DATE(${t.txnDate}) >= ${startDate}`,
-                    sql`DATE(${t.txnDate}) <= ${endDate}`,
-                    eq(t.status, 1),
-                    inArray(t.txnTypeId, investmentIds)
-                )
-            )
-            : 0;
-        const totalInvestment = totalInvestmentByAccount > 0
-            ? totalInvestmentByAccount
-            : totalInvestmentByType;
+        const totalInvestment = totalInvestmentByAccount;
         const [investmentBalance = 0] = await getInvestmentBalanceSeries({
             orgId,
             branchId,
@@ -625,7 +614,7 @@ export const DashboardService = {
             const types = await db.select().from(transactionTypes);
             const getTypeIds = (...aliases: string[]) =>
                 types.filter(t => aliases.includes((t.name || '').toLowerCase())).map(t => t.id);
-            
+
             const incomeIds = getTypeIds('income');
             const expenseIds = getTypeIds('expense');
             const investmentIds = getTypeIds('investment', 'invest');
@@ -686,7 +675,6 @@ export const DashboardService = {
 
             const income = Array(count).fill(0);
             const expense = Array(count).fill(0);
-            const investmentByType = Array(count).fill(0);
             const investmentByAccount = Array(count).fill(0);
 
             for (const row of rows) {
@@ -704,7 +692,6 @@ export const DashboardService = {
                 const typeName = (row.typeName || '').toLowerCase();
                 if (typeName === 'income') income[index] += converted;
                 if (typeName === 'expense') expense[index] += converted;
-                if (typeName === 'investment' || typeName === 'invest') investmentByType[index] += converted;
             }
 
             for (const row of investmentRows) {
@@ -724,7 +711,7 @@ export const DashboardService = {
                 investmentByAccount[index] += converted;
             }
 
-            const investment = investmentByAccount.map((value, index) => value > 0 ? value : investmentByType[index]);
+            const investment = investmentByAccount;
             const investmentBalance = await getInvestmentBalanceSeries({
                 orgId,
                 branchId,
@@ -759,12 +746,12 @@ export const DashboardService = {
         };
 
         console.log(`[DashboardAPI] Trends Request: Org=${orgId}, Range=${currentFy.startDate} - ${currentFy.endDate}, Compare=${customCompareStartDate} - ${customCompareEndDate}`);
-        
+
         const currentSeries = await buildPeriodSeries(currentFy, customStartDate, customEndDate);
         const compareSeries = (customCompareStartDate || compareFy)
             ? await buildPeriodSeries(
-                compareFy || currentFy, 
-                customCompareStartDate || (compareFy ? subtractYear(customStartDate || '') : undefined), 
+                compareFy || currentFy,
+                customCompareStartDate || (compareFy ? subtractYear(customStartDate || '') : undefined),
                 customCompareEndDate || (compareFy ? subtractYear(customEndDate || '') : undefined)
             )
             : null;
@@ -924,7 +911,7 @@ export const DashboardService = {
                 ifsc: acc.ifsc,
                 bankCode: bankMeta.bankCode,
                 bankName: acc.bankName ?? null,
-                bankLogoKey: bankMeta.bankLogoKey
+                bankLogoKey: null
             });
         }
 
@@ -938,14 +925,14 @@ export const DashboardService = {
         const transferBalances: any[] = [];
 
         if (validTypes.length > 0) {
-        const transferWhereClause = [
-            eq(transactions.orgId, orgId),
-            isNotDeleted(transactions),
-            eq(transactions.status, 1),
-            inArray(transactions.txnTypeId, validTypes),
-            isNotDeleted(accounts),
-            lte(transactions.txnDate, endDate)  // Running lifetime balance up to end date
-        ];
+            const transferWhereClause = [
+                eq(transactions.orgId, orgId),
+                isNotDeleted(transactions),
+                eq(transactions.status, 1),
+                inArray(transactions.txnTypeId, validTypes),
+                isNotDeleted(accounts),
+                lte(transactions.txnDate, endDate)  // Running lifetime balance up to end date
+            ];
             applyTxnBranchFilter(transferWhereClause, branchId, user);
 
             const transferEntriesQuery = await db.select({
@@ -1109,14 +1096,14 @@ export const DashboardService = {
             openingBalanceDate: accounts.openingBalanceDate,
             currencyCode: currencies.code,
         })
-        .from(accounts)
-        .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-        .where(and(
-            eq(accounts.orgId, orgId),
-            isNotDeleted(accounts),
-            inArray(accounts.status, [1, 2]),
-            inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
-        ));
+            .from(accounts)
+            .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
+            .where(and(
+                eq(accounts.orgId, orgId),
+                isNotDeleted(accounts),
+                inArray(accounts.status, [1, 2]),
+                inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
+            ));
 
         // Extract active account IDs to scope movement queries
         const activeAccountIds = activeAccounts.map(a => a.id);
@@ -1124,7 +1111,7 @@ export const DashboardService = {
         // 4. Fetch cumulative net movement for these accounts up to end date
         // We need movements BEFORE start date to get the "initial" balance at start of range,
         // and movements WITHIN the range to get daily/monthly points.
-        
+
         if (activeAccountIds.length === 0) {
             return seriesItems.map((item) => {
                 return { date: item.label, bank: 0, card: 0, cash: 0 };
@@ -1148,11 +1135,11 @@ export const DashboardService = {
             currencyCode: currencies.code,
             netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
         })
-        .from(transactionEntries)
-        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
-        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
-        .where(and(...movementWhere))
-        .groupBy(transactionEntries.accountId, periodKeySql, currencies.code);
+            .from(transactionEntries)
+            .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+            .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+            .where(and(...movementWhere))
+            .groupBy(transactionEntries.accountId, periodKeySql, currencies.code);
 
         // 5. Build the series
         // Map account movements by ID and periodKey for quick lookup
@@ -1184,12 +1171,12 @@ export const DashboardService = {
             currencyCode: currencies.code,
             netAmount: sql<string>`SUM(COALESCE(${transactionEntries.debit}, 0) - COALESCE(${transactionEntries.credit}, 0))`
         })
-        .from(transactionEntries)
-        .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
-        .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
-        .where(and(...beforeRangeWhere))
-        .groupBy(transactionEntries.accountId, currencies.code);
-        
+            .from(transactionEntries)
+            .innerJoin(transactions, eq(transactionEntries.transactionId, transactions.id))
+            .leftJoin(currencies, eq(transactions.currencyId, currencies.id))
+            .where(and(...beforeRangeWhere))
+            .groupBy(transactionEntries.accountId, currencies.code);
+
         const beforeMap = new Map<number, number>();
         for (const movement of beforeRangeMovements) {
             const convertedNet = await convertAmount(
@@ -1203,7 +1190,7 @@ export const DashboardService = {
 
         // 6. Calculate balances for each point
         const resultSeries = [];
-        
+
         // Prepare initial balances for each account at start of series
         const accountStates = await Promise.all(activeAccounts.map(async (acc) => {
             const opening = Number(acc.openingBalance || 0);

@@ -359,7 +359,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                 )}
                 onClick={onClose}
             ></div>
-            
+
             <div className={cn(
                 "fixed inset-y-0 right-0 z-[120] w-full max-w-[480px] bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden",
                 isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
@@ -370,7 +370,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                         <div className="flex items-center gap-2">
                             <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 shadow-sm flex items-center justify-center text-[#4A8AF4]">
                                 {isCreating ? (
-                                    <button onClick={exitFormView} className="hover:text-black transition-colors outline-none"><ArrowLeft size={14} strokeWidth={2.5}/></button>
+                                    <button onClick={exitFormView} className="hover:text-black transition-colors outline-none"><ArrowLeft size={14} strokeWidth={2.5} /></button>
                                 ) : (
                                     <Building2 size={14} strokeWidth={2.5} />
                                 )}
@@ -443,78 +443,78 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                             <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                         </div>
                                     ) : (
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                                        {branchesList.length === 0 && hasLoadedOnce && !isLoading ? (
-                                        <div className="text-center py-4 text-gray-400 text-xs">No branches found.</div>
-                                    ) : (
-                                        branchesList.map((branch) => {
-                                            const isSelected = selectedBranchIds?.includes(Number(branch.id)) || false;
-                                            return (
-                                                <div
-                                                    key={branch.id}
-                                                    className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
-                                                >
-                                                    <div className="flex items-center gap-3 flex-1">
-                                                        {/* Selection Dot */}
+                                        <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                            {branchesList.length === 0 && hasLoadedOnce && !isLoading ? (
+                                                <div className="text-center py-4 text-gray-400 text-xs">No branches found.</div>
+                                            ) : (
+                                                branchesList.map((branch) => {
+                                                    const isSelected = selectedBranchIds?.includes(Number(branch.id)) || false;
+                                                    return (
                                                         <div
-                                                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-black' : 'bg-transparent'}`}
-                                                        />
+                                                            key={branch.id}
+                                                            className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
+                                                        >
+                                                            <div className="flex items-center gap-3 flex-1">
+                                                                {/* Selection Dot */}
+                                                                <div
+                                                                    className={`w-2 h-2 rounded-full ${isSelected ? 'bg-black' : 'bg-transparent'}`}
+                                                                />
 
-                                                        <div>
-                                                            <div className="flex items-center gap-2">
-                                                                <div className="text-sm font-bold text-gray-700">
-                                                                    {branch.name}
+                                                                <div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="text-sm font-bold text-gray-700">
+                                                                            {branch.name}
+                                                                        </div>
+                                                                        {/* Status Indicator */}
+                                                                        {branch.status === 2 && (
+                                                                            <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
+                                                                                Inactive
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="text-[10px] text-gray-400 font-medium flex gap-2">
+                                                                        <span>{branch.country || 'Unknown Country'}</span>
+                                                                        <span>•</span>
+                                                                        <span>{branch.currencyCode}</span>
+                                                                    </div>
                                                                 </div>
-                                                                {/* Status Indicator */}
-                                                                {branch.status === 2 && (
-                                                                    <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">
-                                                                        Inactive
-                                                                    </span>
-                                                                )}
                                                             </div>
-                                                            <div className="text-[10px] text-gray-400 font-medium flex gap-2">
-                                                                <span>{branch.country || 'Unknown Country'}</span>
-                                                                <span>•</span>
-                                                                <span>{branch.currencyCode}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
 
-                                                    {['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase()) && (
-                                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); handleEdit(branch); }}
-                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                                title="Edit Branch"
-                                                            >
-                                                                <Edit2 size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => handleToggleStatus(e, branch)}
-                                                                className={`p-1.5 rounded-lg transition-colors ${branch.status === 1
-                                                                    ? 'text-emerald-500 hover:text-rose-600 hover:bg-rose-50'
-                                                                    : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
-                                                                    }`}
-                                                                title={branch.status === 1 ? "Deactivate Branch" : "Activate Branch"}
-                                                            >
-                                                                <Power size={14} className={branch.status === 1 ? "fill-current" : ""} />
-                                                            </button>
+                                                            {['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase()) && (
+                                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                    <button
+                                                                        onClick={(e) => { e.stopPropagation(); handleEdit(branch); }}
+                                                                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                                                        title="Edit Branch"
+                                                                    >
+                                                                        <Edit2 size={14} />
+                                                                    </button>
+                                                                    <button
+                                                                        onClick={(e) => handleToggleStatus(e, branch)}
+                                                                        className={`p-1.5 rounded-lg transition-colors ${branch.status === 1
+                                                                            ? 'text-emerald-500 hover:text-rose-600 hover:bg-rose-50'
+                                                                            : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'
+                                                                            }`}
+                                                                        title={branch.status === 1 ? "Deactivate Branch" : "Activate Branch"}
+                                                                    >
+                                                                        <Power size={14} className={branch.status === 1 ? "fill-current" : ""} />
+                                                                    </button>
 
-                                                            {/* Delete Button */}
-                                                            <button
-                                                                onClick={(e) => handleDeleteBranch(e, branch)}
-                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                                title="Delete Branch"
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
+                                                                    {/* Delete Button */}
+                                                                    <button
+                                                                        onClick={(e) => handleDeleteBranch(e, branch)}
+                                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                                        title="Delete Branch"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </div>
-                                            );
-                                        })
-                                    )}
-                                    </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
                                     )}
                                     {isLoading && branchesList.length > 0 && (
                                         <div className="absolute inset-0 z-10 bg-white/85 rounded-xl flex flex-col items-center justify-center">
@@ -527,143 +527,143 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                     ) : (
                         <form onSubmit={handleSubmit} className="flex h-full flex-col min-h-0">
                             <div className="flex-1 overflow-y-auto py-5 no-scrollbar bg-white">
-                            <div className="space-y-4">
-                            <div>
-                                <label className="block text-[11px] font-bold text-slate-600 mb-1">Branch Name</label>
-                                <input
-                                    type="text"
-                                    name="name"
-                                    value={formData.name}
-                                    onChange={handleInputChange}
-                                    className="w-full px-3 h-[34px] text-[13px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4]"
-                                    placeholder="Enter branch name"
-                                    required
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="relative" ref={countryRef}>
-                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Country</label>
-                                    <input type="hidden" name="country" value={formData.country} required />
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-[11px] font-bold text-slate-600 mb-1">Branch Name</label>
                                         <input
                                             type="text"
-                                            value={showCountryDropdown ? countrySearch : formData.country}
-                                            onFocus={() => {
-                                                setShowCountryDropdown(true);
-                                                setShowCurrencyDropdown(false);
-                                                setCountrySearch('');
-                                            }}
-                                            onChange={(e) => {
-                                                setCountrySearch(e.target.value);
-                                                setShowCountryDropdown(true);
-                                                setShowCurrencyDropdown(false);
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    if (filteredCountries.length > 0) {
-                                                        selectCountry(filteredCountries[0]);
-                                                    }
-                                                }
-                                                if (e.key === 'Escape') {
-                                                    setShowCountryDropdown(false);
-                                                }
-                                            }}
-                                            placeholder="Search country"
-                                            className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
+                                            name="name"
+                                            value={formData.name}
+                                            onChange={handleInputChange}
+                                            className="w-full px-3 h-[34px] text-[13px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4]"
+                                            placeholder="Enter branch name"
+                                            required
                                         />
-                                        <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
                                     </div>
 
-                                    {showCountryDropdown && (
-                                        <div className="absolute z-50 w-full top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
-                                                {filteredCountries.length > 0 ? (
-                                                    filteredCountries.map(c => (
-                                                        <button
-                                                            key={c.id}
-                                                            type="button"
-                                                            onClick={() => selectCountry(c)}
-                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${formData.country === c.countryName ? 'bg-gray-50 font-bold text-black border-r-2 border-black' : 'text-gray-700'}`}
-                                                        >
-                                                            {c.countryName}
-                                                        </button>
-                                                    ))
-                                                ) : (
-                                                    <div className="p-4 text-center text-xs text-gray-400 font-bold italic">No countries found</div>
-                                                )}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="relative" ref={countryRef}>
+                                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Country</label>
+                                            <input type="hidden" name="country" value={formData.country} required />
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                                                <input
+                                                    type="text"
+                                                    value={showCountryDropdown ? countrySearch : formData.country}
+                                                    onFocus={() => {
+                                                        setShowCountryDropdown(true);
+                                                        setShowCurrencyDropdown(false);
+                                                        setCountrySearch('');
+                                                    }}
+                                                    onChange={(e) => {
+                                                        setCountrySearch(e.target.value);
+                                                        setShowCountryDropdown(true);
+                                                        setShowCurrencyDropdown(false);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (filteredCountries.length > 0) {
+                                                                selectCountry(filteredCountries[0]);
+                                                            }
+                                                        }
+                                                        if (e.key === 'Escape') {
+                                                            setShowCountryDropdown(false);
+                                                        }
+                                                    }}
+                                                    placeholder="Search country"
+                                                    className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
+                                                />
+                                                <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCountryDropdown ? 'rotate-180' : ''}`} />
                                             </div>
+
+                                            {showCountryDropdown && (
+                                                <div className="absolute z-50 w-full top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
+                                                        {filteredCountries.length > 0 ? (
+                                                            filteredCountries.map(c => (
+                                                                <button
+                                                                    key={c.id}
+                                                                    type="button"
+                                                                    onClick={() => selectCountry(c)}
+                                                                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${formData.country === c.countryName ? 'bg-gray-50 font-bold text-black border-r-2 border-black' : 'text-gray-700'}`}
+                                                                >
+                                                                    {c.countryName}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="p-4 text-center text-xs text-gray-400 font-bold italic">No countries found</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        <div className="relative" ref={currencyRef}>
+                                            <label className="block text-[11px] font-bold text-slate-600 mb-1">Currency</label>
+                                            <input type="hidden" name="currencyCode" value={formData.currencyCode} required />
+                                            <div className="relative">
+                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
+                                                <input
+                                                    type="text"
+                                                    value={showCurrencyDropdown ? currencySearch : formData.currencyCode}
+                                                    onFocus={() => {
+                                                        setShowCurrencyDropdown(true);
+                                                        setShowCountryDropdown(false);
+                                                        setCurrencySearch('');
+                                                    }}
+                                                    onChange={(e) => {
+                                                        setCurrencySearch(e.target.value);
+                                                        setShowCurrencyDropdown(true);
+                                                        setShowCountryDropdown(false);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                            e.preventDefault();
+                                                            if (filteredCurrencies.length > 0) {
+                                                                selectCurrency(filteredCurrencies[0].code);
+                                                            }
+                                                        }
+                                                        if (e.key === 'Escape') {
+                                                            setShowCurrencyDropdown(false);
+                                                        }
+                                                    }}
+                                                    placeholder="Search currency"
+                                                    className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
+                                                />
+                                                <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
+                                            </div>
+
+                                            {showCurrencyDropdown && (
+                                                <div className="absolute z-50 w-full top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
+                                                        {filteredCurrencies.length > 0 ? (
+                                                            filteredCurrencies.map(c => (
+                                                                <button
+                                                                    key={c.code}
+                                                                    type="button"
+                                                                    onClick={() => selectCurrency(c.code)}
+                                                                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${formData.currencyCode === c.code ? 'bg-gray-50 font-bold text-black border-r-2 border-black' : 'text-gray-700'}`}
+                                                                >
+                                                                    {c.code}
+                                                                </button>
+                                                            ))
+                                                        ) : (
+                                                            <div className="p-4 text-center text-xs text-gray-400 font-bold italic">No currencies found</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {requestError && (
+                                        <div className="p-3 bg-rose-50 text-rose-600 text-[11px] font-bold rounded-md border border-rose-100 flex items-start gap-2">
+                                            <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                                            <span>{requestError}</span>
                                         </div>
                                     )}
                                 </div>
-
-                                <div className="relative" ref={currencyRef}>
-                                    <label className="block text-[11px] font-bold text-slate-600 mb-1">Currency</label>
-                                    <input type="hidden" name="currencyCode" value={formData.currencyCode} required />
-                                    <div className="relative">
-                                        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-                                        <input
-                                            type="text"
-                                            value={showCurrencyDropdown ? currencySearch : formData.currencyCode}
-                                            onFocus={() => {
-                                                setShowCurrencyDropdown(true);
-                                                setShowCountryDropdown(false);
-                                                setCurrencySearch('');
-                                            }}
-                                            onChange={(e) => {
-                                                setCurrencySearch(e.target.value);
-                                                setShowCurrencyDropdown(true);
-                                                setShowCountryDropdown(false);
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    if (filteredCurrencies.length > 0) {
-                                                        selectCurrency(filteredCurrencies[0].code);
-                                                    }
-                                                }
-                                                if (e.key === 'Escape') {
-                                                    setShowCurrencyDropdown(false);
-                                                }
-                                            }}
-                                            placeholder="Search currency"
-                                            className="w-full pl-8 pr-7 h-[34px] rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 focus:border-[#4A8AF4] bg-white text-[13px] font-medium text-slate-800 placeholder:text-gray-400"
-                                        />
-                                        <ChevronDown size={14} className={`absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-transform ${showCurrencyDropdown ? 'rotate-180' : ''}`} />
-                                    </div>
-
-                                    {showCurrencyDropdown && (
-                                        <div className="absolute z-50 w-full top-full mt-1 left-0 bg-white border border-gray-200 rounded-lg shadow-xl overflow-hidden flex flex-col animate-in fade-in slide-in-from-top-2 duration-200">
-                                            <div className="max-h-[220px] overflow-y-auto custom-scrollbar">
-                                                {filteredCurrencies.length > 0 ? (
-                                                    filteredCurrencies.map(c => (
-                                                        <button
-                                                            key={c.code}
-                                                            type="button"
-                                                            onClick={() => selectCurrency(c.code)}
-                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${formData.currencyCode === c.code ? 'bg-gray-50 font-bold text-black border-r-2 border-black' : 'text-gray-700'}`}
-                                                        >
-                                                            {c.code}
-                                                        </button>
-                                                    ))
-                                                ) : (
-                                                    <div className="p-4 text-center text-xs text-gray-400 font-bold italic">No currencies found</div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            {requestError && (
-                                <div className="p-3 bg-rose-50 text-rose-600 text-[11px] font-bold rounded-md border border-rose-100 flex items-start gap-2">
-                                    <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                                    <span>{requestError}</span>
-                                </div>
-                            )}
-                            </div>
                             </div>
 
                             <div className="py-2 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">

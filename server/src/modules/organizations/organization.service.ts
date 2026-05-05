@@ -758,9 +758,21 @@ export const OrganizationService = {
         // Ensure newBranchIds is always an array
         let newBranchIdsArr: number[] = [];
         if (member.branchIds) {
-            newBranchIdsArr = typeof member.branchIds === 'string'
-                ? member.branchIds.split(',').filter(Boolean).map(Number)
-                : (Array.isArray(member.branchIds) ? member.branchIds : []);
+            let parsedIds: number[] = [];
+            if (Array.isArray(member.branchIds)) {
+                parsedIds = member.branchIds.map(Number);
+            } else if (typeof member.branchIds === 'string') {
+                if (member.branchIds.startsWith('[')) {
+                    try {
+                        parsedIds = JSON.parse(member.branchIds).map(Number);
+                    } catch {
+                        parsedIds = member.branchIds.replace(/\[|\]/g, '').split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+                    }
+                } else {
+                    parsedIds = member.branchIds.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n));
+                }
+            }
+            newBranchIdsArr = parsedIds.filter(n => !isNaN(n));
         }
 
         // Remove old branches of THIS org
@@ -771,23 +783,30 @@ export const OrganizationService = {
         newBranchIdsArr = newBranchIdsArr.filter(id => !orgBranchIds.includes(id));
 
         if (finalRoleName?.toLowerCase() === 'member' && branchIds && branchIds.length > 0) {
-            // Validate branches belong to org
-            const validBranches = await db.select({ id: branches.id })
-                .from(branches)
-                .where(and(
-                    eq(branches.orgId, orgId),
-                    isNotDeleted(branches),
-                    inArray(branches.id, branchIds)
-                ));
+            // Deduplicate and ensure numbers
+            const uniqueBranchIds = Array.from(new Set(branchIds.map(Number).filter(n => !isNaN(n))));
 
-            if (validBranches.length !== branchIds.length) {
-                throw new Error("One or more selected branches are invalid.");
+            if (uniqueBranchIds.length > 0) {
+                // Validate branches belong to org
+                const validBranches = await db.select({ id: branches.id })
+                    .from(branches)
+                    .where(and(
+                        eq(branches.orgId, orgId),
+                        isNotDeleted(branches),
+                        inArray(branches.id, uniqueBranchIds)
+                    ));
+
+                if (validBranches.length !== uniqueBranchIds.length) {
+                    throw new Error("One or more selected branches are invalid.");
+                }
+
+                // Add new branches
+                newBranchIdsArr = [...newBranchIdsArr, ...uniqueBranchIds];
             }
-
-            // Add new branches
-            newBranchIdsArr = [...newBranchIdsArr, ...branchIds];
         }
 
+        // Final sanity deduplication before saving
+        newBranchIdsArr = Array.from(new Set(newBranchIdsArr));
         const finalNewBranchIds = newBranchIdsArr.join(',');
 
         await db.update(users)

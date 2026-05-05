@@ -418,6 +418,15 @@ api.interceptors.response.use(
                 localStorage.removeItem('refreshToken');
                 localStorage.removeItem('isLoggingOut');
 
+                // Prevent raw cryptic backend messages from blinking on screen before the page unloads
+                if (refreshError.response?.data) {
+                    if (typeof refreshError.response.data === 'string') {
+                        refreshError.response.data = { message: 'Session expired. Redirecting to login...' };
+                    } else {
+                        refreshError.response.data.message = 'Session expired. Redirecting to login...';
+                    }
+                }
+
                 if (window.location.pathname !== '/login') {
                     window.location.href = '/login';
                 }

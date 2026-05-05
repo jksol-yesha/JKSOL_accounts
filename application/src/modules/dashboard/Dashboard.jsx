@@ -1,9 +1,5 @@
-
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import StatCard from './components/StatCard';
-import CategoryRankings from './components/CategoryRankings';
-import CashFlowCard from './components/CashFlowCard';
-import DashboardPieChart from './components/DashboardPieChart';
 import DashboardSkeleton from './components/DashboardSkeleton';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
@@ -16,6 +12,33 @@ import BranchSelector from '../../components/layout/BranchSelector';
 import CurrencySelector from '../../components/layout/CurrencySelector';
 import DateRangePicker from '../../components/common/DateRangePicker';
 import { generateDatePresets } from '../../utils/constants';
+import { formatCompactAmount } from '../../utils/formatters';
+
+const formatSpecificPeriod = (startStr, endStr) => {
+    if (!startStr || !endStr) return '';
+    try {
+        const start = new Date(startStr);
+        const end = new Date(endStr);
+        const startMonth = start.toLocaleDateString('en-GB', { month: 'short' });
+        const startYear = start.getFullYear();
+        const endMonth = end.toLocaleDateString('en-GB', { month: 'short' });
+        const endYear = end.getFullYear();
+
+        if (startMonth === endMonth && startYear === endYear) {
+            return `${startMonth} ${startYear}`;
+        }
+        if (startYear === endYear) {
+            return `${startMonth} - ${endMonth} ${startYear}`;
+        }
+        return `${startMonth} '${String(startYear).slice(2)} - ${endMonth} '${String(endYear).slice(2)}`;
+    } catch {
+        return '';
+    }
+};
+
+const CategoryRankings = lazy(() => import('./components/CategoryRankings'));
+const CashFlowCard = lazy(() => import('./components/CashFlowCard'));
+const DashboardPieChart = lazy(() => import('./components/DashboardPieChart'));
 
 const EMPTY_STATS = {
     openingBalance: 0,
@@ -50,6 +73,19 @@ const EMPTY_TRENDS = {
 
 const METRIC_LINE_COLOR = '#6b7280';
 const METRIC_FILL_COLOR = 'rgba(107, 114, 128, 0.14)';
+
+const DashboardPanelFallback = ({ className = '' }) => (
+    <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm ${className}`}>
+        <div className="h-full min-h-[280px] animate-pulse bg-gradient-to-br from-slate-100 via-white to-slate-100" />
+    </div>
+);
+
+const DashboardPanelSuspense = ({ children, fallbackClassName = '' }) => (
+    <Suspense fallback={<DashboardPanelFallback className={fallbackClassName} />}>
+        {children}
+    </Suspense>
+);
+
 const formatDate = (date) => {
     if (!date) return null;
     if (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
@@ -207,6 +243,9 @@ const Dashboard = () => {
     const [stats, setStats] = useState(EMPTY_STATS);
     const [previousStats, setPreviousStats] = useState(EMPTY_STATS);
     const [trends, setTrends] = useState(EMPTY_TRENDS);
+    const [rankingCategories, setRankingCategories] = useState([]);
+    const [rankingLoading, setRankingLoading] = useState(false);
+    const [hasFetchedRankings, setHasFetchedRankings] = useState(false);
     const [isDashboardLoading, setIsDashboardLoading] = useState(false);
     const [dashboardRefreshNonce, setDashboardRefreshNonce] = useState(0);
     const [dashboardFilters, setDashboardFilters] = useState({
@@ -226,7 +265,28 @@ const Dashboard = () => {
     });
     const selectedYearIndex = sortedFinancialYears.findIndex((year) => Number(year.id) === Number(selectedYear?.id));
     const previousYear = selectedYearIndex > 0 ? sortedFinancialYears[selectedYearIndex - 1] : null;
-    const currentSeriesLabel = selectedYear?.name || 'Current FY';
+
+    const currentRangeStart = dashboardFilters.dateRange?.startDate;
+    const currentRangeEnd = dashboardFilters.dateRange?.endDate;
+    const prevRange = calculatePreviousRange(
+        currentRangeStart,
+        currentRangeEnd,
+        dashboardFilters.dateRange?.preset
+    );
+
+    const resolvedCurrentStart = formatDate(currentRangeStart || selectedYear?.startDate);
+    const resolvedCurrentEnd = formatDate(currentRangeEnd || selectedYear?.endDate);
+    const resolvedPrevStart = formatDate(prevRange?.startDate || previousYear?.startDate);
+    const resolvedPrevEnd = formatDate(prevRange?.endDate || previousYear?.endDate);
+
+    const currentSeriesLabel = currentRangeStart && currentRangeEnd
+        ? formatSpecificPeriod(currentRangeStart, currentRangeEnd)
+        : (selectedYear?.name || 'Current FY');
+
+    const previousSeriesLabel = prevRange?.startDate && prevRange?.endDate
+        ? formatSpecificPeriod(prevRange.startDate, prevRange.endDate)
+        : (previousYear?.name || 'Previous FY');
+
     const dashboardContextReady = Boolean(
         !branchLoading &&
         !yearLoading &&
@@ -292,6 +352,7 @@ const Dashboard = () => {
             try {
                 const branchFilter = getBranchFilterValue();
                 if (!branchFilter) return;
+
                 const prevRange = calculatePreviousRange(
                     dashboardFilters.dateRange?.startDate,
                     dashboardFilters.dateRange?.endDate,
@@ -392,27 +453,103 @@ const Dashboard = () => {
         };
     }, [dashboardContextReady, user?.id, selectedBranch?.id, selectedYear?.id, previousYear?.id, selectedOrg?.id, dashboardFilters, dashboardRefreshNonce, branchLoading, yearLoading, getBranchFilterValue, statsCacheKey]);
 
+    useEffect(() => {
+        if (!dashboardContextReady) {
+            setRankingCategories([]);
+            setRankingLoading(false);
+            setHasFetchedRankings(false);
+            return undefined;
+        }
+
+        const controller = new AbortController();
+
+        const fetchRankingCategories = async () => {
+            setRankingLoading(true);
+            try {
+                const branchFilter = getBranchFilterValue();
+                if (!branchFilter) return;
+
+                const response = await apiService.dashboard.getCategoryRankings({
+                    branchId: branchFilter,
+                    financialYearId: selectedYear?.id,
+                    targetCurrency: dashboardFilters?.currency || preferences.currency,
+                    ...(dashboardFilters?.dateRange?.startDate ? {
+                        startDate: formatDate(dashboardFilters.dateRange.startDate),
+                        endDate: formatDate(dashboardFilters.dateRange.endDate)
+                    } : {})
+                }, { signal: controller.signal });
+
+                if (!controller.signal.aborted) {
+                    if (response?.success) {
+                        const normalizedCategories = (Array.isArray(response.data) ? response.data : []).map((item) => ({
+                            ...item,
+                            type: String(item?.type ?? item?.txnType ?? '').trim().toLowerCase(),
+                            name: String(item?.name ?? '').trim(),
+                            amount: Number(item?.amount || 0)
+                        }));
+                        setRankingCategories(normalizedCategories.filter((item) => item.type !== 'account'));
+                    } else {
+                        setRankingCategories([]);
+                    }
+                }
+            } catch (error) {
+                if (isIgnorableRequestError(error)) return;
+                console.error('Failed to fetch dashboard rankings:', error);
+                if (!controller.signal.aborted) {
+                    setRankingCategories([]);
+                }
+            } finally {
+                if (!controller.signal.aborted) {
+                    setRankingLoading(false);
+                    setHasFetchedRankings(true);
+                }
+            }
+        };
+
+        const timeoutId = setTimeout(() => {
+            if (dashboardContextReady) {
+                fetchRankingCategories();
+            }
+        }, 100);
+
+        return () => {
+            clearTimeout(timeoutId);
+            controller.abort();
+        };
+    }, [dashboardContextReady, user?.id, selectedBranch?.id, selectedYear?.id, selectedOrg?.id, dashboardFilters, preferences.currency, getBranchFilterValue]);
+
 
 
     const currentMetrics = getMetricSnapshot(stats);
     const previousMetrics = getMetricSnapshot(previousStats);
     const metricSeries = trends?.current?.metrics || EMPTY_TRENDS.current.metrics;
+    const previousMetricSeries = trends?.previous?.metrics || EMPTY_TRENDS.previous.metrics;
     const comparisonLabels = trends?.labels || [];
 
     const incomeChange = formatPercentageIndicator(currentMetrics.totalIncome, previousMetrics.totalIncome);
     const expenseChange = formatPercentageIndicator(currentMetrics.totalExpense, previousMetrics.totalExpense);
     const netProfitChange = formatPercentageIndicator(currentMetrics.netProfit, previousMetrics.netProfit);
-    const investmentChange = formatPercentageIndicator(currentMetrics.investmentBalance, previousMetrics.investmentBalance);
+    const investmentChange = formatPercentageIndicator(currentMetrics.totalInvestment, previousMetrics.totalInvestment);
 
     const allStats = [
         {
             title: 'Net Profit',
-            amount: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactAmount(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency, preferences?.numberFormat),
+            fullAmount: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
+            previousFullAmount: formatCurrency(previousMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.netProfit || [],
+            previousSeries: previousMetricSeries.netProfit || [],
             comparisonLabels,
-            chartColor: '#3b82f6',
-            chartFillColor: '#3b82f6',
+            chartColor: '#2563eb',
+            chartFillColor: '#2563eb',
+            previousChartColor: '#93c5fd',
             currentSeriesLabel,
+            previousSeriesLabel,
+            currentStartDate: resolvedCurrentStart,
+            currentEndDate: resolvedCurrentEnd,
+            previousStartDate: resolvedPrevStart,
+            previousEndDate: resolvedPrevEnd,
+            datePreset: dashboardFilters.dateRange?.preset,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.netProfit >= previousMetrics.netProfit ? 'up' : 'down',
             tertiaryText: netProfitChange.text,
@@ -420,12 +557,22 @@ const Dashboard = () => {
         },
         {
             title: 'Total Income',
-            amount: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactAmount(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency, preferences?.numberFormat),
+            fullAmount: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
+            previousFullAmount: formatCurrency(previousMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalIncome || [],
+            previousSeries: previousMetricSeries.totalIncome || [],
             comparisonLabels,
-            chartColor: '#3b82f6',
-            chartFillColor: '#3b82f6',
+            chartColor: '#2563eb',
+            chartFillColor: '#2563eb',
+            previousChartColor: '#93c5fd',
             currentSeriesLabel,
+            previousSeriesLabel,
+            currentStartDate: resolvedCurrentStart,
+            currentEndDate: resolvedCurrentEnd,
+            previousStartDate: resolvedPrevStart,
+            previousEndDate: resolvedPrevEnd,
+            datePreset: dashboardFilters.dateRange?.preset,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalIncome >= previousMetrics.totalIncome ? 'up' : 'down',
             tertiaryText: incomeChange.text,
@@ -433,12 +580,22 @@ const Dashboard = () => {
         },
         {
             title: 'Total Expenses',
-            amount: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactAmount(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency, preferences?.numberFormat),
+            fullAmount: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
+            previousFullAmount: formatCurrency(previousMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalExpense || [],
+            previousSeries: previousMetricSeries.totalExpense || [],
             comparisonLabels,
-            chartColor: '#3b82f6',
-            chartFillColor: '#3b82f6',
+            chartColor: '#2563eb',
+            chartFillColor: '#2563eb',
+            previousChartColor: '#93c5fd',
             currentSeriesLabel,
+            previousSeriesLabel,
+            currentStartDate: resolvedCurrentStart,
+            currentEndDate: resolvedCurrentEnd,
+            previousStartDate: resolvedPrevStart,
+            previousEndDate: resolvedPrevEnd,
+            datePreset: dashboardFilters.dateRange?.preset,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalExpense <= previousMetrics.totalExpense ? 'up' : 'down',
             tertiaryText: expenseChange.text,
@@ -446,14 +603,24 @@ const Dashboard = () => {
         },
         {
             title: 'Total Investment',
-            amount: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
-            currentSeries: metricSeries.investmentBalance || metricSeries.totalInvestment || [],
+            amount: formatCompactAmount(currentMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency, preferences?.numberFormat),
+            fullAmount: formatCurrency(currentMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency),
+            previousFullAmount: formatCurrency(previousMetrics.totalInvestment, dashboardFilters?.currency || stats.baseCurrency),
+            currentSeries: metricSeries.totalInvestment || [],
+            previousSeries: previousMetricSeries.totalInvestment || [],
             comparisonLabels,
-            chartColor: '#3b82f6',
-            chartFillColor: '#3b82f6',
+            chartColor: '#2563eb',
+            chartFillColor: '#2563eb',
+            previousChartColor: '#93c5fd',
             currentSeriesLabel,
+            previousSeriesLabel,
+            currentStartDate: resolvedCurrentStart,
+            currentEndDate: resolvedCurrentEnd,
+            previousStartDate: resolvedPrevStart,
+            previousEndDate: resolvedPrevEnd,
+            datePreset: dashboardFilters.dateRange?.preset,
             formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
-            trendType: currentMetrics.investmentBalance >= previousMetrics.investmentBalance ? 'up' : 'down',
+            trendType: currentMetrics.totalInvestment >= previousMetrics.totalInvestment ? 'up' : 'down',
             tertiaryText: investmentChange.text,
             tertiaryTone: investmentChange.tone
         }
@@ -461,38 +628,38 @@ const Dashboard = () => {
 
     return (
         <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-white">
-            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto overflow-x-hidden px-4 md:px-4 xl:px-6 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
-                {/* Top Action Row */}
-                <div className="sticky top-0 z-30 -mx-4 mb-0 bg-white border-b border-slate-100/50 md:-mx-4 xl:-mx-6" style={{ zIndex: 40 }}>
-                    <div className="dashboard-header-pattern px-4 pt-4 pb-2 md:px-4 xl:px-6">
-                        <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
-                            <div className="flex-shrink-0">
-                                <DateRangePicker
-                                    startDate={dashboardFilters.dateRange?.startDate}
-                                    endDate={dashboardFilters.dateRange?.endDate}
-                                    selectedPreset={dashboardFilters.dateRange?.preset}
-                                    presetOptions={datePresets}
-                                    onApplyRange={(range) => updateDashboardDateRange(range, { forceRefresh: true })}
-                                    className=""
-                                />
-                            </div>
+            <div className="shrink-0 bg-white border-b border-slate-100/50">
+                <div className="dashboard-header-pattern px-4 pt-4 pb-2 md:px-4 xl:px-6">
+                    <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
+                        <div className="flex-shrink-0">
+                            <DateRangePicker
+                                startDate={dashboardFilters.dateRange?.startDate}
+                                endDate={dashboardFilters.dateRange?.endDate}
+                                selectedPreset={dashboardFilters.dateRange?.preset}
+                                presetOptions={datePresets}
+                                onApplyRange={(range) => updateDashboardDateRange(range, { forceRefresh: true })}
+                                className=""
+                            />
+                        </div>
 
-                            <div className="flex-shrink-0">
-                                <BranchSelector />
-                            </div>
+                        <div className="flex-shrink-0">
+                            <BranchSelector />
+                        </div>
 
-                            <div className="flex-shrink-0">
-                                <CurrencySelector
-                                    value={dashboardFilters.currency}
-                                    onChange={(val) => {
-                                        setDashboardFilters(prev => ({ ...prev, currency: val }));
-                                        updatePreferences({ currency: val });
-                                    }}
-                                />
-                            </div>
+                        <div className="flex-shrink-0">
+                            <CurrencySelector
+                                value={dashboardFilters.currency}
+                                onChange={(val) => {
+                                    setDashboardFilters(prev => ({ ...prev, currency: val }));
+                                    updatePreferences({ currency: val });
+                                }}
+                            />
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto px-4 md:px-4 xl:px-6 pb-4 pt-3 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
 
                 {isDashboardLoading && !stats.openingBalance && !stats.totalIncome ? (
                     <DashboardSkeleton />
@@ -509,17 +676,33 @@ const Dashboard = () => {
 
                         {/* Category Rankings */}
                         <div className="flex-none min-h-[300px] relative transition-all duration-300" key={`${statsCacheKey}-rankings`} style={{ opacity: isDashboardLoading ? 0.6 : 1 }}>
-                            <CategoryRankings dashboardFilters={dashboardFilters} />
+                            <DashboardPanelSuspense fallbackClassName="min-h-[300px]">
+                                <CategoryRankings
+                                    dashboardFilters={dashboardFilters}
+                                    categories={rankingCategories}
+                                    rankingsLoading={rankingLoading}
+                                    hasFetchedRankings={hasFetchedRankings}
+                                />
+                            </DashboardPanelSuspense>
                         </div>
 
                         {/* Additional Charts Row */}
                         <div className={`grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 flex-none transition-all duration-300 ${isDashboardLoading ? 'opacity-60' : 'opacity-100'}`}>
-                            <CashFlowCard key={`${statsCacheKey}-cashflow`} stats={stats} chartData={comparisonLabels.map((label, i) => ({
-                                label,
-                                income: metricSeries.totalIncome?.[i] || 0,
-                                expense: metricSeries.totalExpense?.[i] || 0
-                            }))} />
-                            <DashboardPieChart key={`${statsCacheKey}-pie`} dashboardFilters={dashboardFilters} />
+                            <DashboardPanelSuspense fallbackClassName="min-h-[280px]">
+                                <CashFlowCard key={`${statsCacheKey}-cashflow`} stats={stats} chartData={comparisonLabels.map((label, i) => ({
+                                    label,
+                                    income: metricSeries.totalIncome?.[i] || 0,
+                                    expense: metricSeries.totalExpense?.[i] || 0
+                                }))} />
+                            </DashboardPanelSuspense>
+                            <DashboardPanelSuspense fallbackClassName="min-h-[280px] xl:col-span-1">
+                                <DashboardPieChart
+                                    key={`${statsCacheKey}-pie`}
+                                    dashboardFilters={dashboardFilters}
+                                    categories={rankingCategories}
+                                    loading={rankingLoading && !hasFetchedRankings}
+                                />
+                            </DashboardPanelSuspense>
                         </div>
                     </>
                 )}

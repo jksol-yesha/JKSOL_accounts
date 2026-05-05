@@ -189,17 +189,20 @@ const MemberBranchTooltip = ({ branchNames = [], children }) => {
 };
 
 const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = 'list', initialOrg = null }) => {
-    const { selectedOrg, setSelectedOrg, refreshOrganizations, organizations } = useOrganization();
+    const { selectedOrg, setSelectedOrg, refreshOrganizations, organizations, createOrganization } = useOrganization();
     const { user } = useAuth(); // Needed? Maybe for checks later
     const { currencyOptions } = useCurrencyOptions();
 
     // View State: 'list' | 'manage'
-    const [view, setView] = useState(initialView === 'edit' || initialView === 'settings' ? 'manage' : 'list');
+    const [view, setView] = useState(initialView === 'settings' ? 'manage' : 'list');
     const [editingOrg, setEditingOrg] = useState(initialOrg);
 
     const [requestError, setRequestError] = useState('');
     const [successMessage, setSuccessMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    
+    // Explicit Create/Edit Mode Flag
+    const isStandaloneMode = initialView === 'create' || initialView === 'edit';
 
     // Member Management State
     const [members, setMembers] = useState([]);
@@ -231,15 +234,15 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
     };
 
     // Inline Add Organization State
-    const [isAddingOrg, setIsAddingOrg] = useState(initialView === 'create');
+    const [isAddingOrg, setIsAddingOrg] = useState(initialView === 'create' || initialView === 'edit');
     const [isAddingUser, setIsAddingUser] = useState(false);
     const [createFormData, setCreateFormData] = useState({
-        name: '',
-        baseCurrency: 'INR',
-        timezone: 'Asia/Kolkata',
-        logo: null
+        name: (initialView === 'edit' && initialOrg) ? initialOrg.name : '',
+        baseCurrency: (initialView === 'edit' && initialOrg?.baseCurrency) ? initialOrg.baseCurrency : 'INR',
+        timezone: (initialView === 'edit' && initialOrg?.timezone) ? initialOrg.timezone : 'Asia/Kolkata',
+        logo: (initialView === 'edit' && initialOrg) ? initialOrg.logo : null
     });
-    const [createLogoPreview, setCreateLogoPreview] = useState(null);
+    const [createLogoPreview, setCreateLogoPreview] = useState((initialView === 'edit' && initialOrg) ? initialOrg.logo : null);
 
     // Organization Details Form State (for editing)
     const [formData, setFormData] = useState({
@@ -281,6 +284,13 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             console.error('Failed to validate invite email against users list:', error);
             return false;
         }
+    };
+
+    const handleClose = () => {
+        setIsClosingModal(true);
+        setTimeout(() => {
+            onClose();
+        }, MANAGE_ORG_CLOSE_ANIMATION_MS);
     };
 
     useEffect(() => {
@@ -340,7 +350,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
     // Reset loop when opening
     useEffect(() => {
         if (isOpen) {
-            const isManage = initialView === 'edit' || initialView === 'settings' || initialView === 'manage';
+            const isManage = initialView === 'settings' || initialView === 'manage';
             const isOrgAdmin = initialOrg?.role?.toLowerCase() === 'admin';
 
             setView(isManage ? 'manage' : 'list');
@@ -358,7 +368,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
             setMemberToRemove(null);
             setMemberToEdit(null);
             setEditingAccessData({ roleId: 3, branchIds: [] });
-            setIsAddingOrg(initialView === 'create');
+            setIsAddingOrg(isStandaloneMode);
             setIsAddingUser(false);
         } else if (!shouldRenderModal) {
             setView('list');
@@ -617,20 +627,38 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
         setIsLoading(true);
         setRequestError('');
         try {
-            await apiService.organizations.create(createFormData);
-            await refreshOrganizations();
-            setIsAddingOrg(false);
-            setCreateFormData({
-                name: '',
-                baseCurrency: 'INR',
-                timezone: 'Asia/Kolkata',
-                logo: null
-            });
-            setCreateLogoPreview(null);
-            setSuccessMessage('Organization created successfully');
-            setTimeout(() => setSuccessMessage(''), 3000);
+            if (initialView === 'edit' && initialOrg) {
+                await apiService.organizations.update(initialOrg.id, createFormData);
+                await refreshOrganizations();
+                setSuccessMessage(`Organization '${createFormData.name}' updated successfully!`);
+                setTimeout(() => {
+                    setSuccessMessage('');
+                    handleClose();
+                }, 1000);
+            } else {
+                await createOrganization(createFormData);
+                await refreshOrganizations();
+                if (isStandaloneMode) {
+                    setSuccessMessage(`Organization '${createFormData.name}' created successfully!`);
+                    setTimeout(() => {
+                        setSuccessMessage('');
+                        handleClose();
+                    }, 1000);
+                } else {
+                    setIsAddingOrg(false);
+                    setCreateFormData({
+                        name: '',
+                        baseCurrency: 'INR',
+                        timezone: 'Asia/Kolkata',
+                        logo: null
+                    });
+                    setCreateLogoPreview(null);
+                    setSuccessMessage('Organization created successfully');
+                    setTimeout(() => setSuccessMessage(''), 3000);
+                }
+            }
         } catch (err) {
-            setRequestError(err.response?.data?.message || 'Failed to create organization');
+            setRequestError(err.response?.data?.message || `Failed to ${initialView === 'edit' ? 'update' : 'create'} organization`);
         } finally {
             setIsLoading(false);
         }
@@ -644,7 +672,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                 "fixed inset-0 z-[100] flex justify-end bg-slate-900/40 backdrop-blur-sm",
                 isClosingModal ? "animate-fade-out" : "animate-fade-in"
             )}
-            onClick={onClose}
+            onClick={handleClose}
         >
             <div 
                 onClick={(e) => e.stopPropagation()}
@@ -664,16 +692,20 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             </div>
                             <div className="flex flex-col">
                                 <h2 className="text-[14px] font-bold text-slate-900 tracking-tight leading-tight">
-                                    Manage Organization
+                                    {isStandaloneMode 
+                                        ? (initialView === 'edit' ? 'Edit Organization' : 'Add Organization') 
+                                        : 'Manage Organization'}
                                 </h2>
                                 <p className="text-[10px] text-slate-500 font-bold tracking-wider">
-                                    Settings & Hierarchy
+                                    {isStandaloneMode 
+                                        ? (initialView === 'edit' ? 'Update Details' : 'Create New Entity') 
+                                        : 'Settings & Hierarchy'}
                                 </p>
                             </div>
                         </div>
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
                         >
                             <X size={14} strokeWidth={2.5} />
@@ -682,39 +714,41 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                 </div>
 
                 {/* Tabs */}
-                <div className="flex px-5 border-b border-gray-200 bg-white shadow-[0_4px_12px_-6px_rgba(0,0,0,0.05)] z-20">
-                    <button
-                        onClick={() => {
-                            setView('list');
-                        }}
-                        className={cn(
-                            "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
-                            view === 'list' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
-                        )}
-                    >
-                        Organization
-                        {view === 'list' && (
-                            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
-                        )}
-                    </button>
-                    <button
-                        onClick={() => {
-                            if (!editingOrg && selectedOrg) {
-                                setEditingOrg(selectedOrg);
-                            }
-                            setView('manage');
-                        }}
-                        className={cn(
-                            "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
-                            view === 'manage' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
-                        )}
-                    >
-                        Users
-                        {view === 'manage' && (
-                            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
-                        )}
-                    </button>
-                </div>
+                {!isStandaloneMode && (
+                    <div className="flex px-5 border-b border-gray-200 bg-white shadow-[0_4px_12px_-6px_rgba(0,0,0,0.05)] z-20">
+                        <button
+                            onClick={() => {
+                                setView('list');
+                            }}
+                            className={cn(
+                                "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
+                                view === 'list' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            Organization
+                            {view === 'list' && (
+                                <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
+                            )}
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (!editingOrg && selectedOrg) {
+                                    setEditingOrg(selectedOrg);
+                                }
+                                setView('manage');
+                            }}
+                            className={cn(
+                                "px-5 py-3 text-[11px] font-bold transition-all relative uppercase tracking-wider",
+                                view === 'manage' ? "text-slate-900" : "text-slate-400 hover:text-slate-600"
+                            )}
+                        >
+                            Users
+                            {view === 'manage' && (
+                                <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-[#4A8AF4]" />
+                            )}
+                        </button>
+                    </div>
+                )}
 
                 {/* Body */}
                 <div className="flex-1 flex flex-col min-h-0 bg-white">
@@ -735,9 +769,10 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             )}
                             
                             {/* Add Organization Collapsible */}
-                            <div className="bg-white rounded-md overflow-hidden transition-all duration-300 mb-2">
-                                <button
-                                    onClick={() => setIsAddingOrg(!isAddingOrg)}
+                            <div className={cn("bg-white transition-all duration-300 mb-2", !isStandaloneMode ? "rounded-md overflow-hidden" : "")}>
+                                {!isStandaloneMode && (
+                                    <button
+                                        onClick={() => setIsAddingOrg(!isAddingOrg)}
                                     className={cn(
                                         "w-full px-4 py-2.5 flex items-center justify-between transition-all group",
                                         isAddingOrg ? "bg-white" : "bg-slate-50/50 hover:bg-slate-100/50"
@@ -757,10 +792,12 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                             isAddingOrg ? "rotate-180" : ""
                                         )} 
                                     />
+                                    />
                                 </button>
+                                )}
 
                                 {isAddingOrg && (
-                                    <div className="px-4 pt-2 pb-5 space-y-4 animate-in slide-in-from-top-2 duration-300">
+                                    <div className={cn("space-y-4 animate-in slide-in-from-top-2 duration-300", !isStandaloneMode ? "px-4 pt-2 pb-5" : "")}>
 
                                         
                                         {/* Logo Section */}
@@ -840,7 +877,13 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
                                         <div className="flex justify-end gap-3 pt-1">
                                             <button
-                                                onClick={() => setIsAddingOrg(false)}
+                                                onClick={() => {
+                                                    if (isStandaloneMode) {
+                                                        handleClose();
+                                                    } else {
+                                                        setIsAddingOrg(false);
+                                                    }
+                                                }}
                                                 className="px-3 py-1.5 rounded-md text-[11px] font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all outline-none focus:ring-2 focus:ring-slate-200"
                                             >
                                                 Cancel
@@ -850,7 +893,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                 disabled={isLoading || !createFormData.name.trim()}
                                                 className="bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                             >
-                                                {isLoading ? <Loader className="h-4 w-4 text-white" /> : 'Create'}
+                                                {isLoading ? (initialView === 'edit' ? 'Updating...' : 'Saving...') : (initialView === 'edit' ? 'Update' : 'Create')}
                                             </button>
                                         </div>
                                     </div>
@@ -858,8 +901,9 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                             </div>
 
                             {/* Organizations List */}
-                            <div className="space-y-4">
-                                <div className="flex items-center justify-between px-1">
+                            {!isStandaloneMode && (
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between px-1">
                                     <h4 className="text-[10px] font-bold tracking-wider text-slate-500">Organizations</h4>
                                 </div>
                                 <div className="bg-white rounded-md overflow-hidden divide-y divide-slate-100">
@@ -908,8 +952,9 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                             </button>
                                         );
                                     })}
+                                    </div>
                                 </div>
-                            </div>
+                            )}
                         </div>
                     )}
 
@@ -1038,8 +1083,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                     disabled={inviteLoading || !inviteName.trim() || Boolean(getInviteOwnerEmailError(inviteEmail))}
                                     className="flex-1 py-3.5 rounded-md text-[13px] font-extrabold text-white bg-black hover:bg-black/90 transition-all shadow-md active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
                                 >
-                                    {inviteLoading && <Loader className="h-4 w-4 text-white" />}
-                                    Send Invite
+                                    {inviteLoading ? "Sending..." : "Send Invite"}
                                 </button>
                             </div>
                         </div>
@@ -1263,11 +1307,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                         }
                                                         className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                                     >
-                                                        {inviteLoading ? (
-                                                            <Loader className="h-4 w-4 text-white" />
-                                                        ) : (
-                                                            'Invite Member'
-                                                        )}
+                                                        {inviteLoading ? 'Sending...' : 'Invite Member'}
                                                     </button>
                                                 </div>
                                             </div>
@@ -1322,14 +1362,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
 
                                                     <div className="flex flex-col items-end gap-1 shrink-0">
                                                         <span
-                                                            className={cn(
-                                                                "text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wider uppercase",
-                                                                member.role === 'owner'
-                                                                    ? "bg-amber-100 text-amber-600"
-                                                                    : member.role === 'admin'
-                                                                      ? "bg-indigo-100 text-indigo-600"
-                                                                      : "bg-slate-100 text-slate-500",
-                                                            )}
+                                                            className="text-[8px] font-black px-1.5 py-0.5 rounded-md tracking-wider uppercase text-slate-500"
                                                         >
                                                             {member.role === 'owner'
                                                                 ? 'OWNER'
@@ -1592,11 +1625,7 @@ const ManageOrganizationModal = ({ isOpen, onClose, onCreateNew, initialView = '
                                                     }
                                                     className="flex-1 bg-[#4A8AF4] hover:bg-[#2F5FC6] text-white text-[11px] font-bold px-4 py-1.5 rounded-md shadow-sm active:scale-95 transition-all flex items-center justify-center gap-2 outline-none focus:ring-2 focus:ring-[#4A8AF4]/30 disabled:opacity-50 disabled:cursor-not-allowed"
                                                 >
-                                                    {isLoading ? (
-                                                        <Loader className="h-[18px] w-[18px] text-white" />
-                                                    ) : (
-                                                        'Update'
-                                                    )}
+                                                    {isLoading ? 'Updating...' : 'Update'}
                                                 </button>
                                             </div>
                                         </div>

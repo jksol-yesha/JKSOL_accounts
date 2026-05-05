@@ -745,7 +745,7 @@ const TxnCountCellRenderer = (props) => {
       onClick={(e) => {
         e.stopPropagation();
         e.preventDefault();
-        navigate(`/transactions?accountId=${props.data.id}`);
+        navigate(`/transactions?accountId=${props.data.id}&allDates=true`);
       }}
       className="text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer font-bold w-full h-full flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm"
       title={`View ${value} transactions for ${props.data.name}`}
@@ -1522,7 +1522,7 @@ const Accounts = () => {
             onClick={(e) => {
               e.stopPropagation();
               e.preventDefault();
-              navigate(`/transactions?accountId=${account.id}`);
+              navigate(`/transactions?accountId=${account.id}&allDates=true`);
             }}
             className="shrink-0 text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm text-[12px] font-medium whitespace-nowrap"
             title={`View ${txns} transactions`}

@@ -1,0 +1,86 @@
+<div className="w-full">
+    <div className="flex justify-end mb-4">
+        <button
+            className="h-[32px] px-4 inline-flex items-center justify-center rounded bg-[#EBF3FF] text-[#4A8AF4] text-[12px] font-semibold hover:bg-blue-100 transition-colors"
+        >
+            Add User
+        </button>
+    </div>
+    
+    <div className="border border-slate-200 rounded-lg overflow-hidden bg-white">
+        <table className="w-full text-left border-collapse">
+            <thead>
+                <tr className="bg-[#FAFBFD] border-b border-slate-200 h-[44px]">
+                    <th className="px-5 text-[11px] font-bold text-slate-700 w-16">Id</th>
+                    <th className="px-4 text-[11px] font-bold text-slate-700">Name</th>
+                    <th className="px-4 text-[11px] font-bold text-slate-700">Role</th>
+                    <th className="px-4 text-[11px] font-bold text-slate-700">App Access</th>
+                    <th className="px-4 text-[11px] font-bold text-slate-700">Last Login</th>
+                    <th className="px-5 text-[11px] font-bold text-slate-700 text-right">Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {isLoadingData ? (
+                    <tr>
+                        <td colSpan={6} className="h-32 text-center">
+                            <Loader className="h-5 w-5 text-[#4A8AF4] mx-auto" />
+                        </td>
+                    </tr>
+                ) : orgUsers.length > 0 ? (
+                    orgUsers.map((member, index) => (
+                        <tr key={member.id} className="border-b border-slate-100 hover:bg-slate-50 transition-colors h-[56px] group">
+                            <td className="px-5 text-[12px] font-semibold text-slate-700">
+                                {index + 1}
+                            </td>
+                            <td className="px-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-[28px] w-[28px] shrink-0 flex items-center justify-center rounded-md bg-[#FDE2E4] text-[#D9556C]">
+                                        <UsersIcon size={14} fill="currentColor" className="opacity-80" />
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[12px] font-bold text-slate-700 leading-tight">
+                                            {member.name || member.email?.split('@')[0]}
+                                        </span>
+                                        <span className="text-[10px] text-slate-400 font-medium">
+                                            {member.email}
+                                        </span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td className="px-4">
+                                <span className={cn(
+                                    "px-2.5 py-[3px] rounded-full text-[9px] font-extrabold uppercase tracking-wide",
+                                    member.role?.toLowerCase() === 'admin' || member.role?.toLowerCase() === 'owner' 
+                                        ? "bg-[#F3737A] text-white" 
+                                        : "bg-[#72B7A1] text-white"
+                                )}>
+                                    {member.role || 'Normal'}
+                                </span>
+                            </td>
+                            <td className="px-4 text-[12px] text-slate-500 font-medium">-</td>
+                            <td className="px-4 text-[11px] text-slate-500 font-medium">
+                                {member.lastLogin ? formatDate(member.lastLogin) : '-'}
+                            </td>
+                            <td className="px-5 text-right">
+                                <span className={cn(
+                                    "px-2.5 py-[3px] rounded-full text-[9px] font-extrabold uppercase tracking-wide",
+                                    member.status === 'Active' || member.isActive !== false
+                                        ? "bg-[#72B7A1] text-white"
+                                        : "bg-[#F3737A] text-white"
+                                )}>
+                                    {member.status || 'Active'}
+                                </span>
+                            </td>
+                        </tr>
+                    ))
+                ) : (
+                    <tr>
+                        <td colSpan={6} className="h-32 text-center text-slate-400 text-[12px]">
+                            No users found
+                        </td>
+                    </tr>
+                )}
+            </tbody>
+        </table>
+    </div>
+</div>

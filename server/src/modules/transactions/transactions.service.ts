@@ -797,9 +797,9 @@ export class TransactionService {
 
             // Convert to Excel-like structure and use existing import logic
             const rows = formattedTransactions.map(txn => ({
+                ...txn,
                 date: txn.date,
                 Date: txn.Date,
-
                 type: txn.type,
                 Type: txn.Type,
                 amount: txn.amount,
@@ -1016,6 +1016,13 @@ export class TransactionService {
             if (rowErrors.length > 0) {
                 errors.push({ row: rowNum, message: rowErrors.join(', ') });
             } else {
+                console.log('DEBUG_IMPORT_TXN', {
+                    rowCatId: row.category_id,
+                    rowContId: row.contact_id,
+                    parsedCatId: categoryId,
+                    parsedContId: contactId,
+                    finalName: row.name || row.Name || row.description || row.Description || row.notes || row.Notes || 'Imported Transaction',
+                });
                 validTransactions.push({
                     orgId,
                     branchId,
@@ -1026,7 +1033,9 @@ export class TransactionService {
                     accountId: accId,
                     fromAccountId,
                     toAccountId,
-                    contact: contactId ? String(contactId) : null,
+                    contactId: contactId || null,
+                    contact: row.contact || row.Contact || row.payee || row.Payee || null,
+                    name: row.name || row.Name || row.description || row.Description || row.notes || row.Notes || 'Imported Transaction',
                     payee: row.payee || row.Payee || row.counterparty_name || row.counterpartyName || row.Counterparty || null,
                     notes: row.notes || row.Notes || row.description || row.Description || '',
                     amountLocal: amount,

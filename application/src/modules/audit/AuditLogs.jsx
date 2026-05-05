@@ -222,8 +222,7 @@ const AuditLogs = () => {
         }
     }, [user, selectedOrg, authLoading, navigate, showToast]);
 
-    // Pagination & Search Filters
-    const [currentPage, setCurrentPage] = useState(1);
+    // Pagination Filter
     const [pageSize] = useState(20);
     const searchTerm = '';
     const [filters, setFilters] = useState({ entity: '', action: '' });
@@ -322,7 +321,7 @@ const AuditLogs = () => {
         }
     ], [formatDateTime]);
 
-    const cacheKey = `audit:logs:${selectedOrg?.id || 'org'}:${selectedBranch?.id || 'all'}:${currentPage}:${pageSize}:${filters.entity || 'all'}:${filters.action || 'all'}:${searchTerm || ''}`;
+    const cacheKey = `audit:logs:${selectedOrg?.id || 'org'}:${selectedBranch?.id || 'all'}:${filters.entity || 'all'}:${filters.action || 'all'}:${searchTerm || ''}`;
 
     useEffect(() => {
         try {
@@ -346,11 +345,9 @@ const AuditLogs = () => {
     const fetchLogs = async (signal) => {
         setLoading(true);
         try {
-            const offset = (currentPage - 1) * pageSize;
             const requestConfig = signal && typeof signal.addEventListener === 'function' ? { signal } : {};
-
             const response = await apiService.auditLogs.getAll({
-                ...filters, limit: pageSize, offset: offset, search: searchTerm
+                ...filters, limit: 100000, offset: 0, search: searchTerm
             }, requestConfig);
 
             if (response.success) {
@@ -383,7 +380,7 @@ const AuditLogs = () => {
         const controller = new AbortController();
         fetchLogs(controller.signal);
         return () => controller.abort();
-    }, [cacheKey, currentPage, pageSize, filters, selectedBranch?.id ? String(selectedBranch.id) : null]);
+    }, [cacheKey, filters, selectedBranch?.id ? String(selectedBranch.id) : null]);
 
     useEffect(() => {
         const handleResize = () => setIsDesktopView(window.innerWidth >= 1024);
@@ -393,11 +390,8 @@ const AuditLogs = () => {
 
     const handleFilterChange = (e) => {
         setFilters({ ...filters, [e.target.name]: e.target.value });
-        setCurrentPage(1);
     };
 
-    const totalPages = Math.ceil(totalItems / pageSize) || 1;
-    const hasNextPage = currentPage < totalPages;
     const showInitialLoader = loading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
 
@@ -555,6 +549,9 @@ const AuditLogs = () => {
                                 domLayout='normal'
                                 className="h-full w-full custom-ag-grid no-border-grid"
                                 overlayNoRowsTemplate='<span class="text-sm text-gray-500">No logs found</span>'
+                                pagination={true}
+                                paginationPageSize={20}
+                                paginationPageSizeSelector={[20, 50, 100, 200]}
                                 onRowClicked={(e) => {
                                     if(e.data && (e.data.oldValue || e.data.newValue)) {
                                         setSelectedLog(e.data);
@@ -566,37 +563,7 @@ const AuditLogs = () => {
                     </div>
                 )}
 
-                {/* Desktop Pagination */}
-                <div className="hidden lg:flex items-center justify-between px-2 pt-4 pb-2 flex-none gap-3 sm:gap-0 print:hidden mt-auto">
-                    <div className="text-[11px] text-gray-500 font-medium">
-                        Showing <span className="font-bold text-gray-700">{totalItems === 0 ? 0 : (currentPage - 1) * pageSize + 1}</span> to <span className="font-bold text-gray-700">{Math.min(currentPage * pageSize, totalItems)}</span> of <span className="font-bold text-gray-700">{totalItems}</span> results
-                    </div>
-                    <div className="flex items-center space-x-1">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Previous
-                        </button>
-                        <button
-                            onClick={() => setCurrentPage(prev => prev + 1)}
-                            disabled={!hasNextPage}
-                            className="px-3 py-1 text-[11px] font-bold text-gray-500 hover:text-gray-700 disabled:opacity-30 disabled:hover:text-gray-500 transition-colors"
-                        >
-                            Next
-                        </button>
-                    </div>
-                </div>
-
-                {/* Mobile Pagination */}
-                <div className="lg:hidden py-4 flex flex-col items-center justify-between gap-4">
-                    <MobilePagination
-                        currentPage={currentPage}
-                        totalPages={totalPages}
-                        onPageChange={setCurrentPage}
-                    />
-                </div>
+                {/* Desktop AG Grid handles pagination natively */}
             </div>
             
             {/* Diff Modal overlay */}

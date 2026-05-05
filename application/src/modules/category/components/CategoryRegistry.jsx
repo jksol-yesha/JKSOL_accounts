@@ -302,7 +302,7 @@ const CategoryRegistry = ({
             {/* Grid Container */}
             <div
                 className="category-grid-shell relative w-full px-5 pb-1 flex flex-col"
-                style={{ height: '760px' }}
+                style={{ height: 'calc(100vh - 135px)', minHeight: '500px' }}
             >
                 {showInitialLoader ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 backdrop-blur-sm">

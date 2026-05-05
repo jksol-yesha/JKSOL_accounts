@@ -399,7 +399,7 @@ const Parties = () => {
     };
 
     return (
-        <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0 overflow-y-auto lg:overflow-hidden">
             <PageContentShell
                 header={(
                     <PageHeader
@@ -449,7 +449,7 @@ const Parties = () => {
                 {/* Table Section */}
                 <div
                     className="parties-grid-shell relative w-full px-5 pb-1 flex flex-col"
-                    style={{ height: '760px' }}
+                    style={{ height: 'calc(100vh - 135px)', minHeight: '500px' }}
                 >
                     <div className="h-full w-full relative">
                         <div className="absolute inset-0">

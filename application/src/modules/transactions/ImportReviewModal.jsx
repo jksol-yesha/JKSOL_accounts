@@ -254,7 +254,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file }) => 
         <>
             <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[110] animate-fade-in" onClick={onClose}></div>
 
-            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[120] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden animate-scale-in transition-all duration-300 ease-in-out h-[90vh] w-[98vw] max-w-[1800px]">
+            <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[120] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden animate-scale-in transition-all duration-300 ease-in-out h-[90vh] w-[95vw] max-w-[1400px]">
                 {/* Global Header */}
                 <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white gap-4 flex-none">
                     <div className="flex items-center gap-3">
@@ -337,14 +337,14 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file }) => 
                             <div className={`${activeRightTab === 'pdf' ? 'w-[50%]' : 'w-[70%]'} flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out`}>
                                 <div className="flex-1 relative overflow-hidden">
                                     <div className="absolute inset-0 overflow-auto">
-                                        <table className="w-full text-left border-collapse">
+                                        <table className="w-full text-left border-collapse table-fixed">
                                             <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                                 <tr>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Type</th>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-28 text-right">Amount</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 w-10"></th>
+                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Amount</th>
+                                                    <th className="px-3 py-2 border-b border-slate-200 w-12"></th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
@@ -370,7 +370,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file }) => 
                                                                     {txn.type}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-3 py-2 text-xs font-medium text-slate-800 truncate max-w-[180px] xl:max-w-[240px]">{txn.description}</td>
+                                                            <td className="px-3 py-2 text-xs font-medium text-slate-800 truncate" title={txn.description}>{txn.description}</td>
                                                             <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             <td className="px-3 py-2 text-center">
                                                                 <button 

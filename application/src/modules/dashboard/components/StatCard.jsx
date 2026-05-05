@@ -1,12 +1,13 @@
 import React, { useId, useState } from 'react';
 import {
-    Area,
-    AreaChart,
+    Line,
+    LineChart,
     ResponsiveContainer,
     Tooltip,
     YAxis,
 } from 'recharts';
 import { cn } from '../../../utils/cn';
+import { AmountTooltip } from '../../../components/common/AmountTooltip';
 
 const formatTooltipLabel = (label, payload) => {
     const payloadLabel = payload?.[0]?.payload?.label;
@@ -21,7 +22,13 @@ const MetricTooltip = ({
     currentColor,
     previousColor,
     currentLabel = 'Current FY',
-    previousLabel = 'Previous FY'
+    previousLabel = 'Previous FY',
+    currentStart,
+    currentEnd,
+    previousStart,
+    previousEnd,
+    totalNodes,
+    datePreset
 }) => {
     if (!active || !payload?.length) return null;
 
@@ -30,31 +37,114 @@ const MetricTooltip = ({
     const previous = previousEntry?.value ?? 0;
     const hasPreviousSeries = payload.some((entry) => entry.dataKey === 'previous');
 
+    const hoverLabel = formatTooltipLabel(label, payload);
+    const nodeIndex = payload[0]?.payload?.originalIndex ?? 0;
+
+    const getExactDateLabel = (startDateStr, endDateStr, total, idx, isDaily) => {
+        if (!startDateStr || !endDateStr || !total) return '';
+        try {
+            const start = new Date(startDateStr).getTime();
+            const end = new Date(endDateStr).getTime();
+            const interval = (end - start) / Math.max(1, total - 1);
+            const nodeTime = start + (interval * idx);
+            if (isDaily) {
+                return new Date(nodeTime).toLocaleDateString('default', { day: 'numeric', month: 'short' });
+            }
+            return new Date(nodeTime).toLocaleDateString('default', { month: 'short' });
+        } catch {
+            return '';
+        }
+    };
+
+    let resolvedCurrentLabel = hoverLabel || currentLabel;
+    let resolvedPreviousLabel = hoverLabel ? `Prev ${hoverLabel}` : previousLabel;
+
+    const isWeekLabel = /^[Ww(eek)]*\s*[-_]*\d{1,2}$/i.test(hoverLabel);
+    const isMonthPreset = datePreset && typeof datePreset === 'string' && datePreset.includes('month');
+    const isSingleMonth = datePreset === 'last_month';
+
+    if ((isWeekLabel || isMonthPreset) && totalNodes && currentStart && currentEnd) {
+        const curLabel = getExactDateLabel(currentStart, currentEnd, totalNodes, nodeIndex, isSingleMonth);
+
+        if (curLabel) {
+            resolvedCurrentLabel = curLabel;
+            if (hasPreviousSeries) {
+                const prevLabel = (previousStart && previousEnd)
+                    ? getExactDateLabel(previousStart, previousEnd, totalNodes, nodeIndex, isSingleMonth)
+                    : `Prev ${curLabel}`;
+                resolvedPreviousLabel = prevLabel || `Prev ${curLabel}`;
+            }
+        }
+    } else if (hoverLabel) {
+        if (/\b(20\d{2})\b/.test(hoverLabel)) {
+            resolvedCurrentLabel = hoverLabel;
+            resolvedPreviousLabel = hoverLabel.replace(/\b(20\d{2})\b/g, m => String(Number(m) - 1));
+        } else if (/'(\d{2})\b/.test(hoverLabel)) {
+            resolvedCurrentLabel = hoverLabel;
+            resolvedPreviousLabel = hoverLabel.replace(/'(\d{2})\b/g, (m, p1) => `'${String(Number(p1) - 1).padStart(2, '0')}`);
+        } else if (/^\d{1,2}$/.test(hoverLabel)) {
+            const curMonth = typeof currentLabel === 'string' ? currentLabel.split(' ')[0] : '';
+            const prevMonth = typeof previousLabel === 'string' ? previousLabel.split(' ')[0] : '';
+            resolvedCurrentLabel = curMonth ? `${hoverLabel} ${curMonth}` : hoverLabel;
+            resolvedPreviousLabel = prevMonth ? `${hoverLabel} ${prevMonth}` : `Prev ${hoverLabel}`;
+        } else {
+            const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+            const curStr = typeof currentLabel === 'string' ? currentLabel.split(' ')[0] : '';
+            const prevStr = typeof previousLabel === 'string' ? previousLabel.split(' ')[0] : '';
+            const cIdx = months.findIndex(m => m.toLowerCase() === curStr.toLowerCase());
+            const pIdx = months.findIndex(m => m.toLowerCase() === prevStr.toLowerCase());
+
+            let monthOffset = 1;
+            if (cIdx !== -1 && pIdx !== -1) {
+                let diff = cIdx - pIdx;
+                if (diff < 0) diff += 12;
+                monthOffset = diff === 0 ? 12 : diff;
+            }
+
+            let matchedMonth = false;
+            let tempPrevLabel = hoverLabel;
+
+            months.forEach((m, idx) => {
+                const regex = new RegExp(`\\b${m}\\b`, 'i');
+                if (regex.test(tempPrevLabel) && !matchedMonth) {
+                    let targetIdx = idx - monthOffset;
+                    while (targetIdx < 0) targetIdx += 12;
+                    const prevIdx = targetIdx % 12;
+                    let prevName = months[prevIdx];
+                    const matchStr = tempPrevLabel.match(regex)[0];
+                    if (matchStr === matchStr.toUpperCase()) prevName = prevName.toUpperCase();
+                    else if (matchStr === matchStr.toLowerCase()) prevName = prevName.toLowerCase();
+                    tempPrevLabel = tempPrevLabel.replace(regex, prevName);
+                    matchedMonth = true;
+                }
+            });
+
+            if (matchedMonth) resolvedPreviousLabel = tempPrevLabel;
+            else {
+                resolvedCurrentLabel = hoverLabel;
+                resolvedPreviousLabel = `Prev ${hoverLabel}`;
+            }
+        }
+    }
+
     return (
-        <div className="pointer-events-none min-w-[112px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-medium text-left text-slate-600 shadow-lg">
-            <div className="mb-1 text-[9px] font-normal uppercase tracking-[0.12em] text-left text-slate-400">
-                {formatTooltipLabel(label, payload)}
-            </div>
+        <div className="pointer-events-none min-w-[112px] rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-[10px] font-medium text-left text-slate-600 shadow-lg">
             {hasPreviousSeries && (
-                <div className="flex items-center justify-between gap-3 text-left">
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-left">
+                <div className="mb-1.5 flex items-center justify-between gap-3 text-left">
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left">
                         <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: previousColor }} />
-                        {previousLabel}
+                        <span className="capitalize">{resolvedPreviousLabel}</span>
                     </span>
-                    <span className="whitespace-nowrap text-right text-[9px]">{formatValue(previous)}</span>
+                    <span className="whitespace-nowrap font-semibold text-right text-[10px]">{formatValue(previous)}</span>
                 </div>
             )}
-            {hasPreviousSeries ? (
-                <div className="mt-1 flex items-center justify-between gap-3 text-left">
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-left">
-                        <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: currentColor }} />
-                        {currentLabel}
-                    </span>
-                    <span className="whitespace-nowrap text-right text-[9px]">{formatValue(current)}</span>
-                </div>
-            ) : (
-                <div className="text-center text-[9px]">{formatValue(current)}</div>
-            )}
+            <div className="flex items-center justify-between gap-3 text-left">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left">
+                    <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: currentColor }} />
+                    <span className="font-semibold text-black capitalize">{resolvedCurrentLabel}</span>
+                </span>
+                <span className="whitespace-nowrap font-bold text-black text-right text-[10px]">{formatValue(current)}</span>
+            </div>
         </div>
     );
 };
@@ -80,19 +170,22 @@ const MetricSparkline = ({
     previousColor = '#94a3b8',
     formatValue = (value) => String(value),
     currentSeriesLabel = 'Current FY',
-    previousSeriesLabel = 'Previous FY'
+    previousSeriesLabel = 'Previous FY',
+    currentStartDate,
+    currentEndDate,
+    previousStartDate,
+    previousEndDate,
+    datePreset
 }) => {
-    const chartId = useId().replace(/:/g, '');
     const [isHovered, setIsHovered] = useState(false);
     const normalizedLabels = labels.length ? labels : Array.from({ length: Math.max(currentValues.length, previousValues.length) }, (_, index) => String(index + 1));
     const normalizedCurrent = normalizedLabels.map((_, index) => Number(currentValues[index] || 0));
     const normalizedPrevious = normalizedLabels.map((_, index) => Number(previousValues[index] || 0));
-    const hasPreviousSeries = normalizedPrevious.some((value) => Number.isFinite(value) && value !== 0);
+    const hasPreviousSeries = previousValues.length > 0;
     const safeValues = [...normalizedCurrent, ...(hasPreviousSeries ? normalizedPrevious : [])].filter((value) => Number.isFinite(value));
     const minValue = safeValues.length ? Math.min(...safeValues) : 0;
     const maxValue = safeValues.length ? Math.max(...safeValues) : 0;
     const hasFlatDomain = minValue === maxValue;
-    const showFlatBaseline = hasFlatDomain && !hasPreviousSeries;
     const domainPadding = hasFlatDomain
         ? (minValue === 0 ? 1 : Math.max(Math.abs(minValue) * 0.2, 1))
         : Math.max((maxValue - minValue) * 0.12, 1);
@@ -102,6 +195,7 @@ const MetricSparkline = ({
     const chartData = normalizedLabels.map((label, index) => {
         const row = {
             label,
+            originalIndex: index,
             current: normalizedCurrent[index] || 0
         };
         if (hasPreviousSeries) {
@@ -112,7 +206,7 @@ const MetricSparkline = ({
 
     if (safeValues.length === 0) {
         return (
-            <div className="w-[108px] h-[44px] rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-medium text-slate-400">
+            <div className="w-[130px] h-[72px] rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-[10px] font-medium text-slate-400">
                 No data
             </div>
         );
@@ -121,31 +215,13 @@ const MetricSparkline = ({
     return (
         <div className="flex flex-col items-end gap-1.5">
             <div
-                className="relative w-[118px]"
+                className="relative w-[130px]"
                 onMouseEnter={() => setIsHovered(true)}
                 onMouseLeave={() => setIsHovered(false)}
             >
-                {showFlatBaseline && (
-                    <div className="pointer-events-none absolute inset-x-[8px] top-1/2 z-[1] -translate-y-1/2">
-                        <div
-                            className="h-[2px] rounded-full opacity-95"
-                            style={{
-                                background: currentColor,
-                                opacity: 0.82
-                            }}
-                        />
-                    </div>
-                )}
-                <div className="h-[54px] w-[118px] px-1.5 py-1">
+                <div className="h-[72px] w-[130px] px-1.5 py-1">
                     <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
-                        <AreaChart data={chartData} margin={{ top: 7, right: 4, bottom: 4, left: 4 }}>
-                            <defs>
-                                <linearGradient id={`sparkline-fill-${chartId}`} x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0%" stopColor={currentFillColor} stopOpacity={0.35} />
-                                    <stop offset="70%" stopColor={currentFillColor} stopOpacity={0.10} />
-                                    <stop offset="100%" stopColor={currentFillColor} stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
+                        <LineChart data={chartData} margin={{ top: 7, right: 4, bottom: 4, left: 4 }}>
                             <Tooltip
                                 cursor={{ stroke: 'rgba(148, 163, 184, 0.24)', strokeWidth: 1, strokeDasharray: '3 3' }}
                                 wrapperStyle={{ outline: 'none', zIndex: 20 }}
@@ -159,40 +235,26 @@ const MetricSparkline = ({
                                         previousColor={previousColor}
                                         currentLabel={currentSeriesLabel}
                                         previousLabel={previousSeriesLabel}
+                                        currentStart={currentStartDate}
+                                        currentEnd={currentEndDate}
+                                        previousStart={previousStartDate}
+                                        previousEnd={previousEndDate}
+                                        totalNodes={normalizedLabels.length}
+                                        datePreset={datePreset}
                                     />
                                 }
                                 animationDuration={120}
                             />
                             <YAxis hide domain={yDomain} />
-                            {!showFlatBaseline && (
-                                <Area
-                                    type="natural"
-                                    dataKey="current"
-                                    stroke={currentColor}
-                                    strokeWidth={1.85}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    fill={`url(#sparkline-fill-${chartId})`}
-                                    fillOpacity={1}
-                                    dot={false}
-                                    activeDot={false}
-                                    connectNulls
-                                    isAnimationActive
-                                    animationDuration={950}
-                                    animationEasing="ease-in-out"
-                                />
-                            )}
                             {hasPreviousSeries && (
-                                <Area
+                                <Line
                                     type="natural"
                                     dataKey="previous"
                                     stroke={previousColor}
                                     strokeWidth={1.45}
                                     strokeLinecap="round"
                                     strokeLinejoin="round"
-                                    strokeOpacity={0.24}
-                                    fill="none"
-                                    fillOpacity={0}
+                                    strokeOpacity={0.4}
                                     dot={false}
                                     activeDot={{ r: 3, fill: '#fff', stroke: previousColor, strokeWidth: 1.25 }}
                                     connectNulls
@@ -201,28 +263,24 @@ const MetricSparkline = ({
                                     animationEasing="ease-in-out"
                                 />
                             )}
-                            {!showFlatBaseline && (
-                                <Area
-                                    type="natural"
-                                    dataKey="current"
-                                    stroke={currentColor}
-                                    strokeWidth={1.85}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeOpacity={isHovered ? 0.92 : 0.82}
-                                    fill="none"
-                                    fillOpacity={0}
-                                    dot={(dotProps) => (
-                                        <LastPointDot {...dotProps} data={chartData} stroke={currentColor} />
-                                    )}
-                                    activeDot={{ r: 3.1, fill: currentColor, stroke: '#fff', strokeWidth: 1.3 }}
-                                    connectNulls
-                                    isAnimationActive
-                                    animationDuration={950}
-                                    animationEasing="ease-in-out"
-                                />
-                            )}
-                        </AreaChart>
+                            <Line
+                                type="natural"
+                                dataKey="current"
+                                stroke={currentColor}
+                                strokeWidth={1.85}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeOpacity={isHovered ? 0.92 : 0.82}
+                                dot={(dotProps) => (
+                                    <LastPointDot {...dotProps} data={chartData} stroke={currentColor} />
+                                )}
+                                activeDot={{ r: 3.1, fill: currentColor, stroke: '#fff', strokeWidth: 1.3 }}
+                                connectNulls
+                                isAnimationActive
+                                animationDuration={950}
+                                animationEasing="ease-in-out"
+                            />
+                        </LineChart>
                     </ResponsiveContainer>
                 </div>
             </div>
@@ -233,6 +291,8 @@ const MetricSparkline = ({
 const StatCard = ({
     title,
     amount,
+    fullAmount,
+    previousFullAmount,
     trend,
     trendType = 'up',
     linkText = 'View net earnings',
@@ -243,10 +303,15 @@ const StatCard = ({
     previousSeries = [],
     chartColor = '#4f46e5',
     chartFillColor = 'rgba(79, 70, 229, 0.12)',
-    previousChartColor = '#94a3b8',
+    previousChartColor = '#64748b',
     formatValue,
     currentSeriesLabel,
     previousSeriesLabel,
+    currentStartDate,
+    currentEndDate,
+    previousStartDate,
+    previousEndDate,
+    datePreset,
     tertiaryTone = 'default',
     compact = false
 }) => {
@@ -276,10 +341,7 @@ const StatCard = ({
                 border border-slate-200
                 shadow-sm
                 transition-all duration-300
-                hover:bg-blue-50/30
-                hover:border-blue-200
                 hover:shadow-md
-                hover:shadow-blue-100/50
                 flex flex-col
                 self-start
                 dashboard-laptop-metric-card
@@ -322,26 +384,33 @@ const StatCard = ({
                         style={compact ? { height: '0.125rem' } : undefined}
                         className={compact ? '' : 'h-2.5 dashboard-laptop-metric-spacer'}
                     />
-                    <span
-                        className="
-                            text-sm lg:text-base
-                            font-bold
-                            text-black
-                            leading-tight
-                            dashboard-laptop-metric-amount
-                        "
-                    >
-                        {amount || secondaryText || linkText}
-                    </span>
+                    <AmountTooltip
+                        amount={amount || secondaryText || linkText}
+                        fullAmount={fullAmount}
+                        textClassName="text-sm lg:text-base font-bold text-black leading-tight dashboard-laptop-metric-amount"
+                        position="top"
+                        align="left"
+                    />
                     {tertiaryText && (
-                        <span className={cn("mt-auto text-[10px] lg:text-xs font-bold leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}>
-                            {tertiaryBaseText}
-                            {tertiaryArrow && (
-                                <span className={cn("ml-1", tertiaryArrowClassName)}>
-                                    {tertiaryArrow}
-                                </span>
+                        <div className="group/tertiary relative mt-auto flex w-fit">
+                            <span className={cn("text-[10px] lg:text-xs font-bold leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}>
+                                {tertiaryBaseText}
+                                {tertiaryArrow && (
+                                    <span className={cn("ml-1", tertiaryArrowClassName)}>
+                                        {tertiaryArrow}
+                                    </span>
+                                )}
+                            </span>
+
+                            {previousFullAmount && (
+                                <div className="pointer-events-none absolute left-0 bottom-full mb-2 opacity-0 transition-opacity duration-200 group-hover/tertiary:opacity-100 z-[60]">
+                                    <div className="flex items-center whitespace-nowrap rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 shadow-lg gap-1.5">
+                                        <span className="text-slate-500 font-medium">{previousSeriesLabel || 'Prev'}:</span>
+                                        <span>{previousFullAmount}</span>
+                                    </div>
+                                </div>
                             )}
-                        </span>
+                        </div>
                     )}
                 </div>
 
@@ -357,6 +426,11 @@ const StatCard = ({
                             formatValue={formatValue}
                             currentSeriesLabel={currentSeriesLabel}
                             previousSeriesLabel={previousSeriesLabel}
+                            currentStartDate={currentStartDate}
+                            currentEndDate={currentEndDate}
+                            previousStartDate={previousStartDate}
+                            previousEndDate={previousEndDate}
+                            datePreset={datePreset}
                         />
                     </div>
                 )}

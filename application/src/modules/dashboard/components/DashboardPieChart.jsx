@@ -39,6 +39,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
 
     const isMobile = windowWidth < 768;
     const isDesktop = windowWidth >= 1500;
+    const isLaptop = !isMobile && !isDesktop;
 
     const contextReady = Boolean(!branchLoading && !yearLoading && selectedYear?.id);
 
@@ -71,7 +72,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                     }
                 }
             } catch (error) {
-                if (error.name !== 'AbortError') {
+                if (error.name !== 'AbortError' && error.name !== 'CanceledError') {
                     console.error('Failed to fetch categories', error);
                 }
             } finally {
@@ -156,7 +157,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         },
         series: [{
             type: 'pie',
-            radius: isMobile ? ['0%', '40%'] : isDesktop ? ['0%', '55%'] : ['0%', '48%'],
+            radius: isMobile ? ['0%', '40%'] : isLaptop ? ['0%', '68%'] : ['0%', '55%'],
             center: ['50%', '50%'],
             startAngle: 210, // Fixed start angle combined with interleaving spreads labels across all 4 quadrants
             clockwise: true,
@@ -170,7 +171,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                 moveOverlap: 'shiftY'
             },
             label: {
-                show: true,
+                show: !isLaptop,
                 position: 'outside',
                 distanceToLabelLine: 5,
                 backgroundColor: '#ffffff',
@@ -204,7 +205,7 @@ const DashboardPieChart = ({ dashboardFilters }) => {
                 }
             },
             labelLine: {
-                show: true,
+                show: !isLaptop,
                 length: isMobile ? 15 : 20,
                 length2: isMobile ? 15 : 30,
                 maxSurfaceAngle: 80,

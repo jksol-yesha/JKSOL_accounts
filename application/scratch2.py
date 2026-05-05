@@ -1,4 +1,6 @@
-import React from 'react';
+import re
+
+content = """import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
     X,
@@ -13,8 +15,7 @@ import {
     Users,
     ArrowRightLeft,
     BarChart2,
-    History,
-    LogOut
+    History
 } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import OrganizationSelector from './OrganizationSelector';
@@ -36,20 +37,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
     const location = useLocation();
     const navigate = useNavigate();
     const { selectedOrg } = useOrganization();
-    const { user, logout } = useAuth();
-    const [showLogoutConfirm, setShowLogoutConfirm] = React.useState(false);
-    const [isLoggingOut, setIsLoggingOut] = React.useState(false);
-
-    const handleActualLogout = async () => {
-        setIsLoggingOut(true);
-        try {
-            await logout();
-            navigate('/login');
-        } catch (error) {
-            console.error('Logout failed:', error);
-            setIsLoggingOut(false);
-        }
-    };
+    const { user } = useAuth();
     const { sidebarMode, setSidebarMode, setSidebarHoverExpanded } = useSidebarLayout();
 
     const effectiveCollapsed = isMobileViewport ? false : isCollapsed;
@@ -65,7 +53,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
     const getFormattedName = (name) => {
         if (!name) return '';
-        const parts = String(name).trim().split(/\s+/);
+        const parts = String(name).trim().split(/\\s+/);
         if (parts.length < 2) return parts[0];
         const firstName = parts[0];
         const lastNameFirstChar = parts[1].charAt(0).toUpperCase();
@@ -378,7 +366,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             >
                 <div className={cn(
                     "flex flex-col pt-4 md:pt-0 mb-0.5 flex-none",
-                    effectiveCollapsed ? "items-center px-0" : "pr-3"
+                    effectiveCollapsed ? "items-center px-0" : "px-3"
                 )}>
                     <OrganizationSelector
                         isCollapsed={effectiveCollapsed}
@@ -399,7 +387,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
                 {/* Navigation */}
                 <div className={cn(
-                    "flex-1 overflow-y-auto overflow-x-visible pt-1 pb-2 pr-3 space-y-0.5 custom-scrollbar",
+                    "flex-1 overflow-y-auto overflow-x-visible pt-1 pb-2 px-3 space-y-0.5 custom-scrollbar",
                     effectiveCollapsed && "no-scrollbar px-0 items-center"
                 )}>
                     {filteredMenuItems.map((item) => {
@@ -433,7 +421,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         onMouseEnter={(event) => handleItemHover(event, item, isExactParentActive || isChildActive)}
                                         onMouseLeave={clearHoveredItem}
                                         className={cn(
-                                            "flex items-center gap-3 pr-3 pl-2.5 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent w-full text-left",
+                                            "flex items-center gap-3 px-3 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent w-full text-left",
                                             parentBgClass,
                                             effectiveCollapsed && "mx-auto h-9 w-9 justify-center px-0 py-0",
                                             showHoverExpandPanel && "overflow-visible"
@@ -480,7 +468,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                                                 to={subItem.path}
                                                                 onClick={(event) => handleSidebarItemActivate(event, subItem.path)}
                                                                 className={() => cn(
-                                                                    "flex items-center gap-2 pl-[40px] pr-3 py-1.5 rounded-md transition-all duration-200 text-[13px]",
+                                                                    "flex items-center gap-2 pl-[42px] pr-3 py-1.5 rounded-md transition-all duration-200 text-[13px]",
                                                                     isSubActive
                                                                         ? "bg-[#4A8AF4] text-white font-semibold shadow-sm"
                                                                         : "text-slate-600 font-medium hover:bg-slate-100 hover:text-slate-900"
@@ -512,7 +500,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                 onMouseEnter={(event) => handleItemHover(event, item, isItemActive)}
                                 onMouseLeave={clearHoveredItem}
                                 className={() => cn(
-                                    "flex items-center gap-3 pr-3 pl-2.5 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent",
+                                    "flex items-center gap-3 px-3 py-[7px] rounded-md transition-all duration-200 group relative border border-transparent",
                                     isItemActive
                                         ? "bg-[#4A8AF4] text-white border-[#4A8AF4]"
                                         : "text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
@@ -557,9 +545,10 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                             onKeyDown={handleSidebarButtonKeyDown}
                             data-sidebar-focusable="true"
                             className={cn(
-                                "flex h-[38px] w-full items-center transition-all duration-200 relative border border-transparent text-slate-900 pr-3 pl-2.5 cursor-default",
+                                "flex h-[38px] w-full items-center transition-all duration-200 group relative border border-transparent text-slate-900 px-3",
                                 effectiveCollapsed ? "mx-auto h-[38px] w-[38px] justify-center rounded-md px-0" : "gap-3",
-                                showHoverExpandPanel && "overflow-visible"
+                                showHoverExpandPanel && "overflow-visible",
+                                location.pathname.startsWith('/profile') && "bg-white text-slate-800 shadow-sm border-slate-200"
                             )}
                         >
                             {!effectiveCollapsed && (
@@ -601,49 +590,6 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         </button>
                     </div>
 
-                    {/* Inline Logout Trigger & Confirmation (Merged with sidebar) */}
-                    <div className="relative w-full overflow-hidden transition-all duration-300 ease-in-out">
-                        {showLogoutConfirm ? (
-                            <div className="flex flex-col gap-2 p-3 bg-red-50 border-t border-red-100 mt-1 rounded-t-md opacity-100 animate-in fade-in duration-200">
-                                <div className="text-xs font-semibold text-red-700 text-center">Log out?</div>
-                                <div className="flex items-center gap-2">
-                                    <button
-                                        type="button"
-                                        disabled={isLoggingOut}
-                                        onClick={() => setShowLogoutConfirm(false)}
-                                        className="flex-1 py-1.5 px-2 bg-white text-gray-600 border border-gray-200 rounded text-[11px] font-bold tracking-wide hover:bg-gray-50 transition-colors pointer-events-auto"
-                                    >
-                                        Cancel
-                                    </button>
-                                    <button
-                                        type="button"
-                                        disabled={isLoggingOut}
-                                        onClick={handleActualLogout}
-                                        className="flex-1 py-1.5 px-2 bg-red-500 text-white border border-red-600 rounded text-[11px] font-bold tracking-wide hover:bg-red-600 transition-colors pointer-events-auto flex items-center justify-center"
-                                    >
-                                        {isLoggingOut ? '...' : 'Sure'}
-                                    </button>
-                                </div>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={() => setShowLogoutConfirm(true)}
-                                className={cn(
-                                    "flex h-[38px] w-full items-center justify-start transition-all duration-200 group relative border border-transparent text-slate-900 hover:text-red-500 hover:bg-red-50 pr-3 pl-2.5",
-                                    effectiveCollapsed ? "mx-auto h-[38px] w-[38px] justify-center rounded-md px-0" : "gap-3"
-                                )}
-                            >
-                                <LogOut size={16} strokeWidth={2} className="shrink-0" />
-                                {!effectiveCollapsed && (
-                                    <span className="min-w-0 flex-1 truncate text-left text-[13px] font-semibold tracking-wide">
-                                        Log out
-                                    </span>
-                                )}
-                            </button>
-                        )}
-                    </div>
-
                     {!isMobileViewport && (
                         <>
                             <div className="relative h-10 border-t border-slate-200" ref={sidebarControlRef}>
@@ -659,7 +605,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                     onMouseLeave={clearHoveredItem}
                                     className={cn(
                                         "flex h-full w-full items-center transition-all duration-200 group relative border border-transparent bg-[#EEF0FC] text-slate-900 hover:text-slate-900 hover:bg-[#EEF0FC]",
-                                        effectiveCollapsed ? "mx-auto h-9 w-9 justify-center rounded-md px-0" : "justify-start pr-3 pl-2.5",
+                                        effectiveCollapsed ? "mx-auto h-9 w-9 justify-center rounded-md px-0" : "justify-start px-3",
                                         showHoverExpandPanel && "overflow-visible",
                                         showSidebarControlMenu && "text-slate-900"
                                     )}
@@ -741,3 +687,9 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 };
 
 export default Sidebar;
+"""
+
+with open("/Users/erasoft/Downloads/local-live copy 23/application/src/components/layout/Sidebar.jsx", "w", encoding="utf-8") as f:
+    f.write(content)
+
+print("Done writing to Sidebar.jsx")
