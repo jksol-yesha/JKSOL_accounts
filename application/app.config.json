@@ -1,0 +1,10 @@
+{
+    "apps": [
+        {
+            "name": "account-frontend",
+            "script": "npx",
+            "interpreter": "none",
+            "args": "npx serve -s dist -p 8101"
+        }
+    ]
+}
