@@ -238,6 +238,7 @@ const StatCard = ({
     linkText = 'View net earnings',
     secondaryText,
     tertiaryText,
+    amountTooltip,
     tertiaryTooltip,
     comparisonLabels = [],
     currentSeries = [],
@@ -249,8 +250,26 @@ const StatCard = ({
     currentSeriesLabel,
     previousSeriesLabel,
     tertiaryTone = 'default',
-    compact = false
+    compact = false,
+    isLoading = false
 }) => {
+    if (isLoading) {
+        return (
+            <div className="bg-white px-5 py-4 rounded-lg border border-slate-200 shadow-sm flex flex-col gap-3 self-start dashboard-laptop-metric-card min-h-[110px]" style={compact ? { paddingTop: '0.625rem', paddingBottom: '0.625rem' } : undefined}>
+                <div className="flex justify-between items-center mb-1">
+                    <div className="h-4 w-24 bg-slate-200 rounded animate-pulse"></div>
+                    <div className="h-4 w-8 bg-slate-100 rounded animate-pulse"></div>
+                </div>
+                <div className="flex flex-1 items-stretch justify-between gap-3 mt-1">
+                    <div className="flex flex-col gap-2">
+                        <div className="h-6 w-32 bg-slate-200 rounded animate-pulse"></div>
+                        <div className="h-3 w-16 bg-slate-100 rounded animate-pulse mt-auto"></div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const hasChartData = currentSeries.length > 0 || previousSeries.length > 0;
     const arrowMatch = typeof tertiaryText === 'string' ? tertiaryText.match(/(↗|↘)$/) : null;
     const tertiaryArrow = arrowMatch?.[1] || '';
@@ -293,14 +312,14 @@ const StatCard = ({
                 className="flex justify-between items-start mb-1.5 lg:mb-1.5 dashboard-laptop-metric-header"
                 style={compact ? { marginBottom: '0.25rem' } : undefined}
             >
-                <span className="text-[14px] font-medium text-slate-900 tracking-tight dashboard-laptop-metric-title">
+                <span className="text-sm font-normal text-slate-700 tracking-tight dashboard-laptop-metric-title">
                     {title}
                 </span>
 
                 {trend && (
                     <div
                         className={cn(
-                            "flex items-center gap-1 text-sm font-semibold",
+                            "flex items-center gap-1 text-sm font-normal",
                             trendType === 'up'
                                 ? 'text-emerald-500'
                                 : 'text-rose-500'
@@ -324,10 +343,11 @@ const StatCard = ({
                         className={compact ? '' : 'h-2.5 dashboard-laptop-metric-spacer'}
                     />
                     <span
+                        title={amountTooltip}
                         className="
-                            text-sm lg:text-base
-                            font-bold
-                            text-black
+                            text-xl lg:text-2xl
+                            font-medium
+                            text-slate-900
                             leading-tight
                             dashboard-laptop-metric-amount
                         "
@@ -337,7 +357,7 @@ const StatCard = ({
                     {tertiaryText && (
                         <span 
                             title={tertiaryTooltip}
-                            className={cn("mt-auto text-[10px] lg:text-xs font-bold leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}
+                            className={cn("mt-auto text-xs font-normal leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}
                         >
                             {tertiaryBaseText}
                             {tertiaryArrow && (

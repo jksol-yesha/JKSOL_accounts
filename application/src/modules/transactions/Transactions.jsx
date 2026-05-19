@@ -870,7 +870,7 @@ const Transactions = () => {
     const { selectedBranch, selectedBranchIds, branches } = useBranch();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
-    const { preferences, formatCurrency, formatDate, updatePreferences } = usePreferences();
+    const { preferences, formatCurrency, formatCompactCurrency, formatDate, updatePreferences } = usePreferences();
 
     const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -2144,8 +2144,8 @@ const Transactions = () => {
                                         <ArrowDownLeft size={16} className="text-emerald-600" />
                                     </div>
                                     <div>
-                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
-                                        <div className="text-[13px] font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCurrency(insightsData.totalIncome)}</div>
+                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
+                                        <div title={formatCurrency(insightsData.totalIncome)} className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCompactCurrency(insightsData.totalIncome)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2.5 min-w-fit">
@@ -2153,8 +2153,8 @@ const Transactions = () => {
                                         <ArrowUpRight size={16} className="text-rose-600" />
                                     </div>
                                     <div>
-                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
-                                        <div className="text-[13px] font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCurrency(insightsData.totalExpense)}</div>
+                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
+                                        <div title={formatCurrency(insightsData.totalExpense)} className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCompactCurrency(insightsData.totalExpense)}</div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2.5 min-w-fit pl-5 border-l border-gray-200">
@@ -2162,9 +2162,9 @@ const Transactions = () => {
                                         <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
                                     </div>
                                     <div>
-                                        <div className="text-[10px] font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
-                                        <div className={cn("text-[13px] font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
-                                            {formatCurrency(insightsData.netFlow)}
+                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
+                                        <div title={formatCurrency(insightsData.netFlow)} className={cn("text-sm font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                            {formatCompactCurrency(insightsData.netFlow)}
                                         </div>
                                     </div>
                                 </div>

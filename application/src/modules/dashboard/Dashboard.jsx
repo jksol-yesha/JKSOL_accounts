@@ -201,12 +201,12 @@ const Dashboard = () => {
     const { selectedYear, financialYears, loading: yearLoading } = useYear();
     const { selectedOrg } = useOrganization();
     const { user } = useAuth();
-    const { preferences, formatCurrency, updatePreferences } = usePreferences();
+    const { preferences, formatCurrency, formatCompactCurrency, updatePreferences } = usePreferences();
 
     const [stats, setStats] = useState(EMPTY_STATS);
     const [previousStats, setPreviousStats] = useState(EMPTY_STATS);
     const [trends, setTrends] = useState(EMPTY_TRENDS);
-    const [isDashboardLoading, setIsDashboardLoading] = useState(false);
+    const [isDashboardLoading, setIsDashboardLoading] = useState(true);
     const [dashboardRefreshNonce, setDashboardRefreshNonce] = useState(0);
     const [dashboardFilters, setDashboardFilters] = useState({
         dateRange: null,
@@ -374,18 +374,12 @@ const Dashboard = () => {
             }
         };
 
-        const timeoutId = setTimeout(() => {
-            if (dashboardContextReady) {
-                setIsDashboardLoading(true);
-                // Force reset states to ensure dynamic refresh and skeleton trigger
-                setStats(EMPTY_STATS);
-                setTrends(EMPTY_TRENDS);
-                fetchDashboardData().finally(() => setIsDashboardLoading(false));
-            }
-        }, 150);
+        if (dashboardContextReady) {
+            setIsDashboardLoading(true);
+            fetchDashboardData().finally(() => setIsDashboardLoading(false));
+        }
 
         return () => {
-            clearTimeout(timeoutId);
             controller.abort();
             setIsDashboardLoading(false);
         };
@@ -406,13 +400,14 @@ const Dashboard = () => {
     const allStats = [
         {
             title: 'Net Profit',
-            amount: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
+            amountTooltip: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.netProfit || [],
             comparisonLabels,
             chartColor: '#3b82f6',
             chartFillColor: '#3b82f6',
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
+            formatValue: (value) => formatCompactCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.netProfit >= previousMetrics.netProfit ? 'up' : 'down',
             tertiaryText: netProfitChange.text,
             tertiaryTone: netProfitChange.tone,
@@ -420,13 +415,14 @@ const Dashboard = () => {
         },
         {
             title: 'Total Income',
-            amount: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
+            amountTooltip: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalIncome || [],
             comparisonLabels,
             chartColor: '#3b82f6',
             chartFillColor: '#3b82f6',
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
+            formatValue: (value) => formatCompactCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalIncome >= previousMetrics.totalIncome ? 'up' : 'down',
             tertiaryText: incomeChange.text,
             tertiaryTone: incomeChange.tone,
@@ -434,13 +430,14 @@ const Dashboard = () => {
         },
         {
             title: 'Total Expenses',
-            amount: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
+            amountTooltip: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.totalExpense || [],
             comparisonLabels,
             chartColor: '#3b82f6',
             chartFillColor: '#3b82f6',
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
+            formatValue: (value) => formatCompactCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.totalExpense <= previousMetrics.totalExpense ? 'up' : 'down',
             tertiaryText: expenseChange.text,
             tertiaryTone: expenseChange.tone,
@@ -448,13 +445,14 @@ const Dashboard = () => {
         },
         {
             title: 'Total Investment',
-            amount: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
+            amount: formatCompactCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
+            amountTooltip: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
             currentSeries: metricSeries.investmentBalance || metricSeries.totalInvestment || [],
             comparisonLabels,
             chartColor: '#3b82f6',
             chartFillColor: '#3b82f6',
             currentSeriesLabel,
-            formatValue: (value) => formatCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
+            formatValue: (value) => formatCompactCurrency(value, dashboardFilters?.currency || stats.baseCurrency),
             trendType: currentMetrics.investmentBalance >= previousMetrics.investmentBalance ? 'up' : 'down',
             tertiaryText: investmentChange.text,
             tertiaryTone: investmentChange.tone,
@@ -497,34 +495,32 @@ const Dashboard = () => {
                     </div>
                 </div>
 
-                {isDashboardLoading && !stats.openingBalance && !stats.totalIncome ? (
-                    <DashboardSkeleton />
-                ) : (
-                    <>
+                <div className="w-full relative">
+                    <div className="flex flex-col gap-3 md:gap-4 xl:gap-3 w-full">
                         {/* Stat Cards - 4 Column Grid */}
                         <div className="dashboard-tablet-stat-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-3 flex-none">
                             {allStats.map((stat, index) => (
                                 <div key={`${statsCacheKey}-${index}`} className="w-full self-start">
-                                    <StatCard {...stat} />
+                                    <StatCard {...stat} isLoading={isDashboardLoading} />
                                 </div>
                             ))}
                         </div>
 
                         {/* Category Rankings */}
-                        <div className="flex-none min-h-[300px] relative transition-all duration-300" key={`${statsCacheKey}-rankings`} style={{ opacity: isDashboardLoading ? 0.6 : 1 }}>
+                        <div className="flex-none min-h-[300px] relative transition-all duration-300" key={`${statsCacheKey}-rankings`}>
                             <CategoryRankings dashboardFilters={dashboardFilters} />
                         </div>
 
                         {/* Additional Charts Row */}
-                        <div className={`flex flex-col gap-3 xl:gap-4 flex-none transition-all duration-300 ${isDashboardLoading ? 'opacity-60' : 'opacity-100'}`}>
-                            <CashFlowCard key={`${statsCacheKey}-cashflow`} stats={stats} chartData={comparisonLabels.map((label, i) => ({
+                        <div className="flex flex-col gap-3 xl:gap-4 flex-none transition-all duration-300">
+                            <CashFlowCard key={`${statsCacheKey}-cashflow`} isLoading={isDashboardLoading} stats={stats} chartData={comparisonLabels.map((label, i) => ({
                                 label,
                                 income: metricSeries.totalIncome?.[i] || 0,
                                 expense: metricSeries.totalExpense?.[i] || 0
                             }))} />
                         </div>
-                    </>
-                )}
+                    </div>
+                </div>
             </div>
         </div>
     );

@@ -481,7 +481,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
     const { selectedYear, loading: yearLoading } = useYear();
     const { selectedOrg } = useOrganization();
     const { user } = useAuth();
-    const { formatCurrency, formatDate } = usePreferences();
+    const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact, formatDate } = usePreferences();
     const [transactions, setTransactions] = React.useState([]);
     const [selectedTypeFilters, setSelectedTypeFilters] = React.useState([]);
     const [visibleColumns, setVisibleColumns] = React.useState(DEFAULT_VISIBLE_RECENT_TXN_COLUMNS);
@@ -798,7 +798,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
             headerClassName: 'px-4 py-2 font-bold whitespace-nowrap text-right',
             render: (tx) => (
                 <span className="block px-4 py-[7px] whitespace-nowrap text-right">
-                    <span className={cn(
+                    <span title={formatCurrencyExact(tx.amount)} className={cn(
                         'inline-block min-w-[10ch] text-right text-[13px] font-bold tabular-nums whitespace-nowrap',
                         tx.type?.toLowerCase() === 'income' ? 'text-emerald-600' :
                             tx.type?.toLowerCase() === 'expense' ? 'text-rose-600' :
@@ -946,7 +946,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                                     </div>
                                     <div className="text-right">
                                         <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Amount</div>
-                                        <div className={cn(
+                                        <div title={formatCurrencyExact(tx.amount)} className={cn(
                                             "font-bold text-sm tabular-nums",
                                             tx.type?.toLowerCase() === 'income' ? "text-emerald-600" :
                                                 tx.type?.toLowerCase() === 'expense' ? "text-rose-600" :

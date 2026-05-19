@@ -1,6 +1,7 @@
 import React from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { usePreferences } from '../../../context/PreferenceContext';
+import LoadingOverlay from '../../../components/common/LoadingOverlay';
 
 const formatYAxis = (value) => {
     if (value >= 10000000) return `${(value / 10000000).toFixed(1)}Cr`;
@@ -13,11 +14,11 @@ const CustomTooltip = ({ active, payload, label, formatCurrency }) => {
     if (active && payload && payload.length) {
         return (
             <div className="bg-white px-4 py-3 border border-slate-200 rounded-md shadow-sm min-w-[110px]">
-                <p className="text-[11px] text-slate-500 font-semibold mb-2">{label}</p>
+                <p className="text-xs text-slate-500 font-semibold mb-2">{label}</p>
                 <div className="flex flex-col gap-1.5">
                     {payload.map((entry, index) => (
                         <div key={index} className="flex items-center justify-end">
-                            <span className="text-[13px] font-bold" style={{ color: entry.color }}>
+                            <span className="text-sm font-bold" style={{ color: entry.color }}>
                                 {formatCurrency(entry.value)}
                             </span>
                         </div>
@@ -100,8 +101,8 @@ const CashFlowAxisTick = ({ x = 0, y = 0, payload }) => {
 
 const isMonthlyCashFlowLabel = (value) => /^\w{3}\s+\d{4}$/.test(String(value || '').trim());
 
-const CashFlowCard = ({ stats = {}, chartData = [] }) => {
-    const { formatCurrency } = usePreferences();
+const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
+    const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact } = usePreferences();
 
     const displayData = [...chartData];
     const showAllMonthTicks = displayData.length > 0 && displayData.every((item) => isMonthlyCashFlowLabel(item.label));
@@ -116,7 +117,8 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
             </div>
 
             {/* Body */}
-            <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-white">
+            <div className="flex flex-col lg:flex-row flex-1 min-h-0 bg-white relative">
+                {isLoading && <LoadingOverlay />}
 
                 {/* Left Side: Graph */}
                 <div className="flex-1 p-5 relative min-h-[160px] 2xl:min-h-[220px]">
@@ -149,7 +151,7 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
                                 tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }}
                                 tickFormatter={formatYAxis}
                             />
-                            <Tooltip content={<CustomTooltip formatCurrency={formatCurrency} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                            <Tooltip content={<CustomTooltip formatCurrency={formatCurrencyExact} />} cursor={{ stroke: '#cbd5e1', strokeWidth: 1, strokeDasharray: '4 4' }} />
                             <Area
                                 type="monotone"
                                 name="Income"
@@ -181,11 +183,11 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
 
                     {/* Opening Balance */}
                     <div className="flex flex-col items-end text-right">
-                        <span className="text-[12px] font-medium text-slate-500 mb-1">
+                        <span className="text-xs font-medium text-slate-500 mb-1">
                             Opening Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold text-[#111827] tracking-tight">
+                            <span title={formatCurrencyExact(stats.openingBalance || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
                                 {formatCurrency(stats.openingBalance || 0)}
                             </span>
                         </div>
@@ -193,40 +195,40 @@ const CashFlowCard = ({ stats = {}, chartData = [] }) => {
 
                     {/* Incoming */}
                     <div className="flex flex-col items-end text-right">
-                        <span className="text-[12px] font-medium text-emerald-600 mb-1">
+                        <span className="text-xs font-medium text-emerald-600 mb-1">
                             Incoming
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold text-[#111827] tracking-tight">
+                            <span title={formatCurrencyExact(stats.totalIncome || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
                                 {formatCurrency(stats.totalIncome || 0)}
                             </span>
-                            <span className="text-[14px] font-bold text-emerald-600">+</span>
+                            <span className="text-sm font-bold text-emerald-600">+</span>
                         </div>
                     </div>
 
                     {/* Outgoing */}
                     <div className="flex flex-col items-end text-right">
-                        <span className="text-[12px] font-medium text-rose-500 mb-1">
+                        <span className="text-xs font-medium text-rose-500 mb-1">
                             Outgoing
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold text-[#111827] tracking-tight">
+                            <span title={formatCurrencyExact(stats.totalExpense || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
                                 {formatCurrency(stats.totalExpense || 0)}
                             </span>
-                            <span className="text-[14px] font-bold text-rose-500">-</span>
+                            <span className="text-sm font-bold text-rose-500">-</span>
                         </div>
                     </div>
 
                     {/* Closing Balance */}
                     <div className="flex flex-col items-end text-right pt-3 border-t border-slate-100/60 w-full justify-end">
-                        <span className="text-[12px] font-medium text-blue-500 mb-1">
+                        <span className="text-xs font-medium text-blue-500 mb-1">
                             Closing Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span className="text-[14px] font-bold text-[#111827] tracking-tight">
+                            <span title={formatCurrencyExact(stats.closingBalance || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
                                 {formatCurrency(stats.closingBalance || 0)}
                             </span>
-                            <span className="text-[14px] font-bold text-slate-400">=</span>
+                            <span className="text-sm font-bold text-slate-400">=</span>
                         </div>
                     </div>
 

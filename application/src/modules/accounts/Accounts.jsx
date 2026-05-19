@@ -416,7 +416,7 @@ const SummaryItem = ({
   bgClass,
   currency,
 }) => {
-  const { formatCurrency } = usePreferences();
+  const { formatCurrency, formatCompactCurrency } = usePreferences();
   return (
     <div className="flex items-center gap-3">
       <div
@@ -428,11 +428,11 @@ const SummaryItem = ({
         <Icon size={16} className={colorClass} strokeWidth={2.5} />
       </div>
       <div>
-        <p className="text-[11px] font-semibold text-gray-500 mb-0.5">
+        <p className="text-xs font-semibold text-gray-500 mb-0.5">
           {title}
         </p>
-        <h3 className="text-[15px] font-bold text-gray-800 tracking-tight">
-          {formatCurrency(amount, currency)}
+        <h3 title={formatCurrency(amount, currency)} className="text-base font-bold text-gray-800 tracking-tight">
+          {formatCompactCurrency(amount, currency)}
         </h3>
       </div>
     </div>

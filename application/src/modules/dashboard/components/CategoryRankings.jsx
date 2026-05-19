@@ -84,7 +84,7 @@ const BankAvatar = ({ name, bankLogoKey, ifsc, bankName, bankCode, subtype, subt
         );
     }
     return (
-        <div className={`${circularFallbackShellClassName} text-slate-500 font-bold text-[10px] leading-none`}>
+        <div className={`${circularFallbackShellClassName} text-slate-500 font-bold text-xs leading-none`}>
             {(name || '?').charAt(0)}
         </div>
     );
@@ -108,7 +108,7 @@ const isInvestmentAccount = (account) => {
 const CardShell = ({ title, headerRight, children, className, headerClassName }) => (
     <div className={cn("bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden", className)}>
         <div className={cn("px-5 py-4 border-b border-slate-100 bg-slate-100 shrink-0 flex items-center justify-between gap-4", headerClassName)}>
-            <h3 className="text-[13px] 2xl:text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
+            <h3 className="text-sm font-semibold text-slate-700 tracking-tight flex items-center gap-1.5 focus:outline-none shrink-0">
                 {title}
             </h3>
             {headerRight && (
@@ -127,7 +127,7 @@ const CardShell = ({ title, headerRight, children, className, headerClassName })
 // COLUMN 1: Account Balances
 // -------------------------------------------------------------
 const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetchedOnce }) => {
-    const { formatCurrency } = usePreferences();
+    const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact } = usePreferences();
     
     const accountItems = (accounts || [])
         .map((acc, index) => {
@@ -155,11 +155,11 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
     const isTotalPositive = totalAvailableBalance >= 0;
 
     const totalBalanceBadge = accountItems.length > 0 ? (
-        <div className="flex items-center gap-1.5" title="Total Available Balance">
+        <div className="flex items-center gap-1.5" title={`Total Available Balance: ${formatCurrencyExact(totalAvailableBalance)}`}>
             <Wallet className="w-4 h-4 text-slate-400" />
             <span className={cn(
-                "text-[12px] 2xl:text-[14px] font-semibold tracking-tight",
-                isTotalPositive ? "text-slate-800" : "text-rose-600"
+                "text-sm font-bold tracking-tight",
+                isTotalPositive ? "text-slate-900" : "text-rose-600"
             )}>
                 {formatCurrency(totalAvailableBalance)}
             </span>
@@ -197,14 +197,14 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                         <AccountNameTooltip 
                                             name={cat.displayName}
                                             className="min-w-0 flex-1"
-                                            textClassName="text-[12px] font-medium text-slate-800"
+                                            textClassName="text-sm font-medium text-slate-800"
                                         />
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
-                                        <span className="w-32 text-right text-[12px] font-medium text-slate-800">
+                                        <span title={formatCurrencyExact(cat.amount)} className="w-32 text-right text-sm font-medium text-slate-800">
                                             {formatCurrency(cat.amount)}
                                         </span>
-                                        <span className="w-8 text-right text-[12px] text-slate-400">
+                                        <span className="w-8 text-right text-xs font-medium text-slate-400">
                                             {sharePercent}%
                                         </span>
                                     </div>
@@ -213,7 +213,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                         })}
                     </div>
                 ) : hasFetchedOnce ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-400">
                         No accounts found
                     </div>
                 ) : null}
@@ -227,7 +227,7 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
 // COLUMN 2: Income vs Expenses
 // -------------------------------------------------------------
 const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetchedOnce }) => {
-    const { formatCurrency } = usePreferences();
+    const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact } = usePreferences();
     
     const totalIncomeApp = categories
         .filter(c => String(c.type).toLowerCase() === 'income')
@@ -285,7 +285,7 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                 </PieChart>
                             </ResponsiveContainer>
                             {!showChart && hasFetchedOnce && (
-                                <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
+                                <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-400">
                                     No Data
                                 </div>
                             )}
@@ -297,13 +297,13 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                            <div className="flex flex-col">
                                <div className="flex items-center gap-2 mb-1">
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#4ade80]"></span>
-                                   <span className="text-[12px] font-medium text-slate-600">Income</span>
+                                   <span className="text-xs font-medium text-slate-500">Income</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div className="text-[12px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
+                                   <div title={formatCurrencyExact(totalIncomeApp)} className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalIncomeApp)}
                                    </div>
-                                   <div className="text-[12px] font-medium text-slate-500 shrink-0">
+                                   <div className="text-xs font-medium text-slate-400 shrink-0">
                                        {incomePercent}%
                                    </div>
                                </div>
@@ -313,13 +313,13 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                            <div className="flex flex-col">
                                <div className="flex items-center gap-2 mb-1">
                                    <span className="w-2.5 h-2.5 rounded-full bg-[#f87171]"></span>
-                                   <span className="text-[12px] font-medium text-slate-600">Expenses</span>
+                                   <span className="text-xs font-medium text-slate-500">Expenses</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div className="text-[12px] font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
+                                   <div title={formatCurrencyExact(totalExpenseApp)} className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
                                        {formatCurrency(totalExpenseApp)}
                                    </div>
-                                   <div className="text-[12px] font-medium text-slate-500 shrink-0">
+                                   <div className="text-xs font-medium text-slate-400 shrink-0">
                                        {expensePercent}%
                                    </div>
                                </div>
@@ -337,7 +337,7 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
 // COLUMN 3: Investment Performance
 // -------------------------------------------------------------
 const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoading, hasFetchedOnce }) => {
-    const { formatCurrency } = usePreferences();
+    const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact } = usePreferences();
 
     const investmentAccounts = (accounts || [])
         .filter(isInvestmentAccount)
@@ -364,11 +364,11 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
     const isTotalPositive = totalAvailableInvestment >= 0;
 
     const totalInvestmentBadge = allInvestments.length > 0 ? (
-        <div className="flex items-center gap-1.5" title="Total Investment">
+        <div className="flex items-center gap-1.5" title={`Total Investment: ${formatCurrencyExact(totalAvailableInvestment)}`}>
             <TrendingUp className="w-4 h-4 text-slate-400" />
             <span className={cn(
-                "text-[12px] 2xl:text-[14px] font-semibold tracking-tight",
-                isTotalPositive ? "text-slate-800" : "text-rose-600"
+                "text-sm font-bold tracking-tight",
+                isTotalPositive ? "text-slate-900" : "text-rose-600"
             )}>
                 {formatCurrency(totalAvailableInvestment)}
             </span>
@@ -391,8 +391,8 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
                         {investments.map((cat, i) => {
                             return (
                                 <div key={i} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
-                                    <span className="text-[12px] font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
-                                    <span className="text-[12px] font-medium text-slate-800 mt-0.5 shrink-0">
+                                    <span className="text-sm font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
+                                    <span title={formatCurrencyExact(cat.amount)} className="text-sm font-semibold text-slate-800 mt-0.5 shrink-0">
                                         {formatCurrency(cat.amount)}
                                     </span>
                                 </div>
@@ -400,7 +400,7 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
                         })}
                     </div>
                 ) : hasFetchedOnce ? (
-                    <div className="absolute inset-0 flex items-center justify-center text-[12px] font-medium text-slate-400">
+                    <div className="absolute inset-0 flex items-center justify-center text-xs font-medium text-slate-400">
                         No active investments
                     </div>
                 ) : null}

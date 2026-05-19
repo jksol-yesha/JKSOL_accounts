@@ -220,10 +220,44 @@ export const PreferenceProvider = ({ children }) => {
         }
     };
 
+    const formatCompactCurrency = (amount, currencyOverride = null) => {
+        let val = Number(amount) || 0;
+        const targetCurrency = currencyOverride || preferences.currency;
+
+        let locale = preferences.numberFormat;
+        const legacyMap = {
+            '1,234.56 (US)': 'en-US',
+            '1.234,56 (EU)': 'de-DE',
+            '1 234.56 (SI)': 'fr-CH',
+            '1,23,456.78 (IN)': 'en-IN'
+        };
+        if (legacyMap[locale]) locale = legacyMap[locale];
+
+        let formattedNumber;
+        try {
+            formattedNumber = new Intl.NumberFormat(locale || 'en-US', {
+                notation: 'compact',
+                maximumFractionDigits: 2
+            }).format(val);
+        } catch {
+            formattedNumber = new Intl.NumberFormat('en-US', {
+                notation: 'compact',
+                maximumFractionDigits: 2
+            }).format(val);
+        }
+
+        const parts = new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).formatToParts(0);
+        const symbolPart = parts.find(p => p.type === 'currency');
+        const symbol = symbolPart ? symbolPart.value : targetCurrency;
+
+        return `${symbol} ${formattedNumber}`;
+    };
+
     const value = {
         preferences,
         updatePreferences,
         formatCurrency,
+        formatCompactCurrency,
         formatDate,
         formatDateTime
     };

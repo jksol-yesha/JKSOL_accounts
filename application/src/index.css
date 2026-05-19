@@ -13,7 +13,8 @@
 }
 
 :root {
-  font-family: "Inter", system-ui, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Roboto", Arial, sans-serif;
+  font-variant-numeric: tabular-nums;
   line-height: 1.5;
   font-weight: 400;
 
@@ -737,8 +738,6 @@
   }
 
   .dashboard-laptop-metric-title {
-    font-size: 10px !important;
-    line-height: 1.1 !important;
   }
 
   .dashboard-laptop-metric-amount-wrap {
@@ -747,13 +746,9 @@
   }
 
   .dashboard-laptop-metric-amount {
-    font-size: 14px !important;
-    line-height: 1.1 !important;
   }
 
   .dashboard-laptop-metric-link {
-    font-size: 11px !important;
-    line-height: 1 !important;
   }
 
   .dashboard-laptop-metric-icon {
