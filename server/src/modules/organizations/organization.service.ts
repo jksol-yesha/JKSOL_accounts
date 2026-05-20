@@ -8,12 +8,13 @@ import { DELETED_STATUS, isNotDeleted } from '../../shared/soft-delete';
 
 export const OrganizationService = {
     // Create new organization and owner link
-    async create(userId: number, data: { name: string; baseCurrency?: string; timezone?: string; logo?: string }) {
+    async create(userId: number, data: { name: string; baseCurrency?: string; timezone?: string; logo?: string; fyStartMonth?: number; defaultBranchName?: string; defaultBranchCurrency?: string }) {
         const [user] = await db.select({
             id: users.id,
             role: roles.name,
             roleId: users.roleId,
-            orgIds: users.orgIds
+            orgIds: users.orgIds,
+            branchIds: users.branchIds
         })
             .from(users)
             .leftJoin(roles, eq(users.roleId, roles.id))
@@ -62,18 +63,14 @@ export const OrganizationService = {
             // 3. Auto-Create Financial Years (Current & Next)
             const today = new Date();
             const year = today.getFullYear();
-            const month = today.getMonth(); // 0-11
-
-            // Determine Current FY (assuming April-March cycle common in India/UK, or just Jan-Dec?)
-            // Let's stick to standard Jan-Dec for defaults unless locale specified, OR implementation standard April-March?
-            // User seems to be Indian (Surat branches, HDFC bank). Let's use April-March.
+            const currentMonth = today.getMonth() + 1; // 1-12
+            const fyStartMonth = data.fyStartMonth || 4;
 
             let startYear = year;
-            if (month < 3) { // Jan, Feb, Mar belong to previous FY start
+            if (currentMonth < fyStartMonth) {
                 startYear = year - 1;
             }
 
-            // Format: YYYY-YY (e.g., 2025-26)
             const formatFyName = (start: number) => {
                 const end = start + 1;
                 return `${start}-${end.toString().slice(-2)}`;
@@ -81,21 +78,56 @@ export const OrganizationService = {
 
             const currentFyName = formatFyName(startYear);
             const nextFyName = formatFyName(startYear + 1);
+            
+            const startMonthStr = fyStartMonth.toString().padStart(2, '0');
+            const endMonth = fyStartMonth === 1 ? 12 : fyStartMonth - 1;
+            const endMonthStr = endMonth.toString().padStart(2, '0');
+            
+            const endYear1 = fyStartMonth === 1 ? startYear : startYear + 1;
+            const endYear2 = fyStartMonth === 1 ? startYear + 1 : startYear + 2;
+            
+            const lastDay1 = new Date(endYear1, endMonth, 0).getDate();
+            const lastDay2 = new Date(endYear2, endMonth, 0).getDate();
 
             await tx.insert(financialYears).values([
                 {
                     orgId: org.insertId,
                     name: currentFyName,
-                    startDate: `${startYear}-04-01`,
-                    endDate: `${startYear + 1}-03-31`
+                    startDate: `${startYear}-${startMonthStr}-01`,
+                    endDate: `${endYear1}-${endMonthStr}-${lastDay1}`
                 },
                 {
                     orgId: org.insertId,
                     name: nextFyName,
-                    startDate: `${startYear + 1}-04-01`,
-                    endDate: `${startYear + 2}-03-31`
+                    startDate: `${startYear + 1}-${startMonthStr}-01`,
+                    endDate: `${endYear2}-${endMonthStr}-${lastDay2}`
                 }
             ]);
+
+            // 4. Create Default Branch
+            if (data.defaultBranchName) {
+                const [branch] = await tx.insert(branches).values({
+                    orgId: org.insertId,
+                    name: data.defaultBranchName,
+                    currency: data.defaultBranchCurrency || baseCurrency,
+                    status: 1
+                });
+                const branchId = branch.insertId;
+                
+                let currentBranchIds: number[] = [];
+                if (user.branchIds) {
+                    currentBranchIds = typeof user.branchIds === 'string'
+                        ? user.branchIds.split(',').filter(Boolean).map(Number)
+                        : (Array.isArray(user.branchIds) ? user.branchIds : []);
+                }
+                const newBranchIds = Array.from(new Set([...currentBranchIds, branchId])).join(',');
+                
+                await tx.update(users)
+                    .set({
+                        branchIds: newBranchIds
+                    })
+                    .where(eq(users.id, userId));
+            }
 
             const newOrg = {
                 id: org.insertId,
@@ -663,7 +695,7 @@ export const OrganizationService = {
     },
 
     // Update a member's role and branch access
-    async updateMemberAccess(requesterId: number, orgId: number, memberId: number, roleName: 'owner' | 'admin' | 'member' | undefined, branchIds: number[] | null) {
+    async updateMemberAccess(requesterId: number, orgId: number, memberId: number, roleName: 'owner' | 'admin' | 'member' | undefined, branchIds: number[] | null, name?: string, status?: number) {
         // 1. Verify Requester is Owner or Admin
         const [requester] = await db.select({
             id: users.id,
@@ -790,15 +822,20 @@ export const OrganizationService = {
 
         const finalNewBranchIds = newBranchIdsArr.join(',');
 
+        const updateData: any = {
+            roleId: finalRoleId as any,
+            branchIds: finalNewBranchIds,
+            updatedAt: new Date()
+        };
+
+        if (name) updateData.fullName = name;
+        if (status !== undefined) updateData.status = status;
+
         await db.update(users)
-            .set({
-                roleId: finalRoleId as any,
-                branchIds: finalNewBranchIds,
-                updatedAt: new Date()
-            })
+            .set(updateData)
             .where(eq(users.id, memberId));
 
-        await AuditService.log(orgId, 'user', memberId, 'UPDATE_MEMBER_ACCESS', requesterId, null, { role: roleName, branchIds });
+        await AuditService.log(orgId, 'user', memberId, 'UPDATE_MEMBER_ACCESS', requesterId, null, { role: roleName, branchIds, name, status });
 
         return { message: 'Member access updated successfully' };
     },

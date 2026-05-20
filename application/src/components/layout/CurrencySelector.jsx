@@ -45,7 +45,7 @@ const CurrencySelector = React.forwardRef(({
             setDropdownPosition({
                 top: rect.bottom + 8,
                 right: window.innerWidth - rect.right,
-                width: 120
+                width: Math.max(120, rect.width)
             });
         };
 
@@ -234,7 +234,7 @@ const CurrencySelector = React.forwardRef(({
                     ref={dropdownMenuRef}
                     id={`currency-selector-${name || 'default'}`}
                     role="listbox"
-                    className="fixed z-[100] rounded-md border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in zoom-in-95 duration-200"
+                    className="fixed z-[10000] rounded-md border border-slate-200 bg-white py-1 shadow-lg animate-in fade-in zoom-in-95 duration-200"
                     style={{ top: dropdownPosition.top, right: dropdownPosition.right, width: dropdownPosition.width }}
                 >
                     {options.map((option, index) => {
@@ -249,7 +249,7 @@ const CurrencySelector = React.forwardRef(({
                                 onClick={() => handleSelect(option.value)}
                                 onMouseEnter={() => setHighlightedIndex(index)}
                                 onMouseLeave={() => setHighlightedIndex(-1)}
-                                className={`flex items-center gap-1.5 w-full text-left px-2 py-1.5 transition-colors ${
+                                className={`flex items-center gap-2 w-full text-left px-2.5 py-0.5 transition-colors ${
                                     isSelected
                                     ? ''
                                     : isHighlighted

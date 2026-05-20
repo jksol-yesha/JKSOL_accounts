@@ -253,6 +253,9 @@ const StatCard = ({
     compact = false,
     isLoading = false
 }) => {
+    const [isAmountHovered, setIsAmountHovered] = useState(false);
+    const [isTertiaryHovered, setIsTertiaryHovered] = useState(false);
+
     if (isLoading) {
         return (
             <div className="bg-white px-5 py-4 rounded-lg border border-slate-200 shadow-sm flex flex-col gap-3 self-start dashboard-laptop-metric-card min-h-[110px]" style={compact ? { paddingTop: '0.625rem', paddingBottom: '0.625rem' } : undefined}>
@@ -304,6 +307,9 @@ const StatCard = ({
                 self-start
                 dashboard-laptop-metric-card
                 cursor-pointer
+                relative
+                group
+                hover:z-50
             "
             style={compact ? { paddingTop: '0.625rem', paddingBottom: '0.625rem' } : undefined}
         >
@@ -342,30 +348,80 @@ const StatCard = ({
                         style={compact ? { height: '0.125rem' } : undefined}
                         className={compact ? '' : 'h-2.5 dashboard-laptop-metric-spacer'}
                     />
-                    <span
-                        title={amountTooltip}
-                        className="
-                            text-xl lg:text-2xl
-                            font-medium
-                            text-slate-900
-                            leading-tight
-                            dashboard-laptop-metric-amount
-                        "
-                    >
-                        {amount || secondaryText || linkText}
-                    </span>
-                    {tertiaryText && (
-                        <span 
-                            title={tertiaryTooltip}
-                            className={cn("mt-auto text-xs font-normal leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}
+                    {amountTooltip ? (
+                        <div 
+                            className="relative w-fit"
+                            onMouseEnter={() => setIsAmountHovered(true)}
+                            onMouseLeave={() => setIsAmountHovered(false)}
                         >
-                            {tertiaryBaseText}
-                            {tertiaryArrow && (
-                                <span className={cn("ml-1", tertiaryArrowClassName)}>
-                                    {tertiaryArrow}
-                                </span>
-                            )}
+                            <span
+                                className="
+                                    text-xl lg:text-2xl
+                                    font-medium
+                                    text-slate-900
+                                    leading-tight
+                                    dashboard-laptop-metric-amount
+                                    cursor-default
+                                "
+                            >
+                                {amount || secondaryText || linkText}
+                            </span>
+                            <div className={cn(
+                                "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
+                                isAmountHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
+                            )}>
+                                {amountTooltip}
+                            </div>
+                        </div>
+                    ) : (
+                        <span
+                            className="
+                                text-xl lg:text-2xl
+                                font-medium
+                                text-slate-900
+                                leading-tight
+                                dashboard-laptop-metric-amount
+                            "
+                        >
+                            {amount || secondaryText || linkText}
                         </span>
+                    )}
+                    {tertiaryText && (
+                        tertiaryTooltip ? (
+                            <div 
+                                className="relative w-fit mt-auto"
+                                onMouseEnter={() => setIsTertiaryHovered(true)}
+                                onMouseLeave={() => setIsTertiaryHovered(false)}
+                            >
+                                <span 
+                                    className={cn("text-xs font-normal leading-tight dashboard-laptop-metric-change cursor-default", tertiaryToneClassName)}
+                                >
+                                    {tertiaryBaseText}
+                                    {tertiaryArrow && (
+                                        <span className={cn("ml-1", tertiaryArrowClassName)}>
+                                            {tertiaryArrow}
+                                        </span>
+                                    )}
+                                </span>
+                                <div className={cn(
+                                    "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
+                                    isTertiaryHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
+                                )}>
+                                    {tertiaryTooltip}
+                                </div>
+                            </div>
+                        ) : (
+                            <span 
+                                className={cn("mt-auto text-xs font-normal leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}
+                            >
+                                {tertiaryBaseText}
+                                {tertiaryArrow && (
+                                    <span className={cn("ml-1", tertiaryArrowClassName)}>
+                                        {tertiaryArrow}
+                                    </span>
+                                )}
+                            </span>
+                        )
                     )}
                 </div>
 

@@ -300,6 +300,8 @@ export const getAllUsers = async () => {
         fullName: users.fullName,
         status: users.status,
         profilePhoto: users.profilePhoto,
+        branchIds: users.branchIds,
+        orgIds: users.orgIds,
         roleName: roles.name,
         creatorName: creatorAlias.fullName,
         creatorEmail: creatorAlias.email,
@@ -314,6 +316,8 @@ export const getAllUsers = async () => {
         name: u.fullName,
         isVerified: u.status === 1,
         profilePhoto: u.profilePhoto,
+        branchIds: u.branchIds,
+        orgIds: u.orgIds,
         role: u.roleName || 'Member',
         createdBy: u.creatorName || u.creatorEmail || 'System'
     }));

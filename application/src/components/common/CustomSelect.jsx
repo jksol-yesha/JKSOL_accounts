@@ -545,13 +545,13 @@ const CustomSelect = React.forwardRef(
             {...rest}
             className={cn(
               className,
-              "flex items-center justify-between text-left",
-              disabled ? "cursor-not-allowed opacity-75" : "cursor-pointer",
+              "group flex items-center justify-between text-left transition-colors",
+              disabled ? "cursor-not-allowed opacity-75" : "cursor-pointer hover:border-[#BAE6FD] hover:bg-[#F0F9FF] focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100",
             )}
           >
             <span
               className={cn(
-                "min-w-0 flex-1 truncate pr-3 text-[12px] leading-tight",
+                "min-w-0 flex-1 truncate pr-3 text-[12px] leading-tight transition-colors group-hover:text-[#4A8AF4]",
                 buttonLabelClassName,
               )}
             >
@@ -560,7 +560,7 @@ const CustomSelect = React.forwardRef(
                   <span className="font-bold text-[#4A8AF4] mr-1 opacity-90">
                     {buttonLabel.split(" - ")[0]}
                   </span>
-                  <span>{buttonLabel.split(" - ").slice(1).join(" - ")}</span>
+                  <span className="group-hover:text-[#4A8AF4] transition-colors">{buttonLabel.split(" - ").slice(1).join(" - ")}</span>
                 </>
               ) : (
                 buttonLabel
@@ -568,8 +568,8 @@ const CustomSelect = React.forwardRef(
             </span>
             <svg
               className={cn(
-                "h-4 w-4 shrink-0 text-gray-500 transition-transform",
-                isOpen ? "rotate-180" : "",
+                "h-4 w-4 shrink-0 text-gray-500 transition-colors group-hover:text-[#4A8AF4]",
+                isOpen ? "rotate-180 text-[#4A8AF4]" : "",
               )}
               fill="none"
               stroke="currentColor"
@@ -676,8 +676,10 @@ const CustomSelect = React.forwardRef(
                         disabled={option.disabled}
                         title={option.label}
                         onClick={() => handleSelect(option.value)}
+                        onMouseEnter={() => setHighlightedIndex(idx)}
+                        onMouseLeave={() => setHighlightedIndex(-1)}
                         className={cn(
-                          "flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1 text-left transition-colors",
+                          "group flex w-full items-center gap-1.5 rounded-[6px] px-2 py-1 text-left transition-colors",
                           option.disabled
                             ? "text-gray-300 cursor-not-allowed"
                             : isSelected
@@ -710,18 +712,22 @@ const CustomSelect = React.forwardRef(
                               <span
                                 className={cn(
                                   "font-bold mr-1",
-                                  isSelected || isHighlighted
+                                  isSelected
+                                    ? "text-[#2F5FC6]"
+                                    : isHighlighted
                                     ? "text-[#4A8AF4]"
-                                    : "text-slate-400",
+                                    : "text-slate-400 group-hover:text-[#4A8AF4]",
                                 )}
                               >
                                 {option.label.split(" - ")[0]}
                               </span>
                               <span
                                 className={
-                                  isSelected || isHighlighted
-                                    ? "font-bold text-slate-900"
-                                    : "font-medium text-slate-800"
+                                  isSelected
+                                    ? "font-bold text-[#2F5FC6]"
+                                    : isHighlighted
+                                    ? "font-bold text-[#4A8AF4]"
+                                    : "font-medium text-slate-800 group-hover:text-[#4A8AF4]"
                                 }
                               >
                                 {option.label.split(" - ").slice(1).join(" - ")}
@@ -730,9 +736,11 @@ const CustomSelect = React.forwardRef(
                           ) : (
                             <span
                               className={
-                                isSelected || isHighlighted
-                                  ? "font-bold text-slate-900"
-                                  : "font-medium text-slate-800"
+                                isSelected
+                                  ? "font-bold text-[#2F5FC6]"
+                                  : isHighlighted
+                                  ? "font-bold text-[#4A8AF4]"
+                                  : "font-medium text-slate-800 group-hover:text-[#4A8AF4]"
                               }
                             >
                                 {option.label}

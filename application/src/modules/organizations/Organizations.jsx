@@ -256,7 +256,18 @@ const Organizations = () => {
                                     ) : paginatedOrgs.length > 0 ? (
                                         paginatedOrgs.map((org) => (
                                             <tr key={org.id} className="hover:bg-gray-50/50 transition-colors">
-                                                <td className="px-4 py-1.5 text-sm font-bold text-gray-800">{org.name}</td>
+                                                <td className="px-4 py-1.5 text-sm font-bold text-gray-800">
+                                                    <div className="flex items-center gap-2">
+                                                        {org.logo ? (
+                                                            <img src={org.logo} alt="" className="w-5 h-5 rounded object-cover border border-gray-200" />
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded bg-gray-100 flex items-center justify-center border border-gray-200 shrink-0">
+                                                                <Building2 size={10} className="text-gray-400" />
+                                                            </div>
+                                                        )}
+                                                        {org.name}
+                                                    </div>
+                                                </td>
                                                 <td className="px-4 py-1.5 text-xs font-medium text-gray-600">{org.baseCurrency}</td>
                                                 <td className="px-4 py-1.5 text-xs font-medium text-gray-600">{MONTHS_MAP[org.fyStartMonth] || org.fyStartMonth}</td>
                                                 <td className="px-4 py-1.5">

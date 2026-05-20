@@ -512,7 +512,7 @@ const DateRangePicker = forwardRef(({
                             </div>
                         </div>
 
-                        <div className="mt-1 pt-1 border-t border-slate-100 flex justify-end gap-1.5 px-1 pb-0.5">
+                        <div className="mt-3 pt-3 border-t border-slate-100 flex justify-end gap-1.5 px-1 pb-0">
                             <button
                                 type="button"
                                 onClick={() => setIsOpen(false)}

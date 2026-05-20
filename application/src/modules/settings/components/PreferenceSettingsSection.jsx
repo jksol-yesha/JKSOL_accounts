@@ -1,7 +1,7 @@
 import React from 'react';
 import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
-import { useCurrencyOptions } from '../../../hooks/useCurrencyOptions';
+import CurrencySelector from '../../../components/layout/CurrencySelector';
 import { usePreferences } from '../../../context/PreferenceContext';
 import { cn } from '../../../utils/cn';
 import { CheckCircle2, AlertTriangle, Check } from 'lucide-react';
@@ -30,7 +30,6 @@ const timeZones = [
 ];
 
 export const PreferenceSettingsFields = ({ draftPreferences, onChange, className = '' }) => {
-    const { currencyOptions } = useCurrencyOptions();
 
     return (
     <div className={cn("grid grid-cols-1 sm:grid-cols-2 gap-6 py-1", className)}>
@@ -39,16 +38,14 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                 Currency
             </label>
             <div className="relative group">
-                <CustomSelect
+                <CurrencySelector
                     name="currency"
                     value={draftPreferences.currency || 'INR'}
-                    className="w-full h-[36px] bg-white border border-gray-200 rounded-md focus-within:border-[#4A8AF4] focus-within:ring-2 focus-within:ring-[#4A8AF4]/20 transition-all text-[13px] cursor-pointer px-3"
-                    onChange={onChange}
-                >
-                    {currencyOptions.map((currency) => (
-                        <option key={currency.code} value={currency.code}>{currency.label}</option>
-                    ))}
-                </CustomSelect>
+                    className="w-full h-[36px] bg-white border border-gray-200 rounded-md focus-within:border-[#4A8AF4] focus-within:ring-2 focus-within:ring-[#4A8AF4]/20 transition-all justify-between px-3 shadow-none cursor-pointer"
+                    onChange={(val) => onChange({ target: { name: 'currency', value: val } })}
+                    triggerTextClassName="!text-[12px] font-normal [&_span]:!font-normal [&_span]:!text-[12px]"
+                    optionTextClassName="!text-[12px] font-normal [&_span]:!font-normal [&_span]:!text-[12px]"
+                />
             </div>
         </div>
 
@@ -62,6 +59,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     value={draftPreferences.dateFormat}
                     className="w-full h-[36px] bg-white border border-gray-200 rounded-md focus-within:border-[#4A8AF4] focus-within:ring-2 focus-within:ring-[#4A8AF4]/20 transition-all text-[13px] cursor-pointer px-3"
                     onChange={onChange}
+                    showSelectedBackground={false}
                 >
                     {dateFormats.map((format) => (
                         <option key={format.value} value={format.value}>{format.label}</option>
@@ -80,6 +78,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     value={draftPreferences.numberFormat}
                     className="w-full h-[36px] bg-white border border-gray-200 rounded-md focus-within:border-[#4A8AF4] focus-within:ring-2 focus-within:ring-[#4A8AF4]/20 transition-all text-[13px] cursor-pointer px-3"
                     onChange={onChange}
+                    showSelectedBackground={false}
                 >
                     {numberFormats.map((format) => (
                         <option key={format.value} value={format.value}>{format.label}</option>
@@ -101,6 +100,7 @@ export const PreferenceSettingsFields = ({ draftPreferences, onChange, className
                     value={draftPreferences.timeZone}
                     className="w-full h-[36px] bg-white border border-gray-200 rounded-md focus-within:border-[#4A8AF4] focus-within:ring-2 focus-within:ring-[#4A8AF4]/20 transition-all text-[13px] cursor-pointer px-3"
                     onChange={onChange}
+                    showSelectedBackground={false}
                 >
                     {timeZones.map((timeZone) => (
                         <option key={timeZone.value} value={timeZone.value}>{timeZone.label}</option>

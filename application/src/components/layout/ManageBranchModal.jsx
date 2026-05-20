@@ -443,7 +443,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                             <Loader className="h-6 w-6 text-[#4A8AF4]" />
                                         </div>
                                     ) : (
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                                    <div className="space-y-2 pr-1">
                                         {branchesList.length === 0 && hasLoadedOnce && !isLoading ? (
                                         <div className="text-center py-4 text-gray-400 text-xs">No branches found.</div>
                                     ) : (

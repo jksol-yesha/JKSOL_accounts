@@ -44,10 +44,11 @@ const parseMemberBranchIds = (branchIds) => {
     if (typeof branchIds === 'string') {
         try {
             const parsed = JSON.parse(branchIds);
-            return Array.isArray(parsed) ? parsed.map(Number).filter(Boolean) : [];
+            if (Array.isArray(parsed)) return parsed.map(Number).filter(Boolean);
         } catch {
-            return [];
+            // Fallback for comma-separated string
         }
+        return branchIds.split(',').map(id => Number(id.trim())).filter(n => Number.isFinite(n) && n > 0);
     }
     return [];
 };

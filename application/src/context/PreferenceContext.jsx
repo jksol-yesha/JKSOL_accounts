@@ -224,26 +224,41 @@ export const PreferenceProvider = ({ children }) => {
         let val = Number(amount) || 0;
         const targetCurrency = currencyOverride || preferences.currency;
 
-        let locale = preferences.numberFormat;
-        const legacyMap = {
-            '1,234.56 (US)': 'en-US',
-            '1.234,56 (EU)': 'de-DE',
-            '1 234.56 (SI)': 'fr-CH',
-            '1,23,456.78 (IN)': 'en-IN'
-        };
-        if (legacyMap[locale]) locale = legacyMap[locale];
-
         let formattedNumber;
-        try {
-            formattedNumber = new Intl.NumberFormat(locale || 'en-US', {
-                notation: 'compact',
-                maximumFractionDigits: 2
-            }).format(val);
-        } catch {
-            formattedNumber = new Intl.NumberFormat('en-US', {
-                notation: 'compact',
-                maximumFractionDigits: 2
-            }).format(val);
+
+        if (targetCurrency === 'INR') {
+            const absVal = Math.abs(val);
+            const sign = val < 0 ? '-' : '';
+            if (absVal >= 10000000) {
+                formattedNumber = sign + Number((absVal / 10000000).toFixed(2)).toString() + 'Cr';
+            } else if (absVal >= 100000) {
+                formattedNumber = sign + Number((absVal / 100000).toFixed(2)).toString() + 'L';
+            } else if (absVal >= 1000) {
+                formattedNumber = sign + Number((absVal / 1000).toFixed(2)).toString() + 'K';
+            } else {
+                formattedNumber = sign + Number(absVal.toFixed(2)).toString();
+            }
+        } else {
+            let locale = preferences.numberFormat;
+            const legacyMap = {
+                '1,234.56 (US)': 'en-US',
+                '1.234,56 (EU)': 'de-DE',
+                '1 234.56 (SI)': 'fr-CH',
+                '1,23,456.78 (IN)': 'en-IN'
+            };
+            if (legacyMap[locale]) locale = legacyMap[locale];
+
+            try {
+                formattedNumber = new Intl.NumberFormat(locale || 'en-US', {
+                    notation: 'compact',
+                    maximumFractionDigits: 2
+                }).format(val);
+            } catch {
+                formattedNumber = new Intl.NumberFormat('en-US', {
+                    notation: 'compact',
+                    maximumFractionDigits: 2
+                }).format(val);
+            }
         }
 
         const parts = new Intl.NumberFormat('en-US', { style: 'currency', currency: targetCurrency }).formatToParts(0);

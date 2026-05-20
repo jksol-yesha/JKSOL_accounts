@@ -11,7 +11,10 @@ export const organizationRoutes = new Elysia({ prefix: '/organizations' })
             name: t.String(),
             baseCurrency: t.Optional(t.String()),
             timezone: t.Optional(t.String()),
-            logo: t.Optional(t.Nullable(t.String()))
+            logo: t.Optional(t.Nullable(t.String())),
+            fyStartMonth: t.Optional(t.Number()),
+            defaultBranchName: t.Optional(t.String()),
+            defaultBranchCurrency: t.Optional(t.String())
         })
     })
     .put('/:id', OrganizationController.updateOrganization, {
@@ -71,6 +74,8 @@ export const organizationRoutes = new Elysia({ prefix: '/organizations' })
         }),
         body: t.Object({
             role: t.Optional(t.Union([t.Literal('owner'), t.Literal('admin'), t.Literal('member')])),
-            branchIds: t.Optional(t.Nullable(t.Array(t.Number())))
+            branchIds: t.Optional(t.Nullable(t.Array(t.Number()))),
+            name: t.Optional(t.String()),
+            status: t.Optional(t.Union([t.Literal(1), t.Literal(2)]))
         })
     });

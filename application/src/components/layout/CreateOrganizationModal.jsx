@@ -420,6 +420,12 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
                                             className={`flex items-center justify-between p-3 border rounded-xl transition-all group cursor-pointer ${selectedOrg?.id === org.id ? 'bg-slate-50 border-slate-200 ring-1 ring-slate-200' : 'bg-white border-gray-100 hover:border-gray-300'}`}
                                         >
                                             <div className="flex items-center gap-3 overflow-hidden">
+                                                {/* Selection Checkmark on Left */}
+                                                <div className="w-4 shrink-0 flex items-center justify-center">
+                                                    {selectedOrg?.id === org.id && (
+                                                        <Check size={16} className="text-[#4A8AF4]" strokeWidth={3} />
+                                                    )}
+                                                </div>
                                                 {org.logo ? (
                                                     <img
                                                         src={org.logo}

@@ -975,11 +975,16 @@ const Transactions = () => {
         };
     });
 
+    const isDateFilterDisabled = useMemo(() => {
+        const params = new URLSearchParams(location.search);
+        return params.get('disableDateFilter') === 'true';
+    }, [location.search]);
+
     // Listen for URL param changes (like navigating from Accounts page)
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const accountId = params.get('accountId') || 'all';
-        setAppliedFilters(prev => ({ ...prev, accountId }));
+        setAppliedFilters(prev => ({ ...prev, accountId, ...(params.get('disableDateFilter') === 'true' ? { dateRange: null } : {}) }));
     }, [location.search]);
 
     // Date Presets Generation
@@ -993,11 +998,13 @@ const Transactions = () => {
     // Auto-select Current FY by default on load & year toggle
     useEffect(() => {
         if (!selectedYear || datePresets.length === 0) return;
+        if (isDateFilterDisabled) return; // Do not apply default date if disabled
+        
         const currentFyPreset = datePresets.find(p => p.value === 'current');
         if (currentFyPreset?.range) {
             setAppliedFilters(prev => ({ ...prev, dateRange: currentFyPreset.range }));
         }
-    }, [selectedYear, datePresets]);
+    }, [selectedYear, datePresets, isDateFilterDisabled]);
 
     const [isInsightsExpanded, setIsInsightsExpanded] = useState(false);
     const [pagingPanel, setPagingPanel] = useState(null);
@@ -1090,7 +1097,16 @@ const Transactions = () => {
                 financialYearId: selectedYear.id,
                 targetCurrency: appliedFilters.currency
             };
-            if (appliedFilters.dateRange?.startDate) {
+            
+            const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+            const urlAccountId = params.get('accountId');
+            const disabledDate = params.get('disableDateFilter') === 'true';
+
+            if (disabledDate && urlAccountId && urlAccountId !== 'all') {
+                payload.accountId = Number(urlAccountId);
+                payload.startDate = '1970-01-01';
+                payload.endDate = '2100-12-31';
+            } else if (appliedFilters.dateRange?.startDate) {
                 payload.startDate = appliedFilters.dateRange.startDate;
                 payload.endDate = appliedFilters.dateRange.endDate || appliedFilters.dateRange.startDate;
             }
@@ -1834,14 +1850,16 @@ const Transactions = () => {
                     <div className="px-5 pt-3 pb-4 flex flex-col xl:flex-row justify-between xl:items-center gap-4 print:hidden relative z-20 w-full bg-transparent border-b border-gray-100">
                         {/* LEFT SIDE: Core Filters */}
                         <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
-                            <DateRangePicker
-                                startDate={appliedFilters.dateRange?.startDate}
-                                endDate={appliedFilters.dateRange?.endDate}
-                                selectedPreset={appliedFilters.dateRange?.preset}
-                                presetOptions={datePresets}
-                                onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
-                                className="h-[32px]"
-                            />
+                            <div className={isDateFilterDisabled ? "pointer-events-none opacity-60" : ""}>
+                                <DateRangePicker
+                                    startDate={appliedFilters.dateRange?.startDate}
+                                    endDate={appliedFilters.dateRange?.endDate}
+                                    selectedPreset={appliedFilters.dateRange?.preset}
+                                    presetOptions={datePresets}
+                                    onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
+                                    className="h-[32px]"
+                                />
+                            </div>
 
                             <BranchSelector flatSelectAll hideSettings />
 

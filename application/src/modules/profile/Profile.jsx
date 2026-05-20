@@ -22,7 +22,6 @@ const Profile = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [showDeleteOption, setShowDeleteOption] = useState(false);
     const [error, setError] = useState('');
-    const [showSuccess, setShowSuccess] = useState(false);
     const fileInputRef = useRef(null);
 
     useEffect(() => {
@@ -83,7 +82,7 @@ const Profile = () => {
         
         setIsLoading(true);
         try {
-            await updateUser({ profilePhoto: null });
+            await updateUser({ profilePhoto: '' });
             setFormData(prev => ({ ...prev, profilePhoto: '' }));
             setShowDeleteOption(false);
             showToast('Profile photo removed', 'success');
@@ -127,11 +126,7 @@ const Profile = () => {
                 await updatePreferences(preferenceChanges);
             }
 
-            setShowSuccess(true);
-
-            setTimeout(() => {
-                setShowSuccess(false);
-            }, 3000); // Increased time slightly for visibility
+            showToast('Changes saved successfully', 'success');
         } catch (error) {
             console.error('Failed to save changes', error);
             setError(error.response?.data?.message || 'Failed to save changes. Please try again.');
@@ -144,7 +139,7 @@ const Profile = () => {
         <div className="flex flex-col h-full min-h-0 overflow-hidden relative bg-white">
 
             <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar">
-                <div className="px-6 py-4 w-full max-w-2xl animate-in fade-in duration-300">
+                <div className="px-6 py-4 w-full max-w-2xl">
                     <form onSubmit={handleSubmit} className="flex flex-col gap-8">
                         {error && (
                             <div className="bg-red-50 text-red-500 text-[13px] p-3 rounded">
@@ -188,7 +183,7 @@ const Profile = () => {
                                                     className="fixed inset-0 z-20" 
                                                     onClick={() => setShowDeleteOption(false)}
                                                 />
-                                                <div className="absolute top-[calc(100%+12px)] left-[calc(100%-12px)] w-36 bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.1)] border border-gray-100 z-30 py-1.5 overflow-hidden animate-in zoom-in-95 duration-200">
+                                                <div className="absolute top-[calc(100%+12px)] left-[calc(100%-12px)] w-36 bg-white rounded-xl shadow-[0_4px_20px_rgb(0,0,0,0.1)] border border-gray-100 z-30 py-1.5 overflow-hidden">
                                                     <button
                                                         type="button"
                                                         onClick={() => {
@@ -273,29 +268,21 @@ const Profile = () => {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="h-[36px] px-6 bg-[#4A8AF4] text-white text-[13px] font-bold rounded-md hover:bg-[#3b7eed] transition-all shadow-sm flex items-center justify-center min-w-[120px]"
+                                className="h-[36px] px-6 bg-[#4A8AF4] text-white text-[13px] font-bold rounded-md hover:bg-[#3b7eed] transition-all shadow-sm flex items-center justify-center gap-1.5 min-w-[120px]"
                             >
-                                {isLoading ? <Loader className="h-4 w-4 text-white" /> : 'Save'}
+                                {isLoading ? (
+                                    <Loader className="h-4 w-4 text-white" />
+                                ) : (
+                                    <>
+                                        <Save size={15} strokeWidth={2.5} />
+                                        Save
+                                    </>
+                                )}
                             </button>
                         </div>
                     </form>
                 </div>
             </div>
-
-            {/* Success Popup Overlay */}
-            {showSuccess && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-300">
-                    <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
-                        <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600 animate-[bounce_1s_infinite]">
-                            <Check size={32} strokeWidth={3} />
-                        </div>
-                        <h3 className="text-xl font-bold text-gray-900 mb-2">Changes Saved!</h3>
-                        <p className="text-gray-500 text-center text-sm">
-                            Your changes have been successfully saved.
-                        </p>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

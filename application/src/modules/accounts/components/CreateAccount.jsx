@@ -24,6 +24,7 @@ import { useBranch } from "../../../context/BranchContext";
 import { useOverlayStack } from "../../../hooks/useOverlayStack";
 import { useCurrencyOptions } from "../../../hooks/useCurrencyOptions";
 import { CURRENCY_OPTIONS } from "../../../utils/constants";
+import { useToast } from "../../../context/ToastContext";
 
 const formatDateForInput = (value) => {
   if (!value) return new Date().toISOString().split("T")[0];
@@ -183,7 +184,7 @@ const CreateAccount = ({
   const { selectedOrg } = useOrganization();
   const { branches, selectedBranchIds } = useBranch();
   const { currencyOptions } = useCurrencyOptions();
-  const [showSuccess, setShowSuccess] = useState(false);
+  const { showToast } = useToast();
   const [errors, setErrors] = useState({});
   const [focusTick, setFocusTick] = useState(0);
   const [isNameSuggestionsOpen, setIsNameSuggestionsOpen] = useState(false);
@@ -419,7 +420,6 @@ const CreateAccount = ({
 
       setFormData(initial);
       setErrors({});
-      setShowSuccess(false);
       setIsNameSuggestionsOpen(false);
       setActiveNameSuggestionIndex(-1);
     }
@@ -1001,12 +1001,11 @@ const CreateAccount = ({
 
       clearAccountRelatedCaches();
 
-      setShowSuccess(true);
+      showToast(isEditMode ? "Account Updated successfully" : "Account Created successfully", "success");
+      
       if (onSuccess) onSuccess();
+      onClose();
 
-      setTimeout(() => {
-        onClose();
-      }, 1000);
       return true;
     } catch (error) {
       console.error("Save failed:", error);
@@ -1684,21 +1683,6 @@ const CreateAccount = ({
           </div>
         </form>
       </div>
-
-      {/* Success Popup */}
-      {showSuccess && (
-        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl p-8 shadow-2xl flex flex-col items-center max-w-sm mx-4 animate-in zoom-in-95 duration-300">
-            <div className="w-16 h-16 bg-emerald-100 rounded-full flex items-center justify-center mb-4 text-emerald-600">
-              <Check size={32} strokeWidth={3} />
-            </div>
-            <h3 className="text-xl font-bold text-gray-900 mb-2">
-              {isEditMode ? "Account Updated" : "Account Created"}
-            </h3>
-            <p className="text-gray-500 text-center text-sm">Closing...</p>
-          </div>
-        </div>
-      )}
     </>
   );
 };
