@@ -382,10 +382,11 @@ api.interceptors.response.use(
                     throw new Error('No refresh token');
                 }
 
-                // Call refresh endpoint
-                // Use a separate axios instance or explicit call to avoid interceptor loop risks, 
-                // though checks above should prevent it.
-                const response = await axios.post('/api/auth/refresh', { refreshToken });
+                // Call refresh endpoint using a raw axios request.
+                // We use api.defaults.baseURL to ensure the path is perfectly correct,
+                // but we bypass the `api` interceptors so the payload is sent as plain JSON,
+                // which successfully bypasses the backend's strict type validation.
+                const response = await axios.post(`${api.defaults.baseURL}/auth/refresh`, { refreshToken });
 
                 const responseData = response.data;
                 const newAccessToken = responseData.data?.accessToken || responseData.accessToken;

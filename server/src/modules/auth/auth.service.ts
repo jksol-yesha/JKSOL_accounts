@@ -6,7 +6,7 @@ import { users, organizations, financialYears, branches, roles } from '../../db/
 import { eq, and, aliasedTable } from 'drizzle-orm';
 import { sql } from "drizzle-orm";
 
-const ACCESS_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60;
+const ACCESS_TOKEN_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 
 const sendOtpEmailInBackground = (email: string, otp: string) => {
     EmailService.sendOtpEmail(email, otp).catch((error) => {
