@@ -112,7 +112,7 @@ const CardShell = ({ title, headerRight, children, className, headerClassName })
                 {title}
             </h3>
             {headerRight && (
-                <div className="flex items-center justify-end pointer-events-none">
+                <div className="flex items-center justify-end">
                     {headerRight}
                 </div>
             )}
@@ -122,6 +122,27 @@ const CardShell = ({ title, headerRight, children, className, headerClassName })
         </div>
     </div>
 );
+
+// --- CUSTOM HOVER AMOUNT TOOLTIP ---
+const HoverAmountTooltip = ({ compactAmount, exactAmount, align = 'right', className = "" }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    return (
+        <div 
+            className={`relative w-fit flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <span className={`${className} cursor-default`}>
+                {compactAmount}
+            </span>
+            <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-2 transition-all duration-200 z-[9999] min-w-max bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed ${
+                isHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
+            }`}>
+                {exactAmount}
+            </div>
+        </div>
+    );
+};
 
 // -------------------------------------------------------------
 // COLUMN 1: Account Balances
@@ -155,14 +176,13 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
     const isTotalPositive = totalAvailableBalance >= 0;
 
     const totalBalanceBadge = accountItems.length > 0 ? (
-        <div className="flex items-center gap-1.5" title={`Total Available Balance: ${formatCurrencyExact(totalAvailableBalance)}`}>
+        <div className="flex items-center gap-1.5">
             <Wallet className="w-4 h-4 text-slate-400" />
-            <span className={cn(
-                "text-sm font-bold tracking-tight",
-                isTotalPositive ? "text-slate-900" : "text-rose-600"
-            )}>
-                {formatCurrency(totalAvailableBalance)}
-            </span>
+            <HoverAmountTooltip 
+                compactAmount={formatCurrency(totalAvailableBalance)}
+                exactAmount={formatCurrencyExact(totalAvailableBalance)}
+                className={cn("text-sm font-bold tracking-tight", isTotalPositive ? "text-slate-900" : "text-rose-600")}
+            />
         </div>
     ) : null;
 
@@ -201,9 +221,11 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                         />
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
-                                        <span title={formatCurrencyExact(cat.amount)} className="w-32 text-right text-sm font-medium text-slate-800">
-                                            {formatCurrency(cat.amount)}
-                                        </span>
+                                        <HoverAmountTooltip 
+                                            compactAmount={formatCurrency(cat.amount)}
+                                            exactAmount={formatCurrencyExact(cat.amount)}
+                                            className="w-32 text-right text-sm font-medium text-slate-800"
+                                        />
                                         <span className="w-8 text-right text-xs font-medium text-slate-400">
                                             {sharePercent}%
                                         </span>
@@ -300,9 +322,12 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="text-xs font-medium text-slate-500">Income</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div title={formatCurrencyExact(totalIncomeApp)} className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
-                                       {formatCurrency(totalIncomeApp)}
-                                   </div>
+                                   <HoverAmountTooltip 
+                                       compactAmount={formatCurrency(totalIncomeApp)}
+                                       exactAmount={formatCurrencyExact(totalIncomeApp)}
+                                       align="left"
+                                       className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate"
+                                   />
                                    <div className="text-xs font-medium text-slate-400 shrink-0">
                                        {incomePercent}%
                                    </div>
@@ -316,9 +341,12 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="text-xs font-medium text-slate-500">Expenses</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <div title={formatCurrencyExact(totalExpenseApp)} className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate">
-                                       {formatCurrency(totalExpenseApp)}
-                                   </div>
+                                   <HoverAmountTooltip 
+                                       compactAmount={formatCurrency(totalExpenseApp)}
+                                       exactAmount={formatCurrencyExact(totalExpenseApp)}
+                                       align="left"
+                                       className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate"
+                                   />
                                    <div className="text-xs font-medium text-slate-400 shrink-0">
                                        {expensePercent}%
                                    </div>
@@ -364,14 +392,13 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
     const isTotalPositive = totalAvailableInvestment >= 0;
 
     const totalInvestmentBadge = allInvestments.length > 0 ? (
-        <div className="flex items-center gap-1.5" title={`Total Investment: ${formatCurrencyExact(totalAvailableInvestment)}`}>
+        <div className="flex items-center gap-1.5">
             <TrendingUp className="w-4 h-4 text-slate-400" />
-            <span className={cn(
-                "text-sm font-bold tracking-tight",
-                isTotalPositive ? "text-slate-900" : "text-rose-600"
-            )}>
-                {formatCurrency(totalAvailableInvestment)}
-            </span>
+            <HoverAmountTooltip 
+                compactAmount={formatCurrency(totalAvailableInvestment)}
+                exactAmount={formatCurrencyExact(totalAvailableInvestment)}
+                className={cn("text-sm font-bold tracking-tight", isTotalPositive ? "text-slate-900" : "text-rose-600")}
+            />
         </div>
     ) : null;
 
@@ -392,9 +419,11 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
                             return (
                                 <div key={i} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
                                     <span className="text-sm font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
-                                    <span title={formatCurrencyExact(cat.amount)} className="text-sm font-semibold text-slate-800 mt-0.5 shrink-0">
-                                        {formatCurrency(cat.amount)}
-                                    </span>
+                                    <HoverAmountTooltip 
+                                        compactAmount={formatCurrency(cat.amount)}
+                                        exactAmount={formatCurrencyExact(cat.amount)}
+                                        className="text-sm font-semibold text-slate-800 mt-0.5 shrink-0"
+                                    />
                                 </div>
                             );
                         })}

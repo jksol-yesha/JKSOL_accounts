@@ -864,6 +864,21 @@ const ColumnSettingsHeader = (props) => {
     );
 };
 
+const CustomGridOverlay = (props) => {
+    if (props.isLoading) {
+        return (
+            <div className="flex items-center justify-center h-full w-full">
+                <Loader className="w-6 h-6 text-[#4A8AF4]" />
+            </div>
+        );
+    }
+    return (
+        <div className="flex items-center justify-center h-full w-full">
+            <span className="text-gray-500 font-medium text-sm">No transactions found</span>
+        </div>
+    );
+};
+
 const Transactions = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -902,7 +917,39 @@ const Transactions = () => {
             { field: 'category', headerName: 'Category', hide: !visibleColumns.category, valueGetter: params => params.data?.category?.name || '-', minWidth: 150, flex: 1, cellRenderer: (params) => <AccountNameTooltip name={params.value} textClassName="text-[12px] font-medium text-gray-700" /> },
             { field: 'notes', headerName: 'Notes', hide: !visibleColumns.notes, cellRenderer: (params) => <DescriptionTooltip description={params.data?.notes || params.data?.description || '-'} />, flex: 2, minWidth: 200 },
             { field: 'amount', headerName: 'Amount', hide: !visibleColumns.amount, valueGetter: params => params.data?.amountBaseCurrency ?? params.data?.amountBase ?? params.data?.finalAmountLocal ?? params.data?.amountLocal, cellRenderer: AmountCellRenderer, minWidth: 120, flex: 1, type: 'rightAligned' },
-            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[12px] font-medium text-gray-400', minWidth: 130 }
+            { field: 'createdBy', headerName: 'Created By', hide: !visibleColumns.createdBy, valueGetter: params => params.data?.createdByName || params.data?.createdByDisplayName || params.data?.creatorName || '-', cellClass: 'text-[12px] font-medium text-gray-400', minWidth: 130 },
+            { 
+                field: 'attachment', 
+                headerName: '', 
+                hide: false, 
+                minWidth: 50, 
+                maxWidth: 50, 
+                sortable: false, 
+                filter: false, 
+                resizable: false,
+                cellRenderer: (params) => {
+                    const hasAttachment = Boolean(params.data?.attachmentPath || params.data?.attachment || params.data?.receiptUrl || params.data?.attachmentUrl);
+                    if (!hasAttachment) return null;
+                    return (
+                        <div className="flex items-center justify-center h-full w-full">
+                            <button
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const path = params.data?.attachmentPath || params.data?.attachment || params.data?.receiptUrl || params.data?.attachmentUrl;
+                                    if (params.context?.setFullScreenAttachment) {
+                                        params.context.setFullScreenAttachment({ isOpen: true, path });
+                                    }
+                                }}
+                                className="attachment-btn shrink-0 text-slate-400 hover:text-[#4A8AF4] transition-colors flex items-center justify-center focus:outline-none bg-transparent"
+                                title="View Attachment"
+                            >
+                                <Paperclip size={16} strokeWidth={2.5} className="pointer-events-none hover:-rotate-12 transition-transform duration-200" />
+                            </button>
+                        </div>
+                    );
+                }
+            }
         ];
 
         const firstVisibleIndex = baseDefs.findIndex(col => !col.hide);
@@ -1333,7 +1380,11 @@ const Transactions = () => {
                 const catName = t.category?.name || 'Uncategorized';
                 if (!categoryMap[catName]) categoryMap[catName] = 0;
                 categoryMap[catName] += amount;
+            }
 
+            const isTaxableFlag = t.isTaxable === true || t.isTaxable === 1 || t.isTaxable === '1';
+            
+            if (isTaxableFlag || Number(t.gstTotal) > 0) {
                 const safeDisplayRate = Number.isFinite(displayRate) && displayRate > 0 ? displayRate : 1;
                 const gstTotal = Number(t.gstTotal ?? 0) * safeDisplayRate;
                 const cgstAmount = Number(t.cgstAmount ?? 0) * safeDisplayRate;
@@ -1341,9 +1392,12 @@ const Transactions = () => {
                 const igstAmount = Number(t.igstAmount ?? 0) * safeDisplayRate;
 
                 if (gstTotal > 0 || cgstAmount > 0 || sgstAmount > 0 || igstAmount > 0) {
-                    taxableExpenseCount += 1;
+                    if (type === 'expense') {
+                        taxableExpenseCount += 1;
+                    }
                 }
 
+                // Add to Tax Paid regardless of type
                 gstTrendMap[dateStr].gstPaid += gstTotal;
                 totalGstPaid += gstTotal;
                 totalCgstPaid += cgstAmount;
@@ -2133,6 +2187,10 @@ const Transactions = () => {
                                     paginationPageSize={50}
                                     paginationPageSizeSelector={[25, 50, 100, 200]}
                                     onRowClicked={(event) => {
+                                        const target = event.event?.target;
+                                        if (target && target.closest && target.closest('.attachment-btn')) {
+                                            return;
+                                        }
                                         if (canEditTxn(event.data)) {
                                             handleEdit(event.data);
                                         }
@@ -2147,9 +2205,10 @@ const Transactions = () => {
                                         visibleColumns,
                                         setVisibleColumns
                                     }}
-                                    overlayNoRowsTemplate={
-                                        loading ? '<span class="ag-overlay-loading-center text-primary font-medium text-sm">Loading transactions...</span>' : '<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No transactions found</span>'
-                                    }
+                                    loadingOverlayComponent={CustomGridOverlay}
+                                    loadingOverlayComponentParams={{ isLoading: true }}
+                                    noRowsOverlayComponent={CustomGridOverlay}
+                                    noRowsOverlayComponentParams={{ isLoading: loading }}
                                 />
                             </div>
                         </div>

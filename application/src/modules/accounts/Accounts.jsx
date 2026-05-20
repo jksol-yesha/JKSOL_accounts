@@ -417,6 +417,8 @@ const SummaryItem = ({
   currency,
 }) => {
   const { formatCurrency, formatCompactCurrency } = usePreferences();
+  const [isHovered, setIsHovered] = useState(false);
+
   return (
     <div className="flex items-center gap-3">
       <div
@@ -431,9 +433,21 @@ const SummaryItem = ({
         <p className="text-xs font-semibold text-gray-500 mb-0.5">
           {title}
         </p>
-        <h3 title={formatCurrency(amount, currency)} className="text-base font-bold text-gray-800 tracking-tight">
-          {formatCurrency(amount, currency)}
-        </h3>
+        <div 
+          className="relative w-fit"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <h3 className="text-base font-bold text-gray-800 tracking-tight cursor-default">
+            {formatCompactCurrency(amount, currency)}
+          </h3>
+          <div className={cn(
+            "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
+            isHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
+          )}>
+            {formatCurrency(amount, currency)}
+          </div>
+        </div>
       </div>
     </div>
   );

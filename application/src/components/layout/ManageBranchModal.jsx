@@ -420,14 +420,14 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                             {['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase()) && (
                                 <button
                                     onClick={() => setIsCreating(true)}
-                                    className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all group shadow-sm hover:shadow"
+                                    className="w-full flex items-center justify-between px-3 py-2.5 bg-gray-50 hover:bg-white border border-gray-200 hover:border-gray-300 rounded-xl transition-all group shadow-sm hover:shadow"
                                 >
                                     <div className="flex flex-col items-start">
-                                        <span className="font-bold text-sm text-gray-800">Add New Branch</span>
-                                        <span className="text-xs text-gray-500 font-medium">Register a new location</span>
+                                        <span className="font-bold text-[13px] text-gray-800">Add New Branch</span>
+                                        <span className="text-[11px] text-gray-500 font-medium">Register a new location</span>
                                     </div>
-                                    <div className="w-8 h-8 rounded-full bg-white text-gray-500 border border-gray-200 flex items-center justify-center group-hover:text-black group-hover:border-gray-300 transition-colors">
-                                        <Plus size={18} />
+                                    <div className="w-6 h-6 rounded-full bg-white text-gray-500 border border-gray-200 flex items-center justify-center group-hover:text-black group-hover:border-gray-300 transition-colors">
+                                        <Plus size={14} />
                                     </div>
                                 </button>
                             )}
@@ -455,10 +455,14 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                                                     className="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl hover:border-gray-300 transition-all group"
                                                 >
                                                     <div className="flex items-center gap-3 flex-1">
-                                                        {/* Selection Dot */}
-                                                        <div
-                                                            className={`w-2 h-2 rounded-full ${isSelected ? 'bg-black' : 'bg-transparent'}`}
-                                                        />
+                                                        {/* Selection Indicator */}
+                                                        <div className="w-5 h-5 flex items-center justify-center shrink-0">
+                                                            {isSelected ? (
+                                                                <Check size={16} className="text-[#4A8AF4] stroke-[3px]" />
+                                                            ) : (
+                                                                <div className="w-2 h-2 rounded-full bg-transparent" />
+                                                            )}
+                                                        </div>
 
                                                         <div>
                                                             <div className="flex items-center gap-2">
@@ -704,17 +708,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
                     )}
                 </div>
 
-                {/* Footer only for List View */}
-                {!isCreating && (
-                    <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex justify-end gap-3 shrink-0">
-                        <button
-                            onClick={onClose}
-                            className="px-5 py-1.5 rounded-md text-[13px] font-bold bg-white text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                        >
-                            Done
-                        </button>
-                    </div>
-                )}
+
             </div>
         </>,
         document.body

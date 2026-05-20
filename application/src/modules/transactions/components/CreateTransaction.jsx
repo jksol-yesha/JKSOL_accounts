@@ -12,6 +12,7 @@ import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../..
 import { cn } from '../../../utils/cn';
 import GstRateDropdown from './GstRateDropdown';
 import { notifyTransactionDataChanged } from '../transactionDataSync';
+import { Loader } from '../../../components/common/Loader';
 
 const TRANSACTIONS_CREATE_SCROLL_MODE_EVENT = 'transactions-create-scroll-mode';
 const TRANSACTION_DRAWER_CLOSE_ANIMATION_MS = 280;
@@ -1322,10 +1323,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                     <div ref={scrollAreaRef} className="flex-1 overflow-y-auto px-5 py-5 no-scrollbar bg-white">
                         {isEditMode && !initialData ? (
                             <div className="flex items-center justify-center h-full min-h-[300px]">
-                                <div className="flex flex-col items-center gap-4">
-                                    <div className="w-8 h-8 rounded-full border-[3px] border-[#4A8AF4] border-t-transparent animate-spin" />
-                                    <span className="text-[13px] font-semibold text-slate-500">Loading details...</span>
-                                </div>
+                                <Loader className="w-8 h-8 text-[#4A8AF4]" />
                             </div>
                         ) : (
                             <div className="flex flex-col gap-3">

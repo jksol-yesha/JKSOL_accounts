@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from 'recharts';
 import { usePreferences } from '../../../context/PreferenceContext';
 import LoadingOverlay from '../../../components/common/LoadingOverlay';
@@ -101,6 +101,29 @@ const CashFlowAxisTick = ({ x = 0, y = 0, payload }) => {
 
 const isMonthlyCashFlowLabel = (value) => /^\w{3}\s+\d{4}$/.test(String(value || '').trim());
 
+const HoverAmount = ({ compactAmount, exactAmount, position = "bottom" }) => {
+    const [isHovered, setIsHovered] = useState(false);
+    
+    const positionClasses = position === "top" ? "bottom-full mb-2" : "top-full mt-2";
+    
+    return (
+        <div 
+            className="relative w-fit flex items-center justify-end"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <span className="text-sm font-bold text-slate-900 tracking-tight cursor-default">
+                {compactAmount}
+            </span>
+            <div className={`absolute right-0 ${positionClasses} transition-all duration-200 z-[9999] min-w-max bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed ${
+                isHovered ? "opacity-100 translate-y-0 visible" : `opacity-0 ${position === "top" ? "translate-y-1" : "-translate-y-1"} invisible`
+            }`}>
+                {exactAmount}
+            </div>
+        </div>
+    );
+};
+
 const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
     const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact } = usePreferences();
 
@@ -187,9 +210,10 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                             Opening Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span title={formatCurrencyExact(stats.openingBalance || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
-                                {formatCurrency(stats.openingBalance || 0)}
-                            </span>
+                            <HoverAmount 
+                                compactAmount={formatCurrency(stats.openingBalance || 0)}
+                                exactAmount={formatCurrencyExact(stats.openingBalance || 0)}
+                            />
                         </div>
                     </div>
 
@@ -199,9 +223,10 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                             Incoming
                         </span>
                         <div className="flex items-center gap-2">
-                            <span title={formatCurrencyExact(stats.totalIncome || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
-                                {formatCurrency(stats.totalIncome || 0)}
-                            </span>
+                            <HoverAmount 
+                                compactAmount={formatCurrency(stats.totalIncome || 0)}
+                                exactAmount={formatCurrencyExact(stats.totalIncome || 0)}
+                            />
                             <span className="text-sm font-bold text-emerald-600">+</span>
                         </div>
                     </div>
@@ -212,9 +237,10 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                             Outgoing
                         </span>
                         <div className="flex items-center gap-2">
-                            <span title={formatCurrencyExact(stats.totalExpense || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
-                                {formatCurrency(stats.totalExpense || 0)}
-                            </span>
+                            <HoverAmount 
+                                compactAmount={formatCurrency(stats.totalExpense || 0)}
+                                exactAmount={formatCurrencyExact(stats.totalExpense || 0)}
+                            />
                             <span className="text-sm font-bold text-rose-500">-</span>
                         </div>
                     </div>
@@ -225,9 +251,11 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                             Closing Balance
                         </span>
                         <div className="flex items-center gap-2">
-                            <span title={formatCurrencyExact(stats.closingBalance || 0)} className="text-sm font-bold text-slate-900 tracking-tight">
-                                {formatCurrency(stats.closingBalance || 0)}
-                            </span>
+                            <HoverAmount 
+                                compactAmount={formatCurrency(stats.closingBalance || 0)}
+                                exactAmount={formatCurrencyExact(stats.closingBalance || 0)}
+                                position="top"
+                            />
                             <span className="text-sm font-bold text-slate-400">=</span>
                         </div>
                     </div>

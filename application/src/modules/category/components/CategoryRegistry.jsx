@@ -8,9 +8,6 @@ import {
     Plus,
     CornerDownRight,
     ShoppingBag,
-    Download,
-    FileSpreadsheet,
-    FileText,
     TrendingUp,
     ArrowUpCircle,
     ArrowDownCircle
@@ -38,8 +35,6 @@ const CategoryRegistry = ({
     hasFetchedOnce = false
 }) => {
     const [searchTerm, setSearchTerm] = useState('');
-    const [activeDropdown, setActiveDropdown] = useState(null);
-    const dropdownAreaRef = useRef(null);
     const gridRef = useRef(null);
 
     const formatDisplayDate = (date) => {
@@ -265,27 +260,6 @@ const CategoryRegistry = ({
 
                 {/* Right: Search */}
                 <div className="flex items-center gap-3">
-                    <div className="relative" ref={dropdownAreaRef}>
-                        <button
-                            onClick={() => setActiveDropdown(prev => prev === 'export' ? null : 'export')}
-                            className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium"
-                        >
-                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                            <span>Export</span>
-                        </button>
-                        {activeDropdown === 'export' && (
-                            <div className="absolute top-full mt-2 right-0 w-48 bg-white border border-gray-100 shadow-xl rounded-xl z-50 py-2 animate-in slide-in-from-top-2 duration-200">
-                                <button className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                                    <FileSpreadsheet size={14} className="text-emerald-500" />
-                                    <span>Export to Excel</span>
-                                </button>
-                                <button className="w-full text-left px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors flex items-center space-x-2">
-                                    <FileText size={14} className="text-rose-500" />
-                                    <span>Export to PDF</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
                     <div className="relative group w-[240px]">
                         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
                         <input
