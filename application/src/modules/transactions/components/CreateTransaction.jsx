@@ -329,6 +329,25 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
         setFormData(prev => ({ ...prev, amountLocal: sanitizeDecimalInput(e.target.value) }));
     };
 
+    const handleGstInclusiveToggle = (newIsGstInclusive) => {
+        setFormData(prev => {
+            let newAmountLocal = prev.amountLocal;
+            
+            // Mathematically preserve the Final Amount in the UI by dynamically updating the base
+            if (newIsGstInclusive && gstCalc.finalAmount !== undefined) {
+                newAmountLocal = String(Number(gstCalc.finalAmount).toFixed(2));
+            } else if (!newIsGstInclusive && gstCalc.calculatedBase !== undefined) {
+                newAmountLocal = String(Number(gstCalc.calculatedBase).toFixed(2));
+            }
+            
+            return {
+                ...prev,
+                isGstInclusive: newIsGstInclusive,
+                amountLocal: newAmountLocal
+            };
+        });
+    };
+
     const getBranchCurrencyCode = (branchId) =>
         branches.find(branch => Number(branch.id) === Number(branchId))?.currencyCode || '';
 
@@ -1180,10 +1199,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
             }
             if (fieldName === 'isGstInclusive') {
                 e.preventDefault();
-                setFormData((prev) => ({
-                    ...prev,
-                    isGstInclusive: !prev.isGstInclusive,
-                }));
+                handleGstInclusiveToggle(!formData.isGstInclusive);
                 return; // don't advance
             }
 
@@ -1977,7 +1993,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                                                                 ref={setFieldRef('isGstInclusive')}
                                                                 data-nav-field="true"
                                                                 checked={formData.isGstInclusive}
-                                                                onChange={(e) => setFormData({ ...formData, isGstInclusive: e.target.checked })}
+                                                                onChange={(e) => handleGstInclusiveToggle(e.target.checked)}
                                                                 onKeyDown={(e) => handleFieldKeyDown(e, 'isGstInclusive')}
                                                                 className="sr-only peer"
                                                             />
