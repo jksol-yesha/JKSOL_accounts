@@ -144,18 +144,25 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                         localDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
                     }
                 }
+                const rawPayee = (txn.payee || txn.party || txn.company || txn.Counterparty || txn.counterparty_name || txn.counterpartyName || '').trim();
+                let initialContactId = '';
+                if (rawPayee) {
+                    initialContactId = `new_${rawPayee}`;
+                }
+                
                 return {
                     _id: index,
                     selected: true,
                     date: localDate,
-                description: txn.narration || '',
-                type: txn.deposit > 0 ? 'Income' : 'Expense',
-                amount: txn.deposit > 0 ? txn.deposit : txn.withdrawal,
-                accountId: '',
-                categoryId: '',
-                contactId: '',
-                status: 'posted'
-            };
+                    description: txn.narration || '',
+                    type: txn.deposit > 0 ? 'Income' : 'Expense',
+                    amount: txn.deposit > 0 ? txn.deposit : txn.withdrawal,
+                    accountId: '',
+                    categoryId: '',
+                    contactId: initialContactId,
+                    payee: rawPayee,
+                    status: 'posted'
+                };
         });
             setTransactions(mapped);
             if (mapped.length > 0) setFocusedTransactionId(mapped[0]._id);
@@ -189,14 +196,20 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                 
                 if (accRes?.success) setAccounts(accRes.data || []);
                 if (catRes?.success) {
-                    const cats = [];
+                    const catsMap = new Map();
                     (catRes.data || []).forEach(c => {
-                        cats.push(c);
-                        if (c.subCategories) {
-                            c.subCategories.forEach(sc => cats.push({ ...sc, name: `${c.name} - ${sc.name}` }));
+                        if (!catsMap.has(c.id)) {
+                            catsMap.set(c.id, c);
                         }
                     });
-                    setCategories(cats);
+                    (catRes.data || []).forEach(c => {
+                        if (c.subCategories) {
+                            c.subCategories.forEach(sc => {
+                                catsMap.set(`sub-${sc.id}-${c.id}`, { ...sc, id: `sub-${sc.id}-${c.id}`, name: `${c.name} - ${sc.name}` });
+                            });
+                        }
+                    });
+                    setCategories(Array.from(catsMap.values()));
                 }
                 if (partyRes?.success) setParties(partyRes.data || []);
                 if (typesRes?.success) setTxnTypes(typesRes.data || []);
@@ -256,31 +269,84 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
         setError('');
 
         try {
-            const rows = transactions.map(t => ({
-                date: t.date,
-                type: t.type,
-                amount: t.amount,
-                notes: t.description,
-                account_id: t.accountId || selectedAccount,
-                category_id: t.categoryId,
-                contact_id: t.contactId,
-                branch_id: finalBranchId
-            }));
+            const rows = transactions.map(t => {
+                let catId = t.categoryId;
+                let subCatId = null;
+                if (typeof catId === 'string' && catId.startsWith('sub-')) {
+                    const parts = catId.split('-');
+                    subCatId = parseInt(parts[1], 10);
+                    catId = parseInt(parts[2], 10);
+                }
+                
+                const gst = calculateGst(t.amount, t.isTaxable, t.isGstInclusive, t.gstType, t.gstRate);
 
-            const payload = {
-                rows,
-                accountId: selectedAccount,
-                branchId: finalBranchId,
-                financialYearId: selectedYear?.id,
-                filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import')
-            };
+                let finalContactId = t.contactId;
+                let finalPayee = t.payee;
+                if (finalContactId && typeof finalContactId === 'string' && finalContactId.startsWith('new_')) {
+                    finalPayee = finalContactId.replace('new_', '');
+                    finalContactId = null;
+                }
 
-            const response = await apiService.transactions.importJson(payload);
+                return {
+                    date: t.date,
+                    type: t.type,
+                    amount: t.amount,
+                    notes: t.description,
+                    account_id: t.accountId || selectedAccount,
+                    category_id: catId,
+                    sub_category_id: subCatId,
+                    contact_id: finalContactId,
+                    payee: finalPayee,
+                    branch_id: finalBranchId,
+                    isTaxable: t.isTaxable ? 1 : 0,
+                    isGstInclusive: t.isGstInclusive ? 1 : 0,
+                    gstType: t.gstType || 1,
+                    gstRate: t.gstRate || 0,
+                    cgstAmount: gst.cgstAmount,
+                    sgstAmount: gst.sgstAmount,
+                    igstAmount: gst.igstAmount,
+                    gstTotal: gst.gstTotal,
+                    finalAmount: gst.finalAmount
+                };
+            });
+
+            const hasAttachments = transactions.some(t => t.attachment && typeof t.attachment !== 'string');
+
+            let response;
+            if (hasAttachments) {
+                const formData = new FormData();
+                formData.append('payload', JSON.stringify({
+                    rows,
+                    accountId: selectedAccount,
+                    branchId: finalBranchId,
+                    financialYearId: selectedYear?.id,
+                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import')
+                }));
+                
+                transactions.forEach((t, i) => {
+                    if (t.attachment && typeof t.attachment !== 'string') {
+                        formData.append(`attachment_${i}`, t.attachment);
+                    }
+                });
+
+                // ImportJson endpoint doesn't support multipart natively unless we change it.
+                // We'll update the backend importJson to check for body.payload.
+                response = await apiService.transactions.importJson(formData);
+            } else {
+                const payload = {
+                    rows,
+                    accountId: selectedAccount,
+                    branchId: finalBranchId,
+                    financialYearId: selectedYear?.id,
+                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import')
+                };
+                response = await apiService.transactions.importJson(payload);
+            }
 
             if (response.success || response.insertedRows > 0) {
                 setResult(response);
-                if (response.success && onSuccess) {
-                    onSuccess();
+                if (onSuccess) {
+                    onSuccess(response);
                 }
             } else {
                 setResult(response);
@@ -584,7 +650,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             dropdownClassName="z-[130]"
                                                         >
                                                             <option value="">Select Party...</option>
-                                                            {parties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                            {focusedTxn.payee && !parties.find(p => (p.companyName || p.name || '').toLowerCase() === focusedTxn.payee.toLowerCase()) && (
+                                                                <option value={`new_${focusedTxn.payee}`}>{focusedTxn.payee} (Create New)</option>
+                                                            )}
+                                                            {parties.map(p => <option key={p.id} value={String(p.id)}>{p.companyName || p.name}</option>)}
                                                         </CustomSelect>
                                                     </div>
 
@@ -610,7 +679,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             dropdownClassName="z-[130]"
                                                         >
                                                             <option value="">Use Global Account</option>
-                                                            {filteredAccounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                                            {filteredAccounts.map(a => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
                                                         </CustomSelect>
                                                     </div>
 
@@ -626,7 +695,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             dropdownClassName="z-[130]"
                                                         >
                                                             <option value="">Select Category...</option>
-                                                            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                                            {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
                                                         </CustomSelect>
                                                     </div>
 
@@ -843,16 +912,23 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                 }}
                                                 isInline={true}
                                                 accountToEdit={targetAccountObj}
-                                                onSuccess={() => {
-                                                    fetchDependencies();
+                                                onSuccess={async (newAccount) => {
+                                                    await fetchDependencies();
+                                                    if (newAccount && newAccount.id) {
+                                                        setSelectedAccount(String(newAccount.id));
+                                                    }
                                                     setActiveRightTab('edit');
                                                 }}
                                                 initialData={!targetAccountObj ? {
                                                     accountType: "1", // ASSET
                                                     subtype: "12", // BANK
-                                                    accountNumber: parsedData?.accountNumber || '',
-                                                    bankName: parsedData?.bankName || '',
+                                                    accountNumber: (parsedData?.accountNumber || '').replace(/\D/g, '') || '000000',
+                                                    bankName: parsedData?.bankName || 'My Bank',
                                                     name: parsedData?.bankName ? `${parsedData.bankName} Account` : 'New Bank Account',
+                                                    accountHolderName: 'Main Company',
+                                                    ifsc: 'HDFC0000001',
+                                                    swiftCode: 'XXXXXXXXXXX',
+                                                    bankBranchName: 'Main Branch',
                                                     isActive: true
                                                 } : undefined}
                                             />

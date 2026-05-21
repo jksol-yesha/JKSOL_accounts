@@ -1547,7 +1547,7 @@ const Transactions = () => {
         let rowData = [];
 
         // Push Header Row
-        const headers = TXN_TABLE_COLUMNS.filter(col => visibleColumns[col.key]).map(col => col.label);
+        const headers = TXN_TABLE_COLUMNS.filter(col => visibleColumns[col.key] || col.key === 'type').map(col => col.label);
         rowData.push(headers);
 
         // Push Data Rows
@@ -1558,7 +1558,7 @@ const Transactions = () => {
             let row = [];
 
             TXN_TABLE_COLUMNS.forEach(col => {
-                if (!visibleColumns[col.key]) return;
+                if (!visibleColumns[col.key] && col.key !== 'type') return;
 
                 let val = '-';
                 if (col.key === 'date') val = formatDate(txn.txnDate);
@@ -1589,7 +1589,7 @@ const Transactions = () => {
         if (printContainer && gridRef.current && gridRef.current.api) {
             let html = '<h1 style="font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 15px; color: #000; text-transform: uppercase; letter-spacing: 1px;">JKSOL</h1><table><thead><tr>';
             TXN_TABLE_COLUMNS.forEach(col => {
-                if (visibleColumns[col.key]) {
+                if (visibleColumns[col.key] || col.key === 'type') {
                     html += `<th class="${col.key === 'amount' ? 'text-right' : 'text-left'}">${col.label}</th>`;
                 }
             });
@@ -1601,7 +1601,7 @@ const Transactions = () => {
                 const txn = node.data;
                 html += '<tr>';
                 TXN_TABLE_COLUMNS.forEach(col => {
-                    if (!visibleColumns[col.key]) return;
+                    if (!visibleColumns[col.key] && col.key !== 'type') return;
 
                     let val = '-';
                     if (col.key === 'date') val = formatDate(txn.txnDate);
@@ -1623,7 +1623,7 @@ const Transactions = () => {
 
             if (count === 0) {
                 const colCount = Object.values(visibleColumns).filter(Boolean).length || 1;
-                html += `<tr><td colspan="${colCount}" class="text-center py-4">No transactions found</td></tr>`;
+                html += `<tr><td colspan="${colCount + 1}" class="text-center py-4">No transactions found</td></tr>`;
             }
             html += '</tbody></table>';
             printContainer.innerHTML = html;
@@ -2081,8 +2081,10 @@ const Transactions = () => {
                                                     <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
                                                     <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
                                                         tickFormatter={(val) => {
-                                                            if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-                                                            if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                            const absVal = Math.abs(val);
+                                                            const sign = val < 0 ? "-" : "";
+                                                            if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
+                                                            if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
                                                             return val;
                                                         }}
                                                     />
@@ -2127,8 +2129,10 @@ const Transactions = () => {
                                                         <XAxis dataKey="displayDate" axisLine={{ stroke: "#f3f4f6" }} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }} dy={8} />
                                                         <YAxis axisLine={false} tickLine={false} tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
                                                             tickFormatter={(val) => {
-                                                                if (val >= 1000000) return `${(val / 1000000).toFixed(1)}M`;
-                                                                if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                                                                const absVal = Math.abs(val);
+                                                                const sign = val < 0 ? "-" : "";
+                                                                if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
+                                                                if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
                                                                 return val;
                                                             }}
                                                         />
@@ -2289,11 +2293,18 @@ const Transactions = () => {
                 }}
                 parsedData={parsedStatementData}
                 file={uploadedFile}
-                onSuccess={() => {
+                onSuccess={(response) => {
                     setIsImportReviewModalOpen(false);
                     setParsedStatementData(null);
                     setUploadedFile(null);
                     fetchTransactions();
+                    if (response?.skippedRows > 0) {
+                        toast.warning(`Imported ${response.insertedRows} transactions. Skipped ${response.skippedRows} duplicates.`);
+                    } else if (response?.insertedRows > 0) {
+                        toast.success(`Successfully imported ${response.insertedRows} transactions.`);
+                    } else {
+                        toast.success(`Bank statement processed successfully`);
+                    }
                 }}
             />
 

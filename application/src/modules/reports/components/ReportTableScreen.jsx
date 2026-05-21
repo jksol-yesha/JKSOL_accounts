@@ -302,6 +302,49 @@ const ReportTableScreen = ({
         return [];
     }, [reportData, formatCurrency, formatDate, preferences.currency]);
 
+    const filteredTableData = useMemo(() => {
+        if (!reportData?.tableData) return [];
+        if (!searchTerm || !searchTerm.trim()) return reportData.tableData;
+
+        const term = searchTerm.trim().toLowerCase();
+        const isNumeric = !isNaN(term) && term !== "";
+        const numericTerm = isNumeric ? Number(term) : null;
+
+        const amountFields = ['amount', 'amountBase', 'amountLocal', 'debit', 'credit', 'balance', 'openingBalance', 'income', 'expense', 'investment', 'closingBalance', 'count'];
+
+        return reportData.tableData.filter(row => {
+            // 1. Check Amount Fields (Exact match only if numeric)
+            for (const key of amountFields) {
+                if (row[key] !== undefined && row[key] !== null) {
+                    if (isNumeric) {
+                        if (Number(row[key]) === numericTerm) return true;
+                    } else {
+                        // For string searches, check formatted currency and raw string
+                        const rawStr = String(row[key]).toLowerCase();
+                        const formatted = formatCurrency(row[key], preferences.currency).toLowerCase();
+                        if (rawStr.includes(term) || formatted.includes(term)) return true;
+                    }
+                }
+            }
+
+            // 2. Check String Fields (Partial match always)
+            if (row.date && formatDate(row.date).toLowerCase().includes(term)) return true;
+            if (row.description && String(row.description).toLowerCase().includes(term)) return true;
+            if (row.title && String(row.title).toLowerCase().includes(term)) return true;
+            if (row.name && String(row.name).toLowerCase().includes(term)) return true;
+            
+            if (row.category) {
+                const catName = typeof row.category === 'object' ? row.category.name : row.category;
+                if (catName && String(catName).toLowerCase().includes(term)) return true;
+            }
+            
+            if (row.account && String(row.account).toLowerCase().includes(term)) return true;
+            if (row.type && String(row.type).toLowerCase().includes(term)) return true;
+
+            return false;
+        });
+    }, [reportData?.tableData, searchTerm, formatCurrency, formatDate, preferences.currency]);
+
     const pinnedTopRowData = useMemo(() => {
         if (reportData?.type === 'ledger' && !searchTerm) {
             return [{ isPinnedTitle: true, title: 'Opening Balance', balance: reportData.openingBalance !== undefined ? reportData.openingBalance : reportData.summary?.openingBalance }];
@@ -412,7 +455,7 @@ const ReportTableScreen = ({
                     <div className="absolute inset-0">
                         <AgGridReact
                             theme={themeQuartz}
-                            rowData={reportData.tableData || []}
+                            rowData={filteredTableData}
                             columnDefs={colDefs}
                             defaultColDef={defaultColDef}
                             rowSelection="multiple"
@@ -422,7 +465,6 @@ const ReportTableScreen = ({
                             pagination={true}
                             paginationPageSize={50}
                             paginationPageSizeSelector={[25, 50, 100, 200]}
-                            quickFilterText={searchTerm}
                             pinnedTopRowData={pinnedTopRowData}
                             pinnedBottomRowData={pinnedBottomRowData}
                             overlayNoRowsTemplate={

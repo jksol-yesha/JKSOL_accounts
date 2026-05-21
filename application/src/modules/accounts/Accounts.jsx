@@ -1358,7 +1358,18 @@ const Accounts = () => {
         .filter(Boolean);
       result = result.filter((account) => {
         const haystack = buildAccountSearchText(account);
-        return terms.every((term) => haystack.includes(term));
+        return terms.every((term) => {
+          const isNumber = !isNaN(term) && term.trim() !== "";
+          if (isNumber) {
+            // Require exact match for numbers to prevent partial matches like '10' matching '1000'
+            const exactMatchInHaystack = haystack.split(" ").includes(term);
+            const balance = String(getDisplayBalance(account));
+            const closingBalance = String(getDisplayClosingBalance(account));
+            
+            return exactMatchInHaystack || balance === term || closingBalance === term;
+          }
+          return haystack.includes(term);
+        });
       });
     }
 
@@ -1899,9 +1910,10 @@ const Accounts = () => {
                       tickLine={false}
                       tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
                       tickFormatter={(val) => {
-                        if (val >= 1000000)
-                          return `${(val / 1000000).toFixed(1)}M`;
-                        if (val >= 1000) return `${(val / 1000).toFixed(0)}k`;
+                        const absVal = Math.abs(val);
+                        const sign = val < 0 ? "-" : "";
+                        if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
+                        if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
                         return val;
                       }}
                     />

@@ -43,12 +43,8 @@ const processAttachment = async (rawAttachment: any): Promise<string | null> => 
     if (typeof rawAttachment === 'string') return rawAttachment;
 
     const file = rawAttachment;
-    const isBlob = file instanceof Blob;
-    const hasArrayBuffer = typeof file.arrayBuffer === 'function';
-    const hasSize = file.size !== undefined;
-    const hasName = !!file.name;
-
-    if (isBlob || hasArrayBuffer || (hasName && hasSize)) {
+    // Elysia often wraps files in its own object or File implementation. Just check for size and name/type.
+    if (file && (file.size !== undefined || typeof file.arrayBuffer === 'function' || file instanceof Blob || file.name)) {
         if (!fs.existsSync(transactionUploadsDir)) {
             fs.mkdirSync(transactionUploadsDir, { recursive: true });
         }
@@ -466,13 +462,33 @@ export const getTransactionTypes = async ({ set }: ElysiaContext) => {
     }
 };
 
-export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { body: { rows: any[], accountId?: number, branchId?: number, financialYearId?: number, filename?: string } }) => {
+export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { body: any }) => {
     try {
-        const { rows, accountId, branchId, financialYearId, filename } = body;
+        let payload;
+        if (body.payload) {
+            payload = typeof body.payload === 'string' ? JSON.parse(body.payload) : body.payload;
+        } else {
+            payload = body;
+        }
+
+        const { rows, accountId, branchId, financialYearId, filename } = payload;
         
         if (!rows || !Array.isArray(rows)) {
             set.status = 400;
             return { success: false, message: 'Invalid data format. Expected array of rows.' };
+        }
+
+        // Handle attachments if present
+        for (let i = 0; i < rows.length; i++) {
+            const fileKey = `attachment_${i}`;
+            if (body[fileKey]) {
+                console.log(`Found attachment for row ${i}`);
+                const attachmentPath = await processAttachment(body[fileKey]);
+                console.log(`attachmentPath for row ${i}:`, attachmentPath);
+                if (attachmentPath) {
+                    rows[i].attachmentPath = attachmentPath;
+                }
+            }
         }
 
         const result = await TransactionService.processImportedRows(

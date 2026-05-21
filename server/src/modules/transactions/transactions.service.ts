@@ -310,7 +310,7 @@ export class TransactionService {
             return COLUMNS.filter(c => c.key !== 'createdBy');
         }
 
-        return COLUMNS.filter(c => c.key === null || visibleColumns.includes(c.key));
+        return COLUMNS.filter(c => c.key === null || c.key === 'type' || visibleColumns.includes(c.key));
     }
 
     static buildExportCsv(groupedTransactions: GroupedExportTransaction[], visibleColumns?: string[]) {
@@ -687,10 +687,15 @@ export class TransactionService {
                     contact: party || null,
                     notes: (row.notes || row.description || '').trim(),
                     amountLocal: Math.abs(Number(amount)),
-                    isTaxable: row.is_taxable === 1 || row.is_taxable === true || row.isTaxable === 1 || row.isTaxable === true,
-                    isGstInclusive: row.is_gst_inclusive === 1 || row.is_gst_inclusive === true || row.isGstInclusive === 1 || row.isGstInclusive === true,
-                    gstType: row.gst_type || row.gstType || 1,
-                    gstRate: row.gst_rate || row.gstRate || 0,
+                    isTaxable: row.isTaxable === 1 || row.isTaxable === true || row.is_taxable === 1 || row.is_taxable === true,
+                    isGstInclusive: row.isGstInclusive === 1 || row.isGstInclusive === true || row.is_gst_inclusive === 1 || row.is_gst_inclusive === true,
+                    gstType: row.gstType || row.gst_type || 1,
+                    gstRate: row.gstRate || row.gst_rate || 0,
+                    cgstAmount: row.cgstAmount || row.cgst_amount || 0,
+                    sgstAmount: row.sgstAmount || row.sgst_amount || 0,
+                    igstAmount: row.igstAmount || row.igst_amount || 0,
+                    gstTotal: row.gstTotal || row.gst_total || 0,
+                    finalAmount: row.finalAmount !== undefined ? row.finalAmount : (row.final_amount !== undefined ? row.final_amount : Math.abs(Number(amount))),
                     currencyCode: row.currency || row.currencycode || (branch ? branch.currencyCode : 'USD'),
                     fxRate: Number(row.fxrate || 1),
                     status: 1,
@@ -987,6 +992,8 @@ export class TransactionService {
 
             // 6. Extract Category and Contact
             let categoryId = row.category_id || row.categoryId || null;
+            let subCategoryId = row.sub_category_id || row.subCategoryId || null;
+            
             if (categoryId) {
                 categoryId = Number(categoryId);
                 if (!categoryMap.has(categoryId)) {
@@ -994,13 +1001,18 @@ export class TransactionService {
                 }
             } 
             
+            if (subCategoryId) {
+                subCategoryId = Number(subCategoryId);
+            }
+            
             if (!categoryId) {
                 const normalizedType = typeVal ? String(typeVal).toLowerCase() : '';
                 const isExpense = normalizedType === 'expense' || txnTypeId === 2;
                 const isIncome = normalizedType === 'income' || txnTypeId === 1;
                 
                 if (isExpense || isIncome) {
-                    const defaultCatName = isExpense ? 'Uncategorized Expense' : 'Uncategorized Income';
+                    const userProvidedCatName = (row.category || row.Category || '').trim();
+                    const defaultCatName = userProvidedCatName ? userProvidedCatName : (isExpense ? 'Uncategorized Expense' : 'Uncategorized Income');
                     let matchedCat = categoryNameMap.get(defaultCatName.toLowerCase());
                     
                     if (matchedCat) {
@@ -1049,18 +1061,25 @@ export class TransactionService {
                     txnDate,
                     txnTypeId: txnTypeId!,
                     categoryId: isTransfer ? null : categoryId,
-                    subCategoryId: null,
+                    subCategoryId: isTransfer ? null : subCategoryId,
                     accountId: accId,
                     fromAccountId,
                     toAccountId,
-                    contact: contactId ? String(contactId) : null,
+                    contactId: contactId ? Number(contactId) : null,
+                    contact: contactId ? String(contactId) : (row.payee || row.Payee || row.counterparty_name || row.counterpartyName || row.Counterparty || null),
                     payee: row.payee || row.Payee || row.counterparty_name || row.counterpartyName || row.Counterparty || null,
                     notes: row.notes || row.Notes || row.description || row.Description || '',
                     amountLocal: amount,
-                    isTaxable: row.is_taxable === 1 || row.is_taxable === true || row.isTaxable === 1 || row.isTaxable === true,
-                    isGstInclusive: row.is_gst_inclusive === 1 || row.is_gst_inclusive === true || row.isGstInclusive === 1 || row.isGstInclusive === true,
-                    gstType: row.gst_type || row.gstType || 1,
-                    gstRate: row.gst_rate || row.gstRate || 0,
+                    isTaxable: row.isTaxable === 1 || row.isTaxable === true || row.is_taxable === 1 || row.is_taxable === true,
+                    isGstInclusive: row.isGstInclusive === 1 || row.isGstInclusive === true || row.is_gst_inclusive === 1 || row.is_gst_inclusive === true,
+                    gstType: row.gstType || row.gst_type || 1,
+                    gstRate: row.gstRate || row.gst_rate || 0,
+                    cgstAmount: row.cgstAmount || row.cgst_amount || 0,
+                    sgstAmount: row.sgstAmount || row.sgst_amount || 0,
+                    igstAmount: row.igstAmount || row.igst_amount || 0,
+                    gstTotal: row.gstTotal || row.gst_total || 0,
+                    finalAmount: row.finalAmount !== undefined ? row.finalAmount : (row.final_amount !== undefined ? row.final_amount : amount),
+                    attachmentPath: row.attachmentPath || null,
                     currencyCode: row.currency || row.currencyCode || branchMap.get(branchId)!.currencyCode,
                     fxRate: row.fx_rate || row.fxRate || 1,
                     status: 1, // Posted
@@ -1089,16 +1108,18 @@ export class TransactionService {
             const minDate = minDateObj.toISOString().split('T')[0];
             const maxDate = maxDateObj.toISOString().split('T')[0];
 
-            const generateHash = (txnDate: string, amount: string | number, notes: string) => {
+            const generateHash = (txnDate: string, amount: string | number, notes: string, categoryId: number | null, contactId: number | string | null) => {
                 const cleanNotes = (notes || '').toLowerCase().replace(/\s+/g, '').trim();
                 const cleanAmount = Number(amount).toFixed(2);
-                return `${txnDate}_${cleanAmount}_${cleanNotes}`;
+                return `${txnDate}_${cleanAmount}_${cleanNotes}_${categoryId || ''}_${contactId || ''}`;
             };
 
             const existingTxns = await db.select({
                 txnDate: transactions.txnDate,
-                amountLocal: transactions.amountLocal,
+                amountBase: transactions.amountBase,
                 notes: transactions.notes,
+                categoryId: transactions.categoryId,
+                contactId: transactions.contactId
             }).from(transactions).where(and(
                 eq(transactions.orgId, orgId),
                 gte(transactions.txnDate, minDate as any),
@@ -1106,11 +1127,16 @@ export class TransactionService {
                 isNotDeleted(transactions)
             ));
 
-            const existingHashes = new Set(existingTxns.map(t => generateHash(t.txnDate as string, t.amountLocal, t.notes || '')));
+            const existingHashes = new Set(existingTxns.map(t => generateHash(t.txnDate as string, t.amountBase, t.notes || '', t.categoryId, t.contactId)));
 
             newValidTransactions = validTransactions.filter(txn => {
-                const hash = generateHash(txn.txnDate, txn.amountLocal, txn.notes || '');
-                return !existingHashes.has(hash);
+                const hash = generateHash(txn.txnDate, txn.amountLocal, txn.notes, txn.categoryId, txn.contactId || txn.contact || null);
+                if (existingHashes.has(hash)) {
+                    skippedRows++;
+                    return false;
+                }
+                existingHashes.add(hash);
+                return true;
             });
             
             skippedRows = validTransactions.length - newValidTransactions.length;

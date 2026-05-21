@@ -105,13 +105,7 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
     })
     .post('/import-json', TransactionController.importJson as any, {
         validateAccess: 'org',
-        body: t.Object({
-            rows: t.Array(t.Any()),
-            accountId: t.Optional(t.Numeric()),
-            branchId: t.Optional(t.Numeric()),
-            financialYearId: t.Optional(t.Numeric()),
-            filename: t.Optional(t.String())
-        })
+        body: t.Any()
     })
     .post('/transaction-list', TransactionController.getTransactions as any, {
         validateAccess: 'branch',

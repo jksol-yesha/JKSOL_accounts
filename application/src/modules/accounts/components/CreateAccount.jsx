@@ -993,17 +993,18 @@ const CreateAccount = ({
         p.bankBranchName = formData.bankBranchName || "";
       }
 
+      let result;
       if (isEditMode) {
-        await apiService.accounts.update(accountToEdit.id, p);
+        result = await apiService.accounts.update(accountToEdit.id, p);
       } else {
-        await apiService.accounts.create(p, { orgId: selectedOrg?.id });
+        result = await apiService.accounts.create(p, { orgId: selectedOrg?.id });
       }
 
       clearAccountRelatedCaches();
 
       showToast(isEditMode ? "Account Updated successfully" : "Account Created successfully", "success");
       
-      if (onSuccess) onSuccess();
+      if (onSuccess) onSuccess(result?.data || result);
       onClose();
 
       return true;

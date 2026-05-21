@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import LoadingOverlay from '../../../components/common/LoadingOverlay';
@@ -125,22 +126,53 @@ const CardShell = ({ title, headerRight, children, className, headerClassName })
 
 // --- CUSTOM HOVER AMOUNT TOOLTIP ---
 const HoverAmountTooltip = ({ compactAmount, exactAmount, align = 'right', className = "" }) => {
-    const [isHovered, setIsHovered] = useState(false);
+    const [visible, setVisible] = useState(false);
+    const [position, setPosition] = useState(null);
+    const wrapperRef = useRef(null);
+
     return (
-        <div 
-            className={`relative w-fit flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            <span className={`${className} cursor-default`}>
-                {compactAmount}
-            </span>
-            <div className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} top-full mt-2 transition-all duration-200 z-[9999] min-w-max bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed ${
-                isHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
-            }`}>
-                {exactAmount}
+        <>
+            <div 
+                ref={wrapperRef}
+                className={`relative w-fit flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}
+                onMouseEnter={() => {
+                    if (wrapperRef.current) {
+                        const r = wrapperRef.current.getBoundingClientRect();
+                        const vh = window.innerHeight;
+                        const vw = window.innerWidth;
+                        
+                        let top = r.bottom + 8;
+                        let bottom = 'auto';
+                        
+                        if (top + 40 > vh - 12) {
+                            top = 'auto';
+                            bottom = vh - r.top + 8;
+                        }
+                        
+                        setPosition({ 
+                            top: top !== 'auto' ? `${top}px` : 'auto', 
+                            bottom: bottom !== 'auto' ? `${bottom}px` : 'auto',
+                            ...(align === 'right' ? { right: `${vw - r.right}px` } : { left: `${r.left}px` })
+                        });
+                        setVisible(true);
+                    }
+                }}
+                onMouseLeave={() => setVisible(false)}
+            >
+                <span className={`${className} cursor-default`}>
+                    {compactAmount}
+                </span>
             </div>
-        </div>
+            {visible && position && createPortal(
+                <div 
+                    className="fixed z-[9999] min-w-max bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed animate-in fade-in zoom-in-95 duration-150"
+                    style={position}
+                >
+                    {exactAmount}
+                </div>,
+                document.body
+            )}
+        </>
     );
 };
 
@@ -199,10 +231,10 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                     </div>
                 ) : topAccounts.length > 0 ? (
                     <div className="divide-y divide-slate-100">
-                        {topAccounts.map((cat) => {
+                        {topAccounts.map((cat, index) => {
                             const sharePercent = totalAbsoluteAmount > 0 ? Math.round((Math.abs(cat.amount) / totalAbsoluteAmount) * 100) : 0;
                             return (
-                                <div key={cat.id} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/50 transition-colors">
+                                <div key={`${cat.id}-${index}`} className="flex items-center justify-between px-4 py-3 hover:bg-slate-50/50 transition-colors">
                                     <div className="flex items-center gap-3 min-w-0 pr-2">
                                         <BankAvatar 
                                             name={cat.displayName}

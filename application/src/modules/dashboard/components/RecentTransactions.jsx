@@ -937,8 +937,8 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                     style={{ maxHeight: `${MAX_VISIBLE_ROWS * 54}px` }}
                 >
                     {displayTransactions.length > 0 ? (
-                        displayTransactions.map((tx) => (
-                            <div key={tx.id} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3">
+                        displayTransactions.map((tx, index) => (
+                            <div key={`${tx.id}-${index}`} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3">
                                 <div className="flex justify-between items-start border-b border-gray-50 pb-2">
                                     <div>
                                         <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Date</div>
@@ -1036,8 +1036,8 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {displayTransactions.length > 0 ? displayTransactions.map((tx) => (
-                                <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                            {displayTransactions.length > 0 ? displayTransactions.map((tx, index) => (
+                                <tr key={`${tx.id}-${index}`} className="hover:bg-gray-50 transition-colors">
                                     {visibleDesktopColumns.map((column) => (
                                         <td
                                             key={column.key}
