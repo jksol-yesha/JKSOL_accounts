@@ -273,6 +273,81 @@ const Settings = () => {
         }
     };
 
+    const handleQuickStatusToggle = async (item, isUser) => {
+        if (isUser && !selectedOrg) {
+            alert("No organization selected.");
+            return;
+        }
+
+        const newStatus = Number(item.status) === 1 ? 2 : 1;
+        
+        // Optimistic UI update
+        setItems(prevItems => prevItems.map(obj => 
+            obj.id === item.id ? { ...obj, status: newStatus } : obj
+        ));
+        
+        try {
+            if (isUser) {
+                // Reconstruct branch IDs precisely
+                const bIds = item.branchIds;
+                let parsedIds = [];
+                if (bIds) {
+                    if (Array.isArray(bIds)) parsedIds = bIds.map(Number).filter(Boolean);
+                    else if (typeof bIds === 'string') {
+                        try {
+                            const parsed = JSON.parse(bIds);
+                            if (Array.isArray(parsed)) parsedIds = parsed.map(Number).filter(Boolean);
+                            else parsedIds = bIds.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+                        } catch {
+                            parsedIds = bIds.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+                        }
+                    }
+                }
+                const ids = new Set(parsedIds);
+                if (Array.isArray(item.branches)) {
+                    item.branches.forEach(b => {
+                        const id = Number(b?.id ?? b?.branchId);
+                        if (Number.isFinite(id) && id > 0) ids.add(id);
+                    });
+                }
+                if (Array.isArray(item.branchRoles)) {
+                    item.branchRoles.forEach(br => {
+                        const id = Number(br?.branchId);
+                        if (Number.isFinite(id) && id > 0) ids.add(id);
+                    });
+                }
+                if (item.branchId !== undefined && item.branchId !== null) {
+                    const id = Number(item.branchId);
+                    if (Number.isFinite(id) && id > 0) ids.add(id);
+                }
+                
+                const currentBranchIds = Array.from(ids).filter(id => availableBranches.some(b => b.id === id));
+                
+                await apiService.organizations.updateMemberAccess(selectedOrg.id, item.id, {
+                    role: getRole(item).toLowerCase(),
+                    branchIds: getRole(item).toLowerCase() === 'member' ? currentBranchIds : undefined,
+                    status: newStatus,
+                    name: item.name || item.fullName || '',
+                    email: item.email || ''
+                });
+            } else {
+                await apiService.orgs.update(item.id, {
+                    name: item.name,
+                    baseCurrency: item.baseCurrency,
+                    logo: item.logo,
+                    status: newStatus
+                });
+            }
+        } catch (error) {
+            // Revert on failure
+            setItems(prevItems => prevItems.map(obj => 
+                obj.id === item.id ? { ...obj, status: item.status } : obj
+            ));
+            console.error("Status toggle failed:", error);
+            alert(error.response?.data?.message || "Failed to toggle status");
+        }
+    };
+
     return (
         <div className="flex flex-col min-h-full bg-white animate-in fade-in duration-300 relative">
             {/* Top Bar with Tabs ONLY */}
@@ -387,7 +462,13 @@ const Settings = () => {
                                             <td className="px-6 py-3.5 text-[13px] font-medium text-gray-600">{item.baseCurrency || '-'}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-gray-600">{getCreatedBy(item)}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-right">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                <span 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleQuickStatusToggle(item, false);
+                                                    }}
+                                                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}
+                                                >
                                                     {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>
                                             </td>
@@ -401,7 +482,13 @@ const Settings = () => {
                                             </td>
                                             <td className="px-6 py-3.5 text-[13px] text-gray-600">{getAddedBy(item)}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-right">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                <span 
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleQuickStatusToggle(item, true);
+                                                    }}
+                                                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}
+                                                >
                                                     {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>
                                             </td>
