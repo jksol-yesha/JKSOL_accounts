@@ -1,3 +1,4 @@
+import CompactCurrency from '../../../components/common/CompactCurrency';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation } from 'react-router-dom';
@@ -124,57 +125,7 @@ const CardShell = ({ title, headerRight, children, className, headerClassName })
     </div>
 );
 
-// --- CUSTOM HOVER AMOUNT TOOLTIP ---
-const HoverAmountTooltip = ({ compactAmount, exactAmount, align = 'right', className = "" }) => {
-    const [visible, setVisible] = useState(false);
-    const [position, setPosition] = useState(null);
-    const wrapperRef = useRef(null);
 
-    return (
-        <>
-            <div 
-                ref={wrapperRef}
-                className={`relative w-fit flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'}`}
-                onMouseEnter={() => {
-                    if (wrapperRef.current) {
-                        const r = wrapperRef.current.getBoundingClientRect();
-                        const vh = window.innerHeight;
-                        const vw = window.innerWidth;
-                        
-                        let top = r.bottom + 8;
-                        let bottom = 'auto';
-                        
-                        if (top + 40 > vh - 12) {
-                            top = 'auto';
-                            bottom = vh - r.top + 8;
-                        }
-                        
-                        setPosition({ 
-                            top: top !== 'auto' ? `${top}px` : 'auto', 
-                            bottom: bottom !== 'auto' ? `${bottom}px` : 'auto',
-                            ...(align === 'right' ? { right: `${vw - r.right}px` } : { left: `${r.left}px` })
-                        });
-                        setVisible(true);
-                    }
-                }}
-                onMouseLeave={() => setVisible(false)}
-            >
-                <span className={`${className} cursor-default`}>
-                    {compactAmount}
-                </span>
-            </div>
-            {visible && position && createPortal(
-                <div 
-                    className="fixed z-[9999] min-w-max bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed animate-in fade-in zoom-in-95 duration-150"
-                    style={position}
-                >
-                    {exactAmount}
-                </div>,
-                document.body
-            )}
-        </>
-    );
-};
 
 // -------------------------------------------------------------
 // COLUMN 1: Account Balances
@@ -210,9 +161,8 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
     const totalBalanceBadge = accountItems.length > 0 ? (
         <div className="flex items-center gap-1.5">
             <Wallet className="w-4 h-4 text-slate-400" />
-            <HoverAmountTooltip 
-                compactAmount={formatCurrency(totalAvailableBalance)}
-                exactAmount={formatCurrencyExact(totalAvailableBalance)}
+            <CompactCurrency 
+                amount={totalAvailableBalance}
                 className={cn("text-sm font-bold tracking-tight", isTotalPositive ? "text-slate-900" : "text-rose-600")}
             />
         </div>
@@ -253,9 +203,8 @@ const AccountBalanceList = ({ accounts, initialLoading, overlayLoading, hasFetch
                                         />
                                     </div>
                                     <div className="flex items-center gap-4 shrink-0">
-                                        <HoverAmountTooltip 
-                                            compactAmount={formatCurrency(cat.amount)}
-                                            exactAmount={formatCurrencyExact(cat.amount)}
+                                        <CompactCurrency 
+                                            amount={cat.amount}
                                             className="w-32 text-right text-sm font-medium text-slate-800"
                                         />
                                         <span className="w-8 text-right text-xs font-medium text-slate-400">
@@ -354,10 +303,8 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="text-xs font-medium text-slate-500">Income</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <HoverAmountTooltip 
-                                       compactAmount={formatCurrency(totalIncomeApp)}
-                                       exactAmount={formatCurrencyExact(totalIncomeApp)}
-                                       align="left"
+                                   <CompactCurrency 
+                                       amount={totalIncomeApp}
                                        className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate"
                                    />
                                    <div className="text-xs font-medium text-slate-400 shrink-0">
@@ -373,10 +320,8 @@ const PnLBreakdownList = ({ categories, initialLoading, overlayLoading, hasFetch
                                    <span className="text-xs font-medium text-slate-500">Expenses</span>
                                </div>
                                <div className="flex items-center justify-between ml-[18px] gap-2 min-w-0">
-                                   <HoverAmountTooltip 
-                                       compactAmount={formatCurrency(totalExpenseApp)}
-                                       exactAmount={formatCurrencyExact(totalExpenseApp)}
-                                       align="left"
+                                   <CompactCurrency 
+                                       amount={totalExpenseApp}
                                        className="text-sm font-semibold text-slate-800 tracking-tight whitespace-nowrap truncate"
                                    />
                                    <div className="text-xs font-medium text-slate-400 shrink-0">
@@ -426,9 +371,8 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
     const totalInvestmentBadge = allInvestments.length > 0 ? (
         <div className="flex items-center gap-1.5">
             <TrendingUp className="w-4 h-4 text-slate-400" />
-            <HoverAmountTooltip 
-                compactAmount={formatCurrency(totalAvailableInvestment)}
-                exactAmount={formatCurrencyExact(totalAvailableInvestment)}
+            <CompactCurrency 
+                amount={totalAvailableInvestment}
                 className={cn("text-sm font-bold tracking-tight", isTotalPositive ? "text-slate-900" : "text-rose-600")}
             />
         </div>
@@ -451,9 +395,8 @@ const InvestmentCardList = ({ categories, accounts, initialLoading, overlayLoadi
                             return (
                                 <div key={i} className="px-4 py-3 flex justify-between items-center hover:bg-slate-50/50 transition-colors">
                                     <span className="text-sm font-medium text-slate-800 truncate min-w-0 pr-2">{cat.name}</span>
-                                    <HoverAmountTooltip 
-                                        compactAmount={formatCurrency(cat.amount)}
-                                        exactAmount={formatCurrencyExact(cat.amount)}
+                                    <CompactCurrency 
+                                        amount={cat.amount}
                                         className="text-sm font-semibold text-slate-800 mt-0.5 shrink-0"
                                     />
                                 </div>

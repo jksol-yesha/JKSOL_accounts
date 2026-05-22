@@ -1,3 +1,4 @@
+import CompactCurrency from '../../../components/common/CompactCurrency';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import Card from '../../../components/common/Card';
@@ -804,7 +805,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                             tx.type?.toLowerCase() === 'expense' ? 'text-rose-600' :
                                 'text-gray-900'
                     )}>
-                        {formatCurrency(tx.amount)}
+                        <CompactCurrency amount={tx.amount} />
                     </span>
                 </span>
             )
@@ -952,7 +953,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                                                 tx.type?.toLowerCase() === 'expense' ? "text-rose-600" :
                                                     "text-gray-900"
                                         )}>
-                                            {formatCurrency(tx.amount)}
+                                            <CompactCurrency amount={tx.amount} />
                                         </div>
                                     </div>
                                 </div>

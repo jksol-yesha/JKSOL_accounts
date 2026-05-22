@@ -50,15 +50,19 @@ const BarTooltip = ({ active, payload, label, valueFormatter }) => {
     const indicatorColor = payload[0]?.fill || point?.fill || DEFAULT_POSITIVE_COLOR;
 
     return (
-        <div className="pointer-events-none min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 py-2 text-left shadow-[0_12px_24px_rgba(15,23,42,0.12)]">
-            <div className="mb-1 text-[10px] font-semibold text-slate-500">{fullLabel}</div>
-            <div className="flex items-center justify-between gap-3">
-                <span className="inline-flex items-center gap-2 text-[10px] font-semibold text-slate-500">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: indicatorColor }} />
+        <div className="pointer-events-none relative min-w-[112px] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-left text-slate-300">{fullLabel}</div>
+            <div className="flex items-center justify-between gap-3 text-left">
+                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
+                    <span className="block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: indicatorColor }} />
                     Value
                 </span>
-                <span className="text-[11px] font-bold text-slate-800">{valueFormatter(value)}</span>
+                <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">{valueFormatter(value)}</span>
             </div>
+            {/* Tooltip Arrow pointing down */}
+            <div 
+                className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+            />
         </div>
     );
 };

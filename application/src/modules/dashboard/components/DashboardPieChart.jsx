@@ -136,22 +136,25 @@ const DashboardPieChart = ({ dashboardFilters }) => {
         animationEasing: 'cubicOut',
         tooltip: {
             trigger: 'item',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderColor: '#e2e8f0',
-            borderWidth: 1,
-            borderRadius: 8,
-            padding: 12,
-            shadowColor: 'rgba(0, 0, 0, 0.08)',
-            shadowBlur: 12,
-            textStyle: { color: '#0f172a', fontSize: 12 },
+            backgroundColor: '#1e293b', // slate-800
+            borderColor: '#1e293b', // slate-800
+            borderWidth: 0,
+            borderRadius: 6,
+            padding: [6, 10],
+            shadowColor: 'rgba(0, 0, 0, 0.25)',
+            shadowBlur: 16,
+            textStyle: { color: '#ffffff', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' },
             formatter: (params) => {
                 const amountStr = formatFullAmount(params.data.value, dashboardFilters?.currency || preferences.currency);
                 return `<div style="display:flex;flex-direction:column;gap:4px">
-                            <div style="display:flex;align-items:center;gap:6px">
-                                <span style="width:8px;height:8px;border-radius:50%;background-color:${params.color}"></span>
-                                <span style="color:#64748b;font-weight:500">${params.data.name}</span>
+                            <div style="font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:0.12em;color:#cbd5e1">${params.data.name}</div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                                <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#e2e8f0">
+                                    <span style="display:block;width:6px;height:6px;border-radius:50%;background-color:${params.color}"></span>
+                                    Value
+                                </span>
+                                <span style="font-size:11px;font-weight:600;color:#ffffff">${amountStr} <span style="font-size:10px;color:#94a3b8;margin-left:2px">(${params.data.percent}%)</span></span>
                             </div>
-                            <div style="margin-left:14px;font-weight:600;color:#0f172a;font-size:13px">${amountStr} <span style="color:#64748b;font-weight:500;margin-left:2px">(${params.data.percent}%)</span></div>
                         </div>`;
             }
         },

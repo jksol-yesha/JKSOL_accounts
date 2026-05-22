@@ -1,3 +1,4 @@
+import CompactCurrency from '../../components/common/CompactCurrency';
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -19,6 +20,7 @@ import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../se
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { usePreferences } from '../../context/PreferenceContext';
+import { useToast } from '../../context/ToastContext';
 import { Loader } from '../../components/common/Loader';
 
 
@@ -884,6 +886,7 @@ const Transactions = () => {
     const location = useLocation();
     const { selectedBranch, selectedBranchIds, branches } = useBranch();
     const { user } = useAuth();
+    const { showToast } = useToast();
     const { selectedYear, financialYears } = useYear();
     const { preferences, formatCurrency, formatCompactCurrency, formatDate, updatePreferences } = usePreferences();
 
@@ -1704,8 +1707,10 @@ const Transactions = () => {
     };
 
     const handleDelete = (e, txn) => {
-        e.preventDefault();
-        e.stopPropagation();
+        if (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
         setDeleteDialog({
             open: true,
             id: txn.id,
@@ -2093,17 +2098,25 @@ const Transactions = () => {
                                                         content={({ active, payload, label }) => {
                                                             if (active && payload && payload.length) {
                                                                 return (
-                                                                    <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50">
-                                                                        <div className="text-[11px] font-bold text-gray-500 uppercase mb-2">{label}</div>
-                                                                        {payload.map((entry, index) => (
-                                                                            <div key={index} className="flex items-center gap-3 text-[13px] font-bold mb-1">
-                                                                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                                                                                <span className="text-gray-600 w-16">{entry.name}:</span>
-                                                                                <span className={entry.dataKey === 'income' ? "text-emerald-600" : "text-rose-600"}>
-                                                                                    {formatCurrency(entry.value)}
-                                                                                </span>
-                                                                            </div>
-                                                                        ))}
+                                                                    <div className="pointer-events-none relative min-w-[112px] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150 z-50">
+                                                                        <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-left text-slate-300">{label}</div>
+                                                                        <div className="flex flex-col gap-1.5">
+                                                                            {payload.map((entry, index) => (
+                                                                                <div key={index} className="flex items-center justify-between gap-3 text-left">
+                                                                                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
+                                                                                        <span className="block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                                                                                        {entry.name}
+                                                                                    </span>
+                                                                                    <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">
+                                                                                        {formatCurrency(entry.value)}
+                                                                                    </span>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                        {/* Tooltip Arrow pointing down */}
+                                                                        <div 
+                                                                            className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+                                                                        />
                                                                     </div>
                                                                 );
                                                             }
@@ -2141,12 +2154,21 @@ const Transactions = () => {
                                                             content={({ active, payload, label }) => {
                                                                 if (active && payload && payload.length) {
                                                                     return (
-                                                                        <div className="bg-white border border-gray-100 p-3 rounded-lg shadow-xl shadow-gray-200/50 flex flex-col gap-1">
-                                                                            <div className="text-[11px] font-bold text-gray-500 uppercase mb-1">{label}</div>
-                                                                            <div className="flex items-center justify-between gap-4">
-                                                                                <span className="text-[13px] font-medium text-gray-600">Tax Paid:</span>
-                                                                                <span className="text-[14px] font-bold text-black">{formatCurrency(payload[0].value)}</span>
+                                                                        <div className="pointer-events-none relative min-w-[112px] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150 z-50">
+                                                                            <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-left text-slate-300">{label}</div>
+                                                                            <div className="flex items-center justify-between gap-3 text-left">
+                                                                                <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
+                                                                                    <span className="block h-1.5 w-1.5 rounded-full bg-indigo-500" />
+                                                                                    Tax Paid
+                                                                                </span>
+                                                                                <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">
+                                                                                    {formatCurrency(payload[0].value)}
+                                                                                </span>
                                                                             </div>
+                                                                            {/* Tooltip Arrow pointing down */}
+                                                                            <div 
+                                                                                className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+                                                                            />
                                                                         </div>
                                                                     );
                                                                 }
@@ -2226,7 +2248,7 @@ const Transactions = () => {
                                     </div>
                                     <div>
                                         <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
-                                        <div title={formatCurrency(insightsData.totalIncome)} className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCompactCurrency(insightsData.totalIncome)}</div>
+                                        <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalIncome} placement="top" /></div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2.5 min-w-fit">
@@ -2235,7 +2257,7 @@ const Transactions = () => {
                                     </div>
                                     <div>
                                         <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
-                                        <div title={formatCurrency(insightsData.totalExpense)} className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none">{formatCompactCurrency(insightsData.totalExpense)}</div>
+                                        <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalExpense} placement="top" /></div>
                                     </div>
                                 </div>
                                 <div className="flex items-center gap-2.5 min-w-fit pl-5 border-l border-gray-200">
@@ -2244,8 +2266,8 @@ const Transactions = () => {
                                     </div>
                                     <div>
                                         <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
-                                        <div title={formatCurrency(insightsData.netFlow)} className={cn("text-sm font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
-                                            {formatCompactCurrency(insightsData.netFlow)}
+                                        <div className={cn("text-sm font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                            <CompactCurrency amount={insightsData.netFlow} placement="top" />
                                         </div>
                                     </div>
                                 </div>
@@ -2299,11 +2321,11 @@ const Transactions = () => {
                     setUploadedFile(null);
                     fetchTransactions();
                     if (response?.skippedRows > 0) {
-                        toast.warning(`Imported ${response.insertedRows} transactions. Skipped ${response.skippedRows} duplicates.`);
+                        showToast(`Imported ${response.insertedRows} transactions. Skipped ${response.skippedRows} duplicates.`, 'warning');
                     } else if (response?.insertedRows > 0) {
-                        toast.success(`Successfully imported ${response.insertedRows} transactions.`);
+                        showToast(`Successfully imported ${response.insertedRows} transactions.`, 'success');
                     } else {
-                        toast.success(`Bank statement processed successfully`);
+                        showToast(`Bank statement processed successfully`, 'success');
                     }
                 }}
             />
@@ -2331,6 +2353,10 @@ const Transactions = () => {
                 isOpen={drawerState.open}
                 onClose={() => setDrawerState({ open: false, transaction: null })}
                 transactionToEdit={drawerState.transaction}
+                onDelete={(txn) => {
+                    setDrawerState({ open: false, transaction: null });
+                    handleDelete(null, txn);
+                }}
                 onSuccess={() => {
                     setDrawerState({ open: false, transaction: null });
                     notifyTransactionDataChanged();

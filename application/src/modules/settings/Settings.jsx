@@ -219,9 +219,10 @@ const Settings = () => {
                         try {
                             await apiService.organizations.updateMemberAccess(selectedOrg.id, editingItem.id, {
                                 role: formData.role,
-                                branchIds: formData.role === 'member' ? selectedBranchIds : undefined,
+                                branchIds: formData.role === 'member' ? selectedBranchIds.filter(id => availableBranches.some(b => b.id === id)) : undefined,
                                 status: formData.status,
-                                name: formData.name
+                                name: formData.name,
+                                email: formData.email
                             });
                         } catch (updateError) {
                             console.error("Update failed:", updateError);
@@ -358,7 +359,7 @@ const Settings = () => {
                                     {view === 'organizations' ? (
                                         <>
                                             <td 
-                                                className="px-6 py-3.5 text-[13px] font-semibold text-[#4A8AF4] hover:underline cursor-pointer"
+                                                className="px-6 py-3.5 text-[13px] font-medium text-gray-600 hover:underline cursor-pointer"
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <div 
@@ -386,22 +387,22 @@ const Settings = () => {
                                             <td className="px-6 py-3.5 text-[13px] font-medium text-gray-600">{item.baseCurrency || '-'}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-gray-600">{getCreatedBy(item)}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-right">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${item.status === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                                    {item.status === 2 ? 'Inactive' : 'Active'}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                    {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>
                                             </td>
                                         </>
                                     ) : (
                                         <>
-                                            <td className="px-6 py-3.5 text-[13px] font-semibold text-[#4A8AF4] group-hover:underline">{item.name || item.fullName || '-'}</td>
+                                            <td className="px-6 py-3.5 text-[13px] font-medium text-gray-600 group-hover:underline">{item.name || item.fullName || '-'}</td>
                                             <td className="px-6 py-3.5 text-[13px] font-medium text-gray-600">{item.email || '-'}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-gray-600 capitalize">
                                                 {String(getRole(item)).toLowerCase()}
                                             </td>
                                             <td className="px-6 py-3.5 text-[13px] text-gray-600">{getAddedBy(item)}</td>
                                             <td className="px-6 py-3.5 text-[13px] text-right">
-                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${item.status === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
-                                                    {item.status === 2 ? 'Inactive' : 'Active'}
+                                                <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}>
+                                                    {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>
                                             </td>
                                         </>
@@ -561,23 +562,21 @@ const Settings = () => {
                             </div>
 
                             {/* Footer Actions */}
-                            <div className={`px-5 py-3 border-t border-gray-100 bg-white flex items-center ${view === 'organizations' ? 'justify-between' : 'justify-end'}`}>
-                                {view === 'organizations' && (
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => setFormData(prev => ({...prev, status: prev.status === 1 ? 2 : 1}))}
-                                            className={`relative inline-flex h-[20px] w-[36px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#4A8AF4] focus:ring-offset-1 ${formData.status === 1 ? 'bg-[#4A8AF4]' : 'bg-gray-300'}`}
-                                        >
-                                            <span
-                                                className={`pointer-events-none inline-block h-[16px] w-[16px] transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${formData.status === 1 ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}
-                                            />
-                                        </button>
-                                        <span className="text-[12px] font-bold text-gray-700">
-                                            {formData.status === 1 ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </div>
-                                )}
+                            <div className="px-5 py-3 border-t border-gray-100 bg-white flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFormData(prev => ({...prev, status: prev.status === 1 ? 2 : 1}))}
+                                        className={`relative inline-flex h-[20px] w-[36px] shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-[#4A8AF4] focus:ring-offset-1 ${formData.status === 1 ? 'bg-[#4A8AF4]' : 'bg-gray-300'}`}
+                                    >
+                                        <span
+                                            className={`pointer-events-none inline-block h-[16px] w-[16px] transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out ${formData.status === 1 ? 'translate-x-[18px]' : 'translate-x-[2px]'}`}
+                                        />
+                                    </button>
+                                    <span className="text-[12px] font-bold text-gray-700">
+                                        {formData.status === 1 ? 'Active' : 'Inactive'}
+                                    </span>
+                                </div>
                                 <div className="flex items-center gap-4">
                                     <button
                                         type="button"

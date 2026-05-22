@@ -76,6 +76,7 @@ export const organizationRoutes = new Elysia({ prefix: '/organizations' })
             role: t.Optional(t.Union([t.Literal('owner'), t.Literal('admin'), t.Literal('member')])),
             branchIds: t.Optional(t.Nullable(t.Array(t.Number()))),
             name: t.Optional(t.String()),
+            email: t.Optional(t.String()),
             status: t.Optional(t.Union([t.Literal(1), t.Literal(2)]))
         })
     });

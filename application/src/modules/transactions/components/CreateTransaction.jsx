@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { ArrowLeft, Save, AlertCircle, X, ChevronDown, Download, ArrowRightLeft } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, X, ChevronDown, Download, ArrowRightLeft, Trash2 } from 'lucide-react';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
@@ -61,7 +61,7 @@ const isBranchInactive = (branch) => {
     return false;
 };
 
-const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) => {
+const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDelete }) => {
     const navigate = useNavigate();
     const id = transactionToEdit?.id;
     const isEditMode = !!id;
@@ -499,6 +499,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                 // Keep same-name categories separate when they belong to different transaction types.
                 const uniqueCatsMap = new Map();
                 categoriesList.forEach(c => {
+                    if (c.status === 2 || c.status === 'inactive') return;
                     const catNameKey = (c.name || '').toLowerCase().trim();
                     const catTypeKey = (c.txnType || c.transactionType?.name || c.type || '').toLowerCase().trim();
                     const categoryIdentityKey = `${catNameKey}::${catTypeKey}`;
@@ -508,6 +509,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                         if (c.subCategories) {
                             const uniqueSubsMap = new Map();
                             c.subCategories.forEach(s => {
+                                if (s.status === 2 || s.status === 'inactive') return;
                                 const subNameKey = (s.name || '').toLowerCase().trim();
                                 if (!uniqueSubsMap.has(subNameKey)) {
                                     uniqueSubsMap.set(subNameKey, { ...s });
@@ -2208,7 +2210,18 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess }) =>
                 
                     {/* Drawer Footer */}
                     <div className="px-5 py-2.5 border-t border-slate-100 bg-white flex items-center justify-between shrink-0">
-                        <div />
+                        <div>
+                            {isEditMode && onDelete && (
+                                <button
+                                    type="button"
+                                    onClick={() => onDelete(transactionToEdit)}
+                                    className="px-3 py-1.5 rounded-md text-[11px] font-bold text-rose-500 hover:text-white hover:bg-rose-500 transition-all outline-none focus:ring-2 focus:ring-rose-200 flex items-center gap-1.5"
+                                >
+                                    <Trash2 size={13} strokeWidth={2.5} />
+                                    <span>Delete</span>
+                                </button>
+                            )}
+                        </div>
                         <div className="flex items-center gap-2">
                             <button
                                 type="button"

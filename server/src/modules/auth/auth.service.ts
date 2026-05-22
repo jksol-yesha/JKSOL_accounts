@@ -314,6 +314,7 @@ export const getAllUsers = async () => {
         id: u.id,
         email: u.email,
         name: u.fullName,
+        status: u.status,
         isVerified: u.status === 1,
         profilePhoto: u.profilePhoto,
         branchIds: u.branchIds,

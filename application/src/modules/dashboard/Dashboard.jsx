@@ -1,3 +1,4 @@
+import CompactCurrency from '../../components/common/CompactCurrency';
 
 import React, { useEffect, useState } from 'react';
 import StatCard from './components/StatCard';
@@ -400,8 +401,7 @@ const Dashboard = () => {
     const allStats = [
         {
             title: 'Net Profit',
-            amount: formatCompactCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
-            amountTooltip: formatCurrency(currentMetrics.netProfit, dashboardFilters?.currency || stats.baseCurrency),
+            amount: <CompactCurrency amount={currentMetrics.netProfit} currencyOverride={dashboardFilters?.currency || stats.baseCurrency} />,
             currentSeries: metricSeries.netProfit || [],
             comparisonLabels,
             chartColor: '#3b82f6',
@@ -415,8 +415,7 @@ const Dashboard = () => {
         },
         {
             title: 'Total Income',
-            amount: formatCompactCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
-            amountTooltip: formatCurrency(currentMetrics.totalIncome, dashboardFilters?.currency || stats.baseCurrency),
+            amount: <CompactCurrency amount={currentMetrics.totalIncome} currencyOverride={dashboardFilters?.currency || stats.baseCurrency} />,
             currentSeries: metricSeries.totalIncome || [],
             comparisonLabels,
             chartColor: '#3b82f6',
@@ -430,8 +429,7 @@ const Dashboard = () => {
         },
         {
             title: 'Total Expenses',
-            amount: formatCompactCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
-            amountTooltip: formatCurrency(currentMetrics.totalExpense, dashboardFilters?.currency || stats.baseCurrency),
+            amount: <CompactCurrency amount={currentMetrics.totalExpense} currencyOverride={dashboardFilters?.currency || stats.baseCurrency} />,
             currentSeries: metricSeries.totalExpense || [],
             comparisonLabels,
             chartColor: '#3b82f6',
@@ -445,8 +443,7 @@ const Dashboard = () => {
         },
         {
             title: 'Total Investment',
-            amount: formatCompactCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
-            amountTooltip: formatCurrency(currentMetrics.investmentBalance, dashboardFilters?.currency || stats.baseCurrency),
+            amount: <CompactCurrency amount={currentMetrics.investmentBalance} currencyOverride={dashboardFilters?.currency || stats.baseCurrency} />,
             currentSeries: metricSeries.investmentBalance || metricSeries.totalInvestment || [],
             comparisonLabels,
             chartColor: '#3b82f6',

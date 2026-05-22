@@ -7,7 +7,7 @@ const ACCOUNT_NAME_TOOLTIP_MIN_WIDTH = 160;
 const ACCOUNT_NAME_TOOLTIP_GAP = 8;
 const ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER = 12;
 
-const AccountNameTooltip = ({ name, className = '', textClassName = '' }) => {
+const AccountNameTooltip = ({ name, className = '', textClassName = '', placement = 'top' }) => {
     const [visible, setVisible] = useState(false);
     const [isTruncated, setIsTruncated] = useState(false);
     const [position, setPosition] = useState(null);
@@ -86,15 +86,10 @@ const AccountNameTooltip = ({ name, className = '', textClassName = '' }) => {
                 Math.max(ACCOUNT_NAME_TOOLTIP_MIN_WIDTH, rect.width + 24)
             );
 
-            let left = rect.left;
-            if (left + tooltipWidth > viewportWidth - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER) {
-                left = viewportWidth - tooltipWidth - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER;
-            }
-            if (left < ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER) {
-                left = ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER;
-            }
-
-            let top = rect.bottom + ACCOUNT_NAME_TOOLTIP_GAP;
+            // Center tooltip relative to the text
+            let left = rect.left + (rect.width / 2);
+            let top = placement === 'top' ? rect.top - 8 : rect.bottom + 8;
+            
             const estimatedHeight = 44;
             if (top + estimatedHeight > viewportHeight - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER) {
                 top = rect.top - estimatedHeight - ACCOUNT_NAME_TOOLTIP_GAP;
@@ -135,12 +130,27 @@ const AccountNameTooltip = ({ name, className = '', textClassName = '' }) => {
 
             {visible && position && createPortal(
                 <div
-                    className="pointer-events-none fixed z-[9999] rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-[0_16px_40px_rgba(15,23,42,0.12)]"
-                    style={{ top: `${position.top}px`, left: `${position.left}px`, width: `${position.width}px` }}
+                    className="pointer-events-none fixed z-[10000] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+                    style={{ 
+                        top: `${position.top}px`, 
+                        left: `${position.left}px`, 
+                        width: `${position.width}px`,
+                        transform: placement === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)'
+                    }}
                 >
-                    <span className="block whitespace-nowrap text-[12px] font-semibold leading-relaxed text-gray-700">
+                    <span className="block whitespace-nowrap text-[11px] font-semibold text-white tracking-wide truncate">
                         {content}
                     </span>
+                    {/* Tooltip Arrow */}
+                    {placement === 'top' ? (
+                        <div 
+                            className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+                        />
+                    ) : (
+                        <div 
+                            className="absolute left-1/2 bottom-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-b-[5px] border-l-transparent border-r-transparent border-b-slate-800" 
+                        />
+                    )}
                 </div>,
                 document.body
             )}

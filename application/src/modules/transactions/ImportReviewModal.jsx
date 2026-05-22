@@ -198,13 +198,16 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                 if (catRes?.success) {
                     const catsMap = new Map();
                     (catRes.data || []).forEach(c => {
+                        if (c.status === 2 || c.status === 'inactive') return;
                         if (!catsMap.has(c.id)) {
                             catsMap.set(c.id, c);
                         }
                     });
                     (catRes.data || []).forEach(c => {
+                        if (c.status === 2 || c.status === 'inactive') return;
                         if (c.subCategories) {
                             c.subCategories.forEach(sc => {
+                                if (sc.status === 2 || sc.status === 'inactive') return;
                                 catsMap.set(`sub-${sc.id}-${c.id}`, { ...sc, id: `sub-${sc.id}-${c.id}`, name: `${c.name} - ${sc.name}` });
                             });
                         }

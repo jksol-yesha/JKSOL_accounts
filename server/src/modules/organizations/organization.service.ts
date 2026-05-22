@@ -1,7 +1,7 @@
 import { db } from '../../db';
 import { organizations, users, financialYears, branches, categories, exchangeRates, accounts, transactions, auditLogs, monthlyBranchSummary, yearlyBranchSummary, roles, parties } from '../../db/schema';
 import { alias } from 'drizzle-orm/mysql-core';
-import { eq, and, sql, inArray } from 'drizzle-orm';
+import { eq, and, sql, inArray, ne } from 'drizzle-orm';
 import * as EmailService from '../../shared/email.service';
 import { AuditService } from '../audit/audit.service';
 import { DELETED_STATUS, isNotDeleted } from '../../shared/soft-delete';
@@ -221,6 +221,7 @@ export const OrganizationService = {
             orgIds: users.orgIds,
             branchIds: users.branchIds,
             profilePhoto: users.profilePhoto,
+            status: users.status,
             createdBy: users.createdBy,
             creatorName: creators.fullName
         })
@@ -695,7 +696,7 @@ export const OrganizationService = {
     },
 
     // Update a member's role and branch access
-    async updateMemberAccess(requesterId: number, orgId: number, memberId: number, roleName: 'owner' | 'admin' | 'member' | undefined, branchIds: number[] | null, name?: string, status?: number) {
+    async updateMemberAccess(requesterId: number, orgId: number, memberId: number, roleName: 'owner' | 'admin' | 'member' | undefined, branchIds: number[] | null, name?: string, status?: number, email?: string) {
         // 1. Verify Requester is Owner or Admin
         const [requester] = await db.select({
             id: users.id,
@@ -829,6 +830,15 @@ export const OrganizationService = {
         };
 
         if (name) updateData.fullName = name;
+        if (email) {
+            const [existingUser] = await db.select({ id: users.id })
+                .from(users)
+                .where(and(eq(users.email, email), ne(users.id, memberId)));
+            if (existingUser) {
+                throw new Error("Email already exists.");
+            }
+            updateData.email = email;
+        }
         if (status !== undefined) updateData.status = status;
 
         await db.update(users)

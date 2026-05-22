@@ -151,7 +151,8 @@ export const updateMemberAccess = async ({ user, params, body, set }: ElysiaCont
             body.role,
             body.branchIds || null,
             body.name,
-            body.status
+            body.status,
+            body.email
         );
         return successResponse('Member access updated successfully', result);
     } catch (err: any) {

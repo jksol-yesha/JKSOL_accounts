@@ -1,3 +1,5 @@
+import CompactCurrency from '../../components/common/CompactCurrency';
+import AccountNameTooltip from '../../components/common/AccountNameTooltip';
 import React, {
   useState,
   useMemo,
@@ -433,21 +435,9 @@ const SummaryItem = ({
         <p className="text-xs font-semibold text-gray-500 mb-0.5">
           {title}
         </p>
-        <div 
-          className="relative w-fit"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          <h3 className="text-base font-bold text-gray-800 tracking-tight cursor-default">
-            {formatCompactCurrency(amount, currency)}
-          </h3>
-          <div className={cn(
-            "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
-            isHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
-          )}>
-            {formatCurrency(amount, currency)}
-          </div>
-        </div>
+        <h3 className="text-base font-bold text-gray-800 tracking-tight cursor-default">
+          <CompactCurrency amount={amount} currencyOverride={currency} />
+        </h3>
       </div>
     </div>
   );
@@ -457,29 +447,33 @@ const CustomTooltip = ({ active, payload, label, currency }) => {
   const { formatCurrency } = usePreferences();
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white border border-gray-100 rounded-lg p-2.5 shadow-md z-50 min-w-[140px]">
-        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">
+      <div className="pointer-events-none relative min-w-[112px] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150 z-50">
+        <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-left text-slate-300">
           {label}
-        </p>
-        <div className="space-y-1">
+        </div>
+        <div className="flex flex-col gap-1.5">
           {payload.map((entry, index) => (
             <div
               key={index}
-              className="flex items-center justify-between gap-3"
+              className="flex items-center justify-between gap-3 text-left"
             >
-              <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-700">
+              <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
                 <span
-                  className="w-2 h-2 rounded-full"
+                  className="block h-1.5 w-1.5 rounded-full"
                   style={{ backgroundColor: entry.color }}
                 />
                 {entry.name}
               </span>
-              <span className="text-xs font-bold text-gray-900">
+              <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">
                 {formatCurrency(entry.value, currency)}
               </span>
             </div>
           ))}
         </div>
+        {/* Tooltip Arrow pointing down */}
+        <div 
+            className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+        />
       </div>
     );
   }
@@ -790,164 +784,7 @@ const DescriptionTooltip = ({ description }) => {
   );
 };
 
-const ACCOUNT_NAME_TOOLTIP_MAX_WIDTH = 280;
-const ACCOUNT_NAME_TOOLTIP_MIN_WIDTH = 160;
-const ACCOUNT_NAME_TOOLTIP_GAP = 8;
-const ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER = 12;
 
-const AccountNameTooltip = ({ name, className = "", textClassName = "" }) => {
-  const [visible, setVisible] = useState(false);
-  const [isTruncated, setIsTruncated] = useState(false);
-  const [position, setPosition] = useState(null);
-  const wrapperRef = useRef(null);
-  const textRef = useRef(null);
-  const content = name || "-";
-  const shouldEnableTooltip = isTruncated || content.trim().length >= 18;
-
-  const measureTruncation = () => {
-    const wrapperNode = wrapperRef.current;
-    const textNode = textRef.current;
-    if (!wrapperNode || !textNode) return false;
-
-    const truncated =
-      textNode.scrollWidth > textNode.clientWidth + 1 ||
-      wrapperNode.scrollWidth > wrapperNode.clientWidth + 1;
-
-    setIsTruncated(truncated);
-    return truncated;
-  };
-
-  useEffect(() => {
-    if (typeof window === "undefined") return undefined;
-
-    let frameId = null;
-
-    const scheduleMeasurement = () => {
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-
-      frameId = window.requestAnimationFrame(() => {
-        frameId = null;
-        measureTruncation();
-      });
-    };
-
-    scheduleMeasurement();
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => scheduleMeasurement())
-        : null;
-
-    if (wrapperRef.current) {
-      resizeObserver?.observe(wrapperRef.current);
-    }
-    if (textRef.current) {
-      resizeObserver?.observe(textRef.current);
-    }
-
-    window.addEventListener("resize", scheduleMeasurement);
-    document.fonts?.ready?.then(() => scheduleMeasurement()).catch(() => { });
-
-    return () => {
-      window.removeEventListener("resize", scheduleMeasurement);
-      if (frameId !== null) {
-        window.cancelAnimationFrame(frameId);
-      }
-      resizeObserver?.disconnect();
-    };
-  }, [name]);
-
-  useLayoutEffect(() => {
-    if (!visible || !wrapperRef.current) return undefined;
-
-    const updatePosition = () => {
-      const rect = wrapperRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
-      const tooltipWidth = Math.min(
-        ACCOUNT_NAME_TOOLTIP_MAX_WIDTH,
-        Math.max(ACCOUNT_NAME_TOOLTIP_MIN_WIDTH, rect.width + 24),
-      );
-
-      let left = rect.left;
-      if (
-        left + tooltipWidth >
-        viewportWidth - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER
-      ) {
-        left =
-          viewportWidth - tooltipWidth - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER;
-      }
-      if (left < ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER) {
-        left = ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER;
-      }
-
-      let top = rect.bottom + ACCOUNT_NAME_TOOLTIP_GAP;
-      const estimatedHeight = 44;
-      if (
-        top + estimatedHeight >
-        viewportHeight - ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER
-      ) {
-        top = rect.top - estimatedHeight - ACCOUNT_NAME_TOOLTIP_GAP;
-      }
-      if (top < ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER) {
-        top = ACCOUNT_NAME_TOOLTIP_VIEWPORT_GUTTER;
-      }
-
-      setPosition({ top, left, width: tooltipWidth });
-    };
-
-    updatePosition();
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-
-    return () => {
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [visible]);
-
-  return (
-    <>
-      <span
-        ref={wrapperRef}
-        className={cn("block max-w-full min-w-0", className)}
-        onMouseEnter={() => {
-          if (measureTruncation() || content.trim().length >= 18) {
-            setVisible(true);
-          }
-        }}
-        onMouseLeave={() => setVisible(false)}
-        title={shouldEnableTooltip ? content : undefined}
-      >
-        <span ref={textRef} className={cn("block truncate", textClassName)}>
-          {content}
-        </span>
-      </span>
-
-      {visible &&
-        position &&
-        createPortal(
-          <div
-            className="pointer-events-none fixed z-[240] rounded-lg border border-gray-100 bg-white px-3 py-2 shadow-[0_16px_40px_rgba(15,23,42,0.12)]"
-            style={{
-              top: `${position.top}px`,
-              left: `${position.left}px`,
-              width: `${position.width}px`,
-            }}
-          >
-            <span className="block whitespace-nowrap text-[12px] font-semibold leading-relaxed text-gray-700">
-              {content}
-            </span>
-          </div>,
-          document.body,
-        )}
-    </>
-  );
-};
 
 const MobileAccountField = ({
   label,

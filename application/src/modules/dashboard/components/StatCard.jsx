@@ -1,3 +1,4 @@
+import HoverTooltip from '../../../components/common/Tooltip';
 import React, { useId, useState } from 'react';
 import {
     Area,
@@ -31,30 +32,34 @@ const MetricTooltip = ({
     const hasPreviousSeries = payload.some((entry) => entry.dataKey === 'previous');
 
     return (
-        <div className="pointer-events-none min-w-[112px] rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[10px] font-medium text-left text-slate-600 shadow-lg">
-            <div className="mb-1 text-[9px] font-normal uppercase tracking-[0.12em] text-left text-slate-400">
+        <div className="pointer-events-none relative min-w-[112px] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-left text-slate-300">
                 {formatTooltipLabel(label, payload)}
             </div>
             {hasPreviousSeries && (
                 <div className="flex items-center justify-between gap-3 text-left">
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-left">
-                        <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: previousColor }} />
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
+                        <span className="block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: previousColor }} />
                         {previousLabel}
                     </span>
-                    <span className="whitespace-nowrap text-right text-[9px]">{formatValue(previous)}</span>
+                    <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">{formatValue(previous)}</span>
                 </div>
             )}
             {hasPreviousSeries ? (
                 <div className="mt-1 flex items-center justify-between gap-3 text-left">
-                    <span className="inline-flex items-center gap-1 whitespace-nowrap text-left">
-                        <span className="block h-2 w-2 rounded-full" style={{ backgroundColor: currentColor }} />
+                    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-left text-[11px] text-slate-200">
+                        <span className="block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: currentColor }} />
                         {currentLabel}
                     </span>
-                    <span className="whitespace-nowrap text-right text-[9px]">{formatValue(current)}</span>
+                    <span className="whitespace-nowrap text-right text-[11px] font-semibold text-white">{formatValue(current)}</span>
                 </div>
             ) : (
-                <div className="text-center text-[9px]">{formatValue(current)}</div>
+                <div className="text-center text-[11px] font-semibold text-white tracking-wide">{formatValue(current)}</div>
             )}
+            {/* Tooltip Arrow pointing down */}
+            <div 
+                className="absolute left-1/2 top-full -translate-x-1/2 w-0 h-0 border-l-[5px] border-r-[5px] border-t-[5px] border-l-transparent border-r-transparent border-t-slate-800" 
+            />
         </div>
     );
 };
@@ -349,11 +354,7 @@ const StatCard = ({
                         className={compact ? '' : 'h-2.5 dashboard-laptop-metric-spacer'}
                     />
                     {amountTooltip ? (
-                        <div 
-                            className="relative w-fit"
-                            onMouseEnter={() => setIsAmountHovered(true)}
-                            onMouseLeave={() => setIsAmountHovered(false)}
-                        >
+                        <HoverTooltip content={amountTooltip}>
                             <span
                                 className="
                                     text-xl lg:text-2xl
@@ -366,13 +367,7 @@ const StatCard = ({
                             >
                                 {amount || secondaryText || linkText}
                             </span>
-                            <div className={cn(
-                                "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
-                                isAmountHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
-                            )}>
-                                {amountTooltip}
-                            </div>
-                        </div>
+                        </HoverTooltip>
                     ) : (
                         <span
                             className="
@@ -388,11 +383,7 @@ const StatCard = ({
                     )}
                     {tertiaryText && (
                         tertiaryTooltip ? (
-                            <div 
-                                className="relative w-fit mt-auto"
-                                onMouseEnter={() => setIsTertiaryHovered(true)}
-                                onMouseLeave={() => setIsTertiaryHovered(false)}
-                            >
+                            <HoverTooltip content={tertiaryTooltip} className="mt-auto">
                                 <span 
                                     className={cn("text-xs font-normal leading-tight dashboard-laptop-metric-change cursor-default", tertiaryToneClassName)}
                                 >
@@ -403,13 +394,7 @@ const StatCard = ({
                                         </span>
                                     )}
                                 </span>
-                                <div className={cn(
-                                    "absolute left-0 top-full mt-2 transition-all duration-200 z-[9999] min-w-max max-w-xs bg-white border border-slate-200 text-slate-700 text-[11px] font-medium px-2.5 py-1.5 rounded-md shadow-xl pointer-events-none whitespace-pre-wrap leading-relaxed",
-                                    isTertiaryHovered ? "opacity-100 translate-y-0 visible" : "opacity-0 translate-y-1 invisible"
-                                )}>
-                                    {tertiaryTooltip}
-                                </div>
-                            </div>
+                            </HoverTooltip>
                         ) : (
                             <span 
                                 className={cn("mt-auto text-xs font-normal leading-tight dashboard-laptop-metric-change", tertiaryToneClassName)}
