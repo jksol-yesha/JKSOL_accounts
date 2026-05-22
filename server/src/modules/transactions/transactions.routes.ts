@@ -3,6 +3,8 @@ import * as TransactionController from './transactions.controller';
 import { authMiddleware } from '../../shared/auth.middleware';
 import { parseBankStatement } from '../../utils/pdfParser';
 import { PDFParserService } from '../../shared/pdf-parser.service';
+import { isHDFCStatement, parseHDFCStatement } from '../../services/statement-parsers/hdfcStatementParser';
+import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
 
 // GET /types - Public endpoint for transaction types
 // Defined before authMiddleware to allow access without token (or with invalid token during debugging)
@@ -159,11 +161,84 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             }
 
             const buffer = Buffer.from(await file.arrayBuffer());
+            
+            // Check if this is an HDFC statement for deterministic parsing
+            const text = await PDFParserService.extractText(buffer);
+            
+            console.log('[upload-statement] Extracted text length:', text.length);
+            console.log('[upload-statement] isHDFCStatement:', isHDFCStatement(text));
+            
+            // If PDF has essentially no extractable text, it's likely a scanned/image PDF
+            if (!text || text.trim().length < 50) {
+                console.log('[upload-statement] PDF has no extractable text (likely scanned/image-based)');
+                set.status = 400;
+                return { 
+                    success: false, 
+                    message: 'This PDF appears to be scanned or image-based. Text could not be extracted. Please download a digital/text-based statement from your bank\'s net banking portal and try again.',
+                    data: {
+                        accountNumber: null,
+                        bankName: null,
+                        parser: 'NONE',
+                        transactions: []
+                    }
+                };
+            }
+            
+            if (isHDFCStatement(text)) {
+                // Use deterministic HDFC parser
+                const hdfcResult = await parseHDFCStatement(buffer);
+                
+                console.log('[upload-statement] HDFC parse result:', {
+                    accountNumber: hdfcResult.accountNumber,
+                    rowCount: hdfcResult.rows.length,
+                    openingBalance: hdfcResult.openingBalance,
+                    closingBalance: hdfcResult.closingBalance,
+                    validationErrors: hdfcResult.validation.errors,
+                    validationWarnings: hdfcResult.validation.warnings,
+                });
+                if (hdfcResult.rows.length === 0) {
+                    console.log('[upload-statement] No rows parsed! First 50 lines:');
+                    const lines = text.split('\n');
+                    for (let i = 0; i < Math.min(lines.length, 50); i++) {
+                        console.log(`  [line ${i}]: ${lines[i]}`);
+                    }
+                }
+                
+                const mappedData = {
+                    accountNumber: hdfcResult.accountNumber || null,
+                    bankName: 'HDFC',
+                    parser: 'HDFC_DETERMINISTIC',
+                    statementFromDate: hdfcResult.statementFromDate,
+                    statementToDate: hdfcResult.statementToDate,
+                    openingBalance: hdfcResult.openingBalance,
+                    closingBalance: hdfcResult.closingBalance,
+                    validation: hdfcResult.validation,
+                    transactions: hdfcResult.rows.map((row: any) => ({
+                        date: row.transactionDate,
+                        narration: row.narration,
+                        referenceNo: row.referenceNo,
+                        valueDate: row.valueDate,
+                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
+                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
+                        balance: parseFloat(row.closingBalance),
+                        hash: ''
+                    }))
+                };
+
+                return {
+                    success: true,
+                    message: `Successfully parsed ${mappedData.transactions.length} transactions (HDFC Deterministic)`,
+                    data: mappedData
+                };
+            }
+
+            // Fallback: OpenAI parser for non-HDFC
             const parsedData = await PDFParserService.parseStatement(buffer);
 
             const mappedData = {
                 accountNumber: parsedData.accountNumber || null,
                 bankName: null,
+                parser: 'OPENAI',
                 transactions: parsedData.transactions.map((txn: any) => ({
                     date: txn.date,
                     narration: txn.description,

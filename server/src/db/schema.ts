@@ -242,6 +242,9 @@ export const transactions = mysqlTable("transactions", {
 
   importedStatementId: bigint("imported_statement_id", { mode: "number", unsigned: true }),
 
+  // Deterministic row identity for bank statement deduplication
+  bankTransactionKey: varchar("bank_transaction_key", { length: 64 }), // SHA-256 hex, nullable for old rows
+
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().onUpdateNow(),
@@ -253,6 +256,7 @@ export const transactions = mysqlTable("transactions", {
     idxTxOrgFyBranchDateCreated: index("idx_tx_org_fy_branch_date_created").on(table.orgId, table.financialYearId, table.branchId, table.txnDate, table.createdAt),
     idxTxOrgStatusDate: index("idx_tx_org_status_date").on(table.orgId, table.status, table.txnDate),
     idxTxContactId: index("idx_tx_contact_id").on(table.contactId),
+    idxTxBankTxnKey: index("idx_tx_bank_txn_key").on(table.orgId, table.bankTransactionKey),
   }
 });
 
@@ -484,10 +488,20 @@ export const importedStatements = mysqlTable("imported_statements", {
   importedAt: datetime("imported_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   transactionCount: int("transaction_count").notNull().default(0),
   status: int("status").notNull().default(1), // 1: Active, 0: Reverted
+
+  // Deduplication fields (nullable for backward compatibility with old imports)
+  fileHash: varchar("file_hash", { length: 64 }), // SHA-256 hex of raw PDF bytes
+  statementFingerprint: varchar("statement_fingerprint", { length: 64 }), // SHA-256 of normalized statement metadata
+  parserType: varchar("parser_type", { length: 50 }), // e.g. 'OPENAI', 'HDFC_DETERMINISTIC'
+  validationStatus: varchar("validation_status", { length: 20 }), // 'valid', 'invalid', 'skipped'
+  duplicateCount: int("duplicate_count").default(0),
+  invalidCount: int("invalid_count").default(0),
 }, (table) => {
   return {
     idxImpStmtOrgBranch: index("idx_imp_stmt_org_branch").on(table.orgId, table.branchId),
     idxImpStmtFy: index("idx_imp_stmt_fy").on(table.financialYearId),
+    idxImpStmtFileHash: index("idx_imp_stmt_file_hash").on(table.orgId, table.fileHash),
+    idxImpStmtFingerprint: index("idx_imp_stmt_fingerprint").on(table.orgId, table.statementFingerprint),
   }
 });
 
