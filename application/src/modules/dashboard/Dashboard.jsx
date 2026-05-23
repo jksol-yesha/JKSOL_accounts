@@ -480,7 +480,7 @@ const Dashboard = () => {
                             </div>
 
                             <div className="flex-shrink-0">
-                                <CurrencySelector className="h-[36px]"
+                                <CurrencySelector className="h-[32px]"
                                     value={dashboardFilters.currency}
                                     onChange={(val) => {
                                         setDashboardFilters(prev => ({ ...prev, currency: val }));

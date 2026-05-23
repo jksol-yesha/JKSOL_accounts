@@ -243,7 +243,7 @@ const CategoryRegistry = ({
     }), []);
 
     return (
-        <Card noPadding className="border-none shadow-none rounded-none flex flex-col bg-white overflow-hidden w-full h-full min-h-[400px]">
+        <Card noPadding className="!border-none !shadow-none !rounded-none flex flex-col bg-white overflow-hidden w-full h-full min-h-[400px]">
             {/* Header Toolbar */}
             <div className="px-5 py-3 flex flex-row items-center justify-between gap-4 relative print:hidden min-h-[60px] z-50 bg-white">
                 {/* Left: Actions */}
@@ -276,7 +276,7 @@ const CategoryRegistry = ({
             {/* Grid Container */}
             <div
                 className="category-grid-shell relative w-full px-5 pb-1 flex flex-col"
-                style={{ height: '760px' }}
+                style={{ height: 'calc(100vh - 75px)', minHeight: '400px' }}
             >
                 {showInitialLoader ? (
                     <div className="absolute inset-0 flex items-center justify-center bg-white/80 z-10 backdrop-blur-sm">

@@ -280,6 +280,8 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
 
   for (const block of txnBlocks) {
     rowCounter++;
+
+    // Join all lines for amount/date extraction (amounts may be on any line)
     const combinedText = block.lines.join(' ');
 
     // Extract transaction date from the start
@@ -289,11 +291,9 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
     if (!transactionDate) continue;
 
     // Remove the transaction date prefix
-    let remaining = combinedText.substring(txnDateStr.length);
+    const remaining = combinedText.substring(txnDateStr.length);
 
-    // ── Extract amounts from the RIGHT side using regex ──
-    // The rightmost amounts are: [Withdrawal?] [Deposit?] [Closing Balance]
-    // Find ALL amounts in the combined text
+    // ── Extract ALL amounts from the combined text ──
     const allAmounts: { value: string; index: number; length: number }[] = [];
     const amtRegex = /(\d{1,3}(?:,\d{2,3})*\.\d{2})/g;
     let amtMatch;
@@ -319,7 +319,6 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
     }
 
     // The transaction amount(s) are the amounts before closing balance
-    // Could be 1 amount (either withdrawal or deposit) or 2 amounts (both columns)
     let debitAmount: string | null = null;
     let creditAmount: string | null = null;
 
@@ -328,23 +327,17 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
       const txnAmountStr = normalizeAmount(txnAmountRaw.value);
 
       if (allAmounts.length >= 3) {
-        // Could be: withdrawal, deposit, closing — or narration-embedded amount, txnAmount, closing
-        // For safety, take the two amounts just before closing
         const amt1 = normalizeAmount(allAmounts[allAmounts.length - 3]!.value);
         const amt2 = txnAmountStr;
-        // We'll determine debit vs credit later via balance chain
         debitAmount = amt1;
         creditAmount = amt2;
       } else {
-        // Single transaction amount — determine debit/credit later
         debitAmount = txnAmountStr;
       }
     }
 
     // ── Extract value date ──
-    // Value date is a DD/MM/YY pattern that appears AFTER the narration, before amounts
-    // In concatenated format: "...HDFCH0070724224001/01/26800,000.00..."
-    // Find all dates in remaining text
+    // Find all dates in the remaining text
     const allDates: { value: string; index: number }[] = [];
     const dateRegexGlobal = /(\d{2}\/\d{2}\/\d{2,4})/g;
     let dateMatchG;
@@ -355,37 +348,71 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
     let valueDateStr: string | null = null;
     let referenceNo: string | null = null;
 
-    // The value date is typically the LAST date before the amounts
+    // Value date is the LAST date before the amounts section
     if (allDates.length > 0) {
-      // Use the last date found (value date)
       const lastDate = allDates[allDates.length - 1]!;
       valueDateStr = parseHDFCDate(lastDate.value);
 
-      // Reference number is typically right before the value date
-      // In: "HDFCH0070724224001/01/26" — ref is "HDFCH00707242240"
+      // Reference number is right before the value date
       const textBeforeValueDate = remaining.substring(0, lastDate.index);
 
-      // Extract reference: last alphanumeric sequence (6+ chars) before value date
-      const refMatch = textBeforeValueDate.match(/([A-Z0-9]{6,})\s*$/i);
-      if (refMatch) {
-        referenceNo = refMatch[1]!;
-      }
+      // Extract reference using known HDFC reference patterns:
+      // HDFCH followed by digits, CITIN followed by digits, CINB followed by digits,
+      // NB followed by digits, all-zero sequences (cash deposits)
+      const refPatterns = [
+        /(?:HDFCH\d{10,})\s*$/i,       // HDFC internal ref
+        /(?:CITIN\d{10,})\s*$/i,        // Citibank NEFT ref
+        /(?:CINB\d{10,})\s*$/i,         // CINB ref
+        /(?:NB\d{10,})\s*$/i,           // NB ref
+        /(?:0{10,})\s*$/,               // Cash deposit (all zeros)
+        /(?:[A-Z]{4,5}\d{10,})\s*$/i,   // Generic: 4-5 letter prefix + 10+ digits
+      ];
 
-      // Narration is everything between txn date and reference/value date
-      const narrationEnd = refMatch
-        ? textBeforeValueDate.lastIndexOf(refMatch[1]!)
-        : lastDate.index;
-
-      remaining = remaining.substring(0, narrationEnd).trim();
-    } else {
-      // No value date found — narration is everything before first amount
-      if (allAmounts.length > 0) {
-        remaining = remaining.substring(0, allAmounts[0]!.index).trim();
+      for (const pattern of refPatterns) {
+        const refMatch = textBeforeValueDate.match(pattern);
+        if (refMatch) {
+          referenceNo = refMatch[0]!.trim();
+          break;
+        }
       }
     }
 
-    // Clean up narration: remove trailing commas, extra spaces
-    const narration = remaining
+    // ── Build narration ──
+    // Narration = all text between txn date and the ref/valueDate/amounts section
+    // Plus any continuation text after the last amount
+
+    // Find where the structural portion starts
+    let narrationEndIdx = remaining.length;
+
+    if (referenceNo) {
+      // Find the FIRST occurrence of refNo (on the first line, before amounts)
+      const refIdx = remaining.indexOf(referenceNo);
+      if (refIdx !== -1) {
+        narrationEndIdx = refIdx;
+      }
+    } else if (allDates.length > 0) {
+      narrationEndIdx = allDates[allDates.length - 1]!.index;
+    } else if (allAmounts.length > 0) {
+      narrationEndIdx = allAmounts[0]!.index;
+    }
+
+    // Get the narration portion (before ref/dates/amounts)
+    let narrationBefore = remaining.substring(0, narrationEndIdx).trim();
+
+    // Also collect any text AFTER the last amount (continuation narration lines)
+    const lastAmountEnd = closingBalanceRaw.index + closingBalanceRaw.length;
+    let narrationAfter = remaining.substring(lastAmountEnd).trim();
+
+    // Combine narration parts
+    let narration = narrationBefore;
+    if (narrationAfter) {
+      narration = narration ? `${narration} ${narrationAfter}` : narrationAfter;
+    }
+
+    // Clean up narration: remove trailing commas, extra spaces, embedded amounts/dates
+    narration = narration
+      .replace(/\d{2}\/\d{2}\/\d{2,4}/g, '') // Remove any leftover dates
+      .replace(/\d{1,3}(?:,\d{2,3})*\.\d{2}/g, '') // Remove any leftover amounts
       .replace(/\s+/g, ' ')
       .replace(/^[,\s]+|[,\s]+$/g, '')
       .trim();

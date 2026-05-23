@@ -348,6 +348,8 @@ const Parties = () => {
 
     const gridTheme = useMemo(() => themeQuartz.withParams({
         headerFontSize: 12,
+        rowHeight: 48,
+        headerHeight: 40,
     }), []);
 
     const handleToggleStatus = async (party) => {
@@ -399,7 +401,7 @@ const Parties = () => {
     };
 
     return (
-        <div className="flex flex-col h-full min-h-0 overflow-hidden">
+        <div className="flex flex-col h-full min-h-0 overflow-y-auto bg-white">
             <PageContentShell
                 header={(
                     <PageHeader
@@ -410,7 +412,7 @@ const Parties = () => {
                 )}
                 className="!overflow-visible lg:!overflow-visible"
                 contentClassName="p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
-                cardClassName="border-none shadow-none rounded-none !overflow-visible max-h-none lg:!max-h-none bg-white"
+                cardClassName="!border-none !shadow-none !rounded-none !overflow-visible max-h-none lg:!max-h-none bg-white"
             >
 
                 {/* Toolbar */}
@@ -449,7 +451,7 @@ const Parties = () => {
                 {/* Table Section */}
                 <div
                     className="parties-grid-shell relative w-full px-5 pb-1 flex flex-col"
-                    style={{ height: '760px' }}
+                    style={{ height: 'calc(100vh - 75px)', minHeight: '400px' }}
                 >
                     <div className="h-full w-full relative">
                         <div className="absolute inset-0">
@@ -459,8 +461,8 @@ const Parties = () => {
                                 rowData={filteredParties}
                                 columnDefs={colDefs}
                                 defaultColDef={defaultColDef}
-                                rowHeight={42}
-                                headerHeight={44}
+                                rowHeight={48}
+                                headerHeight={40}
                                 animateRows={true}
                                 suppressCellFocus={true}
                                 suppressRowClickSelection={true}

@@ -1440,7 +1440,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                     // Transfer
                                     <>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
@@ -1464,7 +1464,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Amount <span className="text-rose-500">*</span>
                                                 </label>
@@ -1498,7 +1498,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1 relative z-[60]">
+                                            <div className="space-y-1 min-w-0 relative z-[60]">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
@@ -1523,7 +1523,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 </CustomSelect>
                                                 {errors.fromAccountId && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.fromAccountId}</p>}
                                             </div>
-                                            <div className="space-y-1 relative z-[50]">
+                                            <div className="space-y-1 min-w-0 relative z-[50]">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     To Account <span className="text-rose-500">*</span>
                                                 </label>
@@ -1554,7 +1554,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                     // Investment
                                     <>
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
@@ -1578,7 +1578,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     From Account <span className="text-rose-500">*</span>
                                                 </label>
@@ -1605,7 +1605,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                         </div>
 
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Investment Account <span className="text-rose-500">*</span>
                                                 </label>
@@ -1630,7 +1630,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 </CustomSelect>
                                             </div>
 
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Investment Category <span className="text-rose-500">*</span>
                                                 </label>
@@ -1665,7 +1665,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
 
                                         {currentSubcategories.length > 0 ? (
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Sub-Category
                                                     </label>
@@ -1689,7 +1689,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                     </CustomSelect>
                                                 </div>
 
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
@@ -1723,7 +1723,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                             </div>
                                         ) : (
                                             <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
@@ -1762,7 +1762,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                     <>
                                         {/* Row 2: Date & Account */}
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
@@ -1788,7 +1788,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                             </div>
 
                                             {/* Payment Wrapper */}
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     {Number(formData.txnTypeId) === 1 ? 'Deposit To' : 'Paid From'} <span className="text-rose-500">*</span>
                                                 </label>
@@ -1828,7 +1828,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                         {/* Dynamic Rows based on Sub-Category existence */}
                                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                                             {/* Always show Category First */}
-                                            <div className="space-y-1">
+                                            <div className="space-y-1 min-w-0">
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     {Number(formData.txnTypeId) === 1 ? 'Income Category' : 'Expense Category'} <span className="text-rose-500">*</span>
                                                 </label>
@@ -1873,7 +1873,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
 
                                             {/* If Subcategories exist, show Sub-Category. Else, show Amount on right side. */}
                                             {currentSubcategories.length > 0 ? (
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Sub-Category
                                                     </label>
@@ -1897,7 +1897,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                     </CustomSelect>
                                                 </div>
                                             ) : (
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
@@ -1933,7 +1933,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                         {/* If Sub-category exists, place Amount below in half-width */}
                                         {currentSubcategories.length > 0 && (
                                             <div className="grid grid-cols-2 gap-x-3">
-                                                <div className="space-y-1">
+                                                <div className="space-y-1 min-w-0">
                                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                         Amount <span className="text-rose-500">*</span>
                                                     </label>
@@ -2117,7 +2117,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
 
 
 
-                                <div className="space-y-1">
+                                <div className="space-y-1 min-w-0">
                                     <label className="text-[11px] font-bold text-slate-600 block capitalize">Notes</label>
                                     <textarea
                                         rows={2}
@@ -2131,7 +2131,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                     />
                                 </div>
 
-                                <div className="space-y-1">
+                                <div className="space-y-1 min-w-0">
                                     <div className="flex items-center justify-between gap-3">
                                         <label className="text-[11px] font-bold text-slate-600 block capitalize">Attachment (Invoice/Receipt)</label>
                                     </div>

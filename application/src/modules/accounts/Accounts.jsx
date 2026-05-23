@@ -684,7 +684,7 @@ const buildAccountSearchText = (account) => {
 // Stable AG Grid pure functions (Hoist completely out to prevent structural Redraw loops)
 const genericIsFullWidthRow = (params) =>
   params.rowNode.data && params.rowNode.data.isGroupHeader;
-const genericGetRowHeight = (params) => (params.node?.data?.isGroupHeader ? 36 : 42);
+const genericGetRowHeight = (params) => (params.node?.data?.isGroupHeader ? 36 : 48);
 const GenericFullWidthGroupCellRenderer = (props) => {
   if (!props.data || !props.data.isGroupHeader) return null;
   return (
@@ -1866,7 +1866,7 @@ const Accounts = () => {
             return (
               <div className="w-full px-5 pb-8 relative" aria-busy={loading}>
                 <div
-                  style={{ height: "600px", width: "100%" }}
+                  style={{ height: 'calc(100vh - 220px)', minHeight: '300px', width: "100%" }}
                   className="ag-theme-quartz border border-gray-200 rounded-lg overflow-hidden"
                 >
                   <AgGridReact
@@ -1881,8 +1881,8 @@ const Accounts = () => {
                     rowData={filteredAccounts}
                     columnDefs={columnDefs}
                     defaultColDef={defaultColDef}
-                    rowHeight={42}
-                    headerHeight={44}
+                    rowHeight={48}
+                    headerHeight={40}
                     isFullWidthRow={genericIsFullWidthRow}
                     fullWidthCellRenderer={GenericFullWidthGroupCellRenderer}
                     getRowHeight={genericGetRowHeight}

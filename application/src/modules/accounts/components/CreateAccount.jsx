@@ -246,7 +246,7 @@ const CreateAccount = ({
         triggeringElementRef.current.focus();
       }
       shouldRestoreFocusRef.current = false;
-    }, 0);
+    }, ACCOUNT_DRAWER_CLOSE_ANIMATION_MS);
 
     return () => {
       if (openStateTimer) {
@@ -1035,7 +1035,8 @@ const CreateAccount = ({
       {!isInline && (
         <div
           className={cn(
-            "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]"
+            "fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[110]",
+            isClosingDrawer ? "animate-fade-out" : "animate-fade-in"
           )}
           onClick={handleClose}
         ></div>
@@ -1046,7 +1047,8 @@ const CreateAccount = ({
         className={cn(
           isInline
             ? "flex-1 flex flex-col h-full bg-white relative z-10"
-            : "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden"
+            : "fixed inset-y-0 right-0 z-[120] w-full max-w-md bg-white shadow-[-10px_0_30px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden",
+          !isInline && (isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right")
         )}
       >
         <form

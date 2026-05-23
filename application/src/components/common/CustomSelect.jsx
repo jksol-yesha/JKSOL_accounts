@@ -454,7 +454,7 @@ const CustomSelect = React.forwardRef(
         )}
 
         {searchInInput && isSearchable ? (
-          <div className="relative">
+          <div className="relative min-w-0">
             <input
               ref={(node) => {
                 buttonRef.current = node;
@@ -499,7 +499,7 @@ const CustomSelect = React.forwardRef(
               {...rest}
               className={cn(
                 className,
-                "w-full px-3 pr-9 text-[12px] leading-tight",
+                "w-full px-3 pr-9 text-[12px] leading-tight overflow-hidden text-ellipsis",
                 disabled ? "cursor-not-allowed opacity-75" : "cursor-text",
               )}
             />
@@ -703,7 +703,7 @@ const CustomSelect = React.forwardRef(
                         </div>
                         <span
                           className={cn(
-                            "block w-full pr-1 text-[12px] leading-tight tracking-tight whitespace-normal break-words",
+                            "block w-full pr-1 text-[12px] leading-tight tracking-tight truncate",
                             optionLabelClassName,
                           )}
                         >

@@ -4,6 +4,8 @@ import { authMiddleware } from '../../shared/auth.middleware';
 import { parseBankStatement } from '../../utils/pdfParser';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { isHDFCStatement, parseHDFCStatement } from '../../services/statement-parsers/hdfcStatementParser';
+import { isAxisStatement, parseAxisStatement } from '../../services/statement-parsers/axisStatementParser';
+import { isICICIStatement, parseICICIStatement } from '../../services/statement-parsers/iciciStatementParser';
 import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
 
 // GET /types - Public endpoint for transaction types
@@ -232,7 +234,86 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
                 };
             }
 
-            // Fallback: OpenAI parser for non-HDFC
+            // ─── Axis Bank Deterministic ───
+            if (isAxisStatement(text)) {
+                const axisResult = await parseAxisStatement(buffer);
+                
+                console.log('[upload-statement] Axis parse result:', {
+                    accountNumber: axisResult.accountNumber,
+                    rowCount: axisResult.rows.length,
+                    valid: axisResult.validation.isValid,
+                });
+                
+                const mappedData = {
+                    accountNumber: axisResult.accountNumber || null,
+                    bankName: 'AXIS',
+                    parser: 'AXIS_DETERMINISTIC',
+                    statementFromDate: axisResult.statementFromDate,
+                    statementToDate: axisResult.statementToDate,
+                    openingBalance: axisResult.openingBalance,
+                    closingBalance: axisResult.closingBalance,
+                    validation: axisResult.validation,
+                    transactions: axisResult.rows.map((row: any) => ({
+                        date: row.transactionDate,
+                        narration: row.narration,
+                        referenceNo: row.referenceNo,
+                        chequeNumber: row.chequeNumber,
+                        valueDate: row.valueDate,
+                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
+                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
+                        balance: parseFloat(row.closingBalance),
+                        hash: ''
+                    }))
+                };
+
+                return {
+                    success: true,
+                    message: `Successfully parsed ${mappedData.transactions.length} transactions (Axis Deterministic)`,
+                    data: mappedData
+                };
+            }
+
+            // ─── ICICI Bank Deterministic ───
+            if (isICICIStatement(text)) {
+                const iciciResult = await parseICICIStatement(buffer);
+                
+                console.log('[upload-statement] ICICI parse result:', {
+                    accountNumber: iciciResult.accountNumber,
+                    rowCount: iciciResult.rows.length,
+                    valid: iciciResult.validation.isValid,
+                });
+                
+                const mappedData = {
+                    accountNumber: iciciResult.accountNumber || null,
+                    bankName: 'ICICI',
+                    parser: 'ICICI_DETERMINISTIC',
+                    statementFromDate: iciciResult.statementFromDate,
+                    statementToDate: iciciResult.statementToDate,
+                    openingBalance: iciciResult.openingBalance,
+                    closingBalance: iciciResult.closingBalance,
+                    validation: iciciResult.validation,
+                    transactions: iciciResult.rows.map((row: any) => ({
+                        date: row.transactionDate,
+                        narration: row.narration,
+                        referenceNo: row.referenceNo,
+                        chequeNumber: row.chequeNumber,
+                        serialNo: row.serialNo,
+                        valueDate: row.valueDate,
+                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
+                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
+                        balance: parseFloat(row.closingBalance),
+                        hash: ''
+                    }))
+                };
+
+                return {
+                    success: true,
+                    message: `Successfully parsed ${mappedData.transactions.length} transactions (ICICI Deterministic)`,
+                    data: mappedData
+                };
+            }
+
+            // Fallback: OpenAI parser for unsupported banks
             const parsedData = await PDFParserService.parseStatement(buffer);
 
             const mappedData = {

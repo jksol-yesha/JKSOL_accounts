@@ -3,7 +3,7 @@
  *
  * This service coordinates the multi-layered deduplication pipeline:
  * 1. File hash check (exact PDF reupload)
- * 2. Bank detection & deterministic parsing (HDFC)
+ * 2. Bank detection & deterministic parsing (HDFC, AXIS, ICICI)
  * 3. Statement fingerprint check (same period, different PDF)
  * 4. Per-row bankTransactionKey deduplication
  * 5. Transaction creation via existing TransactionService.create()
@@ -16,6 +16,8 @@ import { importedStatements, transactions } from '../../db/schema';
 import { eq, and, isNotNull } from 'drizzle-orm';
 import { generateFileHash, generateStatementFingerprint, generateBankTransactionKey } from './statementHashUtils';
 import { isHDFCStatement, parseHDFCStatement } from './hdfcStatementParser';
+import { isAxisStatement, parseAxisStatement } from './axisStatementParser';
+import { isICICIStatement, parseICICIStatement } from './iciciStatementParser';
 import type { StatementImportResult, ImportRowResult } from './types';
 
 // Re-export for convenience
@@ -102,7 +104,7 @@ export async function getExistingBankTransactionKeys(
  * Detect bank type from PDF text.
  * Currently only HDFC has a deterministic parser.
  */
-export async function detectBankType(buffer: Buffer): Promise<'HDFC' | 'UNKNOWN'> {
+export async function detectBankType(buffer: Buffer): Promise<'HDFC' | 'AXIS' | 'ICICI' | 'UNKNOWN'> {
   // We need to extract text first to detect
   if (typeof (globalThis as any).DOMMatrix === 'undefined') {
     (globalThis as any).DOMMatrix = class DOMMatrix {} as any;
@@ -113,6 +115,8 @@ export async function detectBankType(buffer: Buffer): Promise<'HDFC' | 'UNKNOWN'
   const text: string = data.text;
 
   if (isHDFCStatement(text)) return 'HDFC';
+  if (isAxisStatement(text)) return 'AXIS';
+  if (isICICIStatement(text)) return 'ICICI';
   return 'UNKNOWN';
 }
 
@@ -272,6 +276,334 @@ export async function processHDFCImport(params: {
     duplicateCount: rowsWithKeys.filter(r => r.status === 'duplicate').length,
     invalidCount: rowsWithKeys.filter(r => r.status === 'invalid').length,
     parser: 'HDFC_DETERMINISTIC',
+    statementAlreadyImported: false,
+    fileAlreadyImported: false,
+    validationErrors: parsed.validation.errors,
+    validationWarnings: parsed.validation.warnings,
+    rows: rowsWithKeys,
+  };
+}
+
+/**
+ * Process an Axis statement through the deterministic pipeline.
+ */
+export async function processAxisImport(params: {
+  buffer: Buffer;
+  orgId: number;
+  accountId: number;
+  branchId: number;
+  fileHash: string;
+  accountNumber: string;
+}): Promise<StatementImportResult> {
+  const { buffer, orgId, accountId, branchId, fileHash, accountNumber } = params;
+
+  // Parse the statement
+  const parsed = await parseAxisStatement(buffer);
+
+  // Use account number from parser if available, otherwise use the one from params
+  const effectiveAccountNumber = parsed.accountNumber || accountNumber;
+
+  // Check validation
+  if (!parsed.validation.isValid) {
+    return {
+      success: false,
+      message: 'Axis statement parsed but validation failed. No transactions were imported.',
+      importedCount: 0,
+      duplicateCount: 0,
+      invalidCount: parsed.rows.length,
+      parser: 'AXIS_DETERMINISTIC',
+      statementAlreadyImported: false,
+      fileAlreadyImported: false,
+      validationErrors: parsed.validation.errors,
+      validationWarnings: parsed.validation.warnings,
+      rows: parsed.rows.map(r => ({
+        transactionDate: r.transactionDate,
+        referenceNo: r.referenceNo,
+        debitAmount: r.debitAmount,
+        creditAmount: r.creditAmount,
+        closingBalance: r.closingBalance,
+        narration: r.narration,
+        status: 'invalid' as const,
+        reason: 'Validation failed: ' + parsed.validation.errors.join('; '),
+        bankTransactionKey: '',
+      })),
+    };
+  }
+
+  // Generate statement fingerprint
+  let statementFingerprint: string | null = null;
+  if (
+    parsed.accountNumber &&
+    parsed.statementFromDate &&
+    parsed.statementToDate &&
+    parsed.openingBalance &&
+    parsed.closingBalance &&
+    parsed.debitCount !== null &&
+    parsed.creditCount !== null &&
+    parsed.totalDebit &&
+    parsed.totalCredit
+  ) {
+    statementFingerprint = generateStatementFingerprint({
+      bankName: 'AXIS',
+      accountNumber: parsed.accountNumber,
+      statementFromDate: parsed.statementFromDate,
+      statementToDate: parsed.statementToDate,
+      openingBalance: parsed.openingBalance,
+      closingBalance: parsed.closingBalance,
+      debitCount: parsed.debitCount,
+      creditCount: parsed.creditCount,
+      totalDebit: parsed.totalDebit,
+      totalCredit: parsed.totalCredit,
+    });
+
+    // Check if this statement period was already imported
+    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    if (fingerprintExists) {
+      return {
+        success: true,
+        message: 'This Axis statement period was already imported. No new transactions were created.',
+        importedCount: 0,
+        duplicateCount: parsed.rows.length,
+        invalidCount: 0,
+        parser: 'AXIS_DETERMINISTIC',
+        statementAlreadyImported: true,
+        fileAlreadyImported: false,
+        validationErrors: [],
+        validationWarnings: parsed.validation.warnings,
+        rows: parsed.rows.map(r => ({
+          transactionDate: r.transactionDate,
+          referenceNo: r.referenceNo,
+          debitAmount: r.debitAmount,
+          creditAmount: r.creditAmount,
+          closingBalance: r.closingBalance,
+          narration: r.narration,
+          status: 'duplicate' as const,
+          reason: 'Statement fingerprint already exists',
+          bankTransactionKey: '',
+        })),
+      };
+    }
+  }
+
+  // Generate bankTransactionKey for each row
+  const rowsWithKeys: (ImportRowResult & { parsedRow: typeof parsed.rows[0] })[] = parsed.rows.map(row => {
+    const debitOrCredit = row.debitAmount ? 'DEBIT' : 'CREDIT';
+    const amount = row.debitAmount || row.creditAmount || '0';
+
+    const key = generateBankTransactionKey({
+      organizationId: orgId,
+      accountId,
+      bankName: 'AXIS',
+      accountNumber: effectiveAccountNumber,
+      transactionDate: row.transactionDate,
+      valueDate: row.valueDate,
+      debitOrCredit: debitOrCredit as 'DEBIT' | 'CREDIT',
+      amount,
+      closingBalance: row.closingBalance,
+      referenceNo: row.referenceNo,
+    });
+
+    return {
+      transactionDate: row.transactionDate,
+      referenceNo: row.referenceNo,
+      debitAmount: row.debitAmount,
+      creditAmount: row.creditAmount,
+      closingBalance: row.closingBalance,
+      narration: row.narration,
+      status: 'imported' as const,
+      reason: null,
+      bankTransactionKey: key,
+      parsedRow: row,
+    };
+  });
+
+  // Check existing keys in bulk
+  const allKeys = rowsWithKeys.map(r => r.bankTransactionKey);
+  const existingKeys = await getExistingBankTransactionKeys(orgId, allKeys);
+
+  // Classify rows
+  for (const row of rowsWithKeys) {
+    if (existingKeys.has(row.bankTransactionKey)) {
+      row.status = 'duplicate';
+      row.reason = 'Transaction with this bank key already exists';
+    }
+  }
+
+  return {
+    success: true,
+    message: '',
+    importedCount: 0,
+    duplicateCount: rowsWithKeys.filter(r => r.status === 'duplicate').length,
+    invalidCount: rowsWithKeys.filter(r => r.status === 'invalid').length,
+    parser: 'AXIS_DETERMINISTIC',
+    statementAlreadyImported: false,
+    fileAlreadyImported: false,
+    validationErrors: parsed.validation.errors,
+    validationWarnings: parsed.validation.warnings,
+    rows: rowsWithKeys,
+  };
+}
+
+/**
+ * Process an ICICI statement through the deterministic pipeline.
+ *
+ * ICICI key generation uses serialNo and chequeNumber instead of valueDate/referenceNo
+ * to match the ICICI-specific column structure.
+ */
+export async function processICICIImport(params: {
+  buffer: Buffer;
+  orgId: number;
+  accountId: number;
+  branchId: number;
+  fileHash: string;
+  accountNumber: string;
+}): Promise<StatementImportResult> {
+  const { buffer, orgId, accountId, branchId, fileHash, accountNumber } = params;
+
+  // Parse the statement
+  const parsed = await parseICICIStatement(buffer);
+
+  // Use account number from parser if available, otherwise use the one from params
+  const effectiveAccountNumber = parsed.accountNumber || accountNumber;
+
+  // Check validation
+  if (!parsed.validation.isValid) {
+    return {
+      success: false,
+      message: 'ICICI statement parsed but validation failed. No transactions were imported.',
+      importedCount: 0,
+      duplicateCount: 0,
+      invalidCount: parsed.rows.length,
+      parser: 'ICICI_DETERMINISTIC',
+      statementAlreadyImported: false,
+      fileAlreadyImported: false,
+      validationErrors: parsed.validation.errors,
+      validationWarnings: parsed.validation.warnings,
+      rows: parsed.rows.map(r => ({
+        transactionDate: r.transactionDate,
+        referenceNo: r.referenceNo,
+        debitAmount: r.debitAmount,
+        creditAmount: r.creditAmount,
+        closingBalance: r.closingBalance,
+        narration: r.narration,
+        status: 'invalid' as const,
+        reason: 'Validation failed: ' + parsed.validation.errors.join('; '),
+        bankTransactionKey: '',
+      })),
+    };
+  }
+
+  // Generate statement fingerprint
+  let statementFingerprint: string | null = null;
+  if (
+    parsed.accountNumber &&
+    parsed.statementFromDate &&
+    parsed.statementToDate &&
+    parsed.openingBalance &&
+    parsed.closingBalance &&
+    parsed.debitCount !== null &&
+    parsed.creditCount !== null &&
+    parsed.totalDebit &&
+    parsed.totalCredit
+  ) {
+    statementFingerprint = generateStatementFingerprint({
+      bankName: 'ICICI',
+      accountNumber: parsed.accountNumber,
+      statementFromDate: parsed.statementFromDate,
+      statementToDate: parsed.statementToDate,
+      openingBalance: parsed.openingBalance,
+      closingBalance: parsed.closingBalance,
+      debitCount: parsed.debitCount,
+      creditCount: parsed.creditCount,
+      totalDebit: parsed.totalDebit,
+      totalCredit: parsed.totalCredit,
+    });
+
+    // Check if this statement period was already imported
+    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    if (fingerprintExists) {
+      return {
+        success: true,
+        message: 'This ICICI statement period was already imported. No new transactions were created.',
+        importedCount: 0,
+        duplicateCount: parsed.rows.length,
+        invalidCount: 0,
+        parser: 'ICICI_DETERMINISTIC',
+        statementAlreadyImported: true,
+        fileAlreadyImported: false,
+        validationErrors: [],
+        validationWarnings: parsed.validation.warnings,
+        rows: parsed.rows.map(r => ({
+          transactionDate: r.transactionDate,
+          referenceNo: r.referenceNo,
+          debitAmount: r.debitAmount,
+          creditAmount: r.creditAmount,
+          closingBalance: r.closingBalance,
+          narration: r.narration,
+          status: 'duplicate' as const,
+          reason: 'Statement fingerprint already exists',
+          bankTransactionKey: '',
+        })),
+      };
+    }
+  }
+
+  // Generate bankTransactionKey for each row
+  // ICICI uses serialNo + chequeNumber instead of valueDate + referenceNo
+  const rowsWithKeys: (ImportRowResult & { parsedRow: typeof parsed.rows[0] })[] = parsed.rows.map(row => {
+    const debitOrCredit = row.debitAmount ? 'DEBIT' : 'CREDIT';
+    const amount = row.debitAmount || row.creditAmount || '0';
+
+    // ICICI-specific key: includes serialNo and chequeNumber
+    const keyInput = [
+      String(orgId),
+      String(accountId),
+      'ICICI',
+      effectiveAccountNumber,
+      String(row.serialNo ?? ''),
+      row.transactionDate,
+      debitOrCredit,
+      amount,
+      row.closingBalance,
+      row.chequeNumber || '',
+    ].join('|');
+
+    const crypto = require('crypto');
+    const key = crypto.createHash('sha256').update(keyInput).digest('hex');
+
+    return {
+      transactionDate: row.transactionDate,
+      referenceNo: row.referenceNo,
+      debitAmount: row.debitAmount,
+      creditAmount: row.creditAmount,
+      closingBalance: row.closingBalance,
+      narration: row.narration,
+      status: 'imported' as const,
+      reason: null,
+      bankTransactionKey: key,
+      parsedRow: row,
+    };
+  });
+
+  // Check existing keys in bulk
+  const allKeys = rowsWithKeys.map(r => r.bankTransactionKey);
+  const existingKeys = await getExistingBankTransactionKeys(orgId, allKeys);
+
+  // Classify rows
+  for (const row of rowsWithKeys) {
+    if (existingKeys.has(row.bankTransactionKey)) {
+      row.status = 'duplicate';
+      row.reason = 'Transaction with this bank key already exists';
+    }
+  }
+
+  return {
+    success: true,
+    message: '',
+    importedCount: 0,
+    duplicateCount: rowsWithKeys.filter(r => r.status === 'duplicate').length,
+    invalidCount: rowsWithKeys.filter(r => r.status === 'invalid').length,
+    parser: 'ICICI_DETERMINISTIC',
     statementAlreadyImported: false,
     fileAlreadyImported: false,
     validationErrors: parsed.validation.errors,

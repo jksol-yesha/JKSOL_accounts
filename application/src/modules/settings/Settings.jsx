@@ -467,7 +467,7 @@ const Settings = () => {
                                                         e.stopPropagation();
                                                         handleQuickStatusToggle(item, false);
                                                     }}
-                                                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}
+                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:brightness-95 transition-colors ${Number(item.status) === 2 ? 'text-gray-500' : 'text-emerald-600'}`}
                                                 >
                                                     {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>
@@ -487,7 +487,7 @@ const Settings = () => {
                                                         e.stopPropagation();
                                                         handleQuickStatusToggle(item, true);
                                                     }}
-                                                    className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium cursor-pointer hover:opacity-80 transition-opacity ${Number(item.status) === 2 ? 'bg-red-50 text-red-600 border border-red-100' : 'bg-emerald-50 text-emerald-600 border border-emerald-100'}`}
+                                                    className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider cursor-pointer hover:brightness-95 transition-colors ${Number(item.status) === 2 ? 'text-gray-500' : 'text-emerald-600'}`}
                                                 >
                                                     {Number(item.status) === 2 ? 'Inactive' : 'Active'}
                                                 </span>

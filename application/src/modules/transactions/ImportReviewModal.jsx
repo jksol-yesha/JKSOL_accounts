@@ -461,6 +461,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                 value={selectedAccount}
                                 onChange={(e) => setSelectedAccount(e.target.value)}
                                 isSearchable={true}
+                                matchTriggerWidth={true}
                                 placeholder="Select an account..."
                                 className="w-full px-3 h-[32px] bg-slate-50 border border-slate-200 rounded-lg text-[12px] font-semibold text-slate-800 shadow-sm outline-none transition-all flex items-center justify-between hover:bg-slate-100"
                                 dropdownClassName="z-[150]"
@@ -531,7 +532,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                             <div className={`${!isRightPanelOpen ? 'w-full' : (activeRightTab === 'pdf' ? 'w-[50%]' : 'w-[70%]')} flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out`}>
                                 <div className="flex-1 relative overflow-hidden">
                                     <div className="absolute inset-0 overflow-auto">
-                                        <table className="w-full text-left border-collapse table-fixed">
+                                        <table className="w-full text-left border-collapse">
                                             <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
                                                 <tr>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
@@ -565,7 +566,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                                     {txn.type}
                                                                 </span>
                                                             </td>
-                                                            <td className="px-3 py-2 text-xs font-medium text-slate-800 truncate" title={txn.description}>{txn.description}</td>
+                                                            <td className="px-3 py-2 text-xs font-medium text-slate-800 break-words whitespace-normal">{txn.description}</td>
                                                             <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                             <td className="px-3 py-2 text-center">
                                                                 <button 
@@ -620,7 +621,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                             {focusedTxn ? (
                                                 <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                                                     {/* Type */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Transaction Type <span className="text-rose-500">*</span></label>
                                                         <CustomSelect 
                                                             value={focusedTxn.type} 
@@ -642,7 +643,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Party */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Party</label>
                                                         <CustomSelect 
                                                             value={focusedTxn.contactId} 
@@ -661,7 +662,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Date */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Date <span className="text-rose-500">*</span></label>
                                                         <input 
                                                             type="date" 
@@ -672,12 +673,13 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Target Account Override */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">{focusedTxn.type === 'Expense' ? 'Paid From' : 'Deposit To'} <span className="text-rose-500">*</span></label>
                                                         <CustomSelect 
                                                             value={focusedTxn.accountId} 
                                                             onChange={(e) => handleFieldChange(focusedTxn._id, 'accountId', e.target.value)} 
                                                             isSearchable={true}
+                                                            matchTriggerWidth={true}
                                                             className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                             dropdownClassName="z-[130]"
                                                         >
@@ -687,7 +689,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Category */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Category <span className="text-rose-500">*</span></label>
                                                         <CustomSelect 
                                                             value={focusedTxn.categoryId} 
@@ -703,7 +705,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Amount */}
-                                                    <div className="space-y-1 col-span-1">
+                                                    <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Amount <span className="text-rose-500">*</span></label>
                                                         <input 
                                                             type="number" 

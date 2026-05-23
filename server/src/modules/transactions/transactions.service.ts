@@ -8,7 +8,7 @@ import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { read, utils, write } from 'xlsx';
 import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
-import { checkFileHashExists, detectBankType, processHDFCImport } from '../../services/statement-parsers/statementImportService';
+import { checkFileHashExists, detectBankType, processHDFCImport, processAxisImport, processICICIImport } from '../../services/statement-parsers/statementImportService';
 import type { StatementImportResult } from '../../services/statement-parsers/types';
 
 import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
@@ -815,10 +815,10 @@ export class TransactionService {
             // ─── Layer 2: Bank Detection ───
             const bankType = await detectBankType(buffer);
 
-            // ─── HDFC Deterministic Path ───
-            if (bankType === 'HDFC') {
+            // ─── Deterministic Paths ───
+            if (bankType === 'HDFC' || bankType === 'AXIS' || bankType === 'ICICI') {
                 return await this.importFromPDFDeterministic(
-                    buffer, orgId, user, accountId, branchId, financialYearId, fileHash
+                    buffer, orgId, user, accountId, branchId, financialYearId, fileHash, bankType
                 );
             }
 
@@ -837,7 +837,7 @@ export class TransactionService {
     }
 
     /**
-     * HDFC Deterministic import pipeline.
+     * Deterministic import pipeline for supported banks.
      * Uses the deterministic parser, statement fingerprint, and per-row bankTransactionKey.
      */
     private static async importFromPDFDeterministic(
@@ -847,7 +847,8 @@ export class TransactionService {
         accountId: number | undefined,
         branchId: number,
         financialYearId: number | undefined,
-        fileHash: string
+        fileHash: string,
+        bankType: 'HDFC' | 'AXIS' | 'ICICI'
     ) {
         let targetAccountId = accountId;
 
@@ -873,7 +874,7 @@ export class TransactionService {
             if (!targetAccountId) {
                 return {
                     success: false,
-                    message: `Could not auto-detect bank account from the HDFC statement (Detected A/C: ${accMatch?.[1] || 'None'}). Please select an account manually.`
+                    message: `Could not auto-detect bank account from the ${bankType} statement (Detected A/C: ${accMatch?.[1] || 'None'}). Please select an account manually.`
                 };
             }
         }
@@ -887,55 +888,76 @@ export class TransactionService {
             return { success: false, message: 'Selected account not found' };
         }
 
-        // Process through HDFC pipeline
-        const hdfcResult = await processHDFCImport({
-            buffer,
-            orgId,
-            accountId: targetAccountId,
-            branchId,
-            fileHash,
-            accountNumber: account.accountNumber || '',
-        });
+        // Process through appropriate pipeline
+        let deterministicResult;
+        if (bankType === 'ICICI') {
+            deterministicResult = await processICICIImport({
+                buffer,
+                orgId,
+                accountId: targetAccountId,
+                branchId,
+                fileHash,
+                accountNumber: account.accountNumber || '',
+            });
+        } else if (bankType === 'AXIS') {
+            deterministicResult = await processAxisImport({
+                buffer,
+                orgId,
+                accountId: targetAccountId,
+                branchId,
+                fileHash,
+                accountNumber: account.accountNumber || '',
+            });
+        } else {
+            deterministicResult = await processHDFCImport({
+                buffer,
+                orgId,
+                accountId: targetAccountId,
+                branchId,
+                fileHash,
+                accountNumber: account.accountNumber || '',
+            });
+        }
 
         // If statement was already imported (fingerprint match) or validation failed, return early
-        if (hdfcResult.statementAlreadyImported || !hdfcResult.rows.some(r => r.status === 'imported')) {
+        if (deterministicResult.statementAlreadyImported || !deterministicResult.rows.some(r => r.status === 'imported')) {
             // Still record the file hash even for skipped imports
-            if (hdfcResult.statementAlreadyImported) {
+            if (deterministicResult.statementAlreadyImported) {
                 return {
                     success: true,
-                    message: hdfcResult.message,
+                    message: deterministicResult.message,
                     importedCount: 0,
-                    duplicateCount: hdfcResult.duplicateCount,
-                    invalidCount: hdfcResult.invalidCount,
-                    parser: 'HDFC_DETERMINISTIC',
+                    duplicateCount: deterministicResult.duplicateCount,
+                    invalidCount: deterministicResult.invalidCount,
+                    parser: `${bankType}_DETERMINISTIC`,
                     statementAlreadyImported: true,
                     fileAlreadyImported: false,
-                    totalRows: hdfcResult.rows.length,
+                    totalRows: deterministicResult.rows.length,
                     insertedRows: 0,
-                    skippedRows: hdfcResult.duplicateCount,
-                    errors: hdfcResult.validationErrors.map(e => ({ row: 0, message: e })),
-                    rows: hdfcResult.rows,
+                    skippedRows: deterministicResult.duplicateCount,
+                    errors: deterministicResult.validationErrors.map(e => ({ row: 0, message: e })),
+                    rows: deterministicResult.rows,
                 };
             }
             return {
                 success: false,
-                message: hdfcResult.message || 'All rows are duplicates or invalid',
+                message: deterministicResult.message || 'All rows are duplicates or invalid',
                 importedCount: 0,
-                duplicateCount: hdfcResult.duplicateCount,
-                invalidCount: hdfcResult.invalidCount,
-                parser: 'HDFC_DETERMINISTIC',
+                duplicateCount: deterministicResult.duplicateCount,
+                invalidCount: deterministicResult.invalidCount,
+                parser: `${bankType}_DETERMINISTIC`,
                 statementAlreadyImported: false,
                 fileAlreadyImported: false,
-                totalRows: hdfcResult.rows.length,
+                totalRows: deterministicResult.rows.length,
                 insertedRows: 0,
-                skippedRows: hdfcResult.duplicateCount,
-                errors: hdfcResult.validationErrors.map(e => ({ row: 0, message: e })),
-                rows: hdfcResult.rows,
+                skippedRows: deterministicResult.duplicateCount,
+                errors: deterministicResult.validationErrors.map(e => ({ row: 0, message: e })),
+                rows: deterministicResult.rows,
             };
         }
 
         // ─── Create transactions for non-duplicate, valid rows ───
-        const rowsToImport = hdfcResult.rows.filter(r => r.status === 'imported');
+        const rowsToImport = deterministicResult.rows.filter(r => r.status === 'imported');
         const fys = await db.query.financialYears.findMany({
             where: eq(financialYears.orgId, orgId)
         });
@@ -956,11 +978,11 @@ export class TransactionService {
                 transactionCount: rowsToImport.length,
                 status: 1,
                 fileHash,
-                statementFingerprint: hdfcResult.rows[0]?.bankTransactionKey ? null : null, // Set below
-                parserType: 'HDFC_DETERMINISTIC',
+                statementFingerprint: deterministicResult.rows[0]?.bankTransactionKey ? null : null, // Set below
+                parserType: `${bankType}_DETERMINISTIC`,
                 validationStatus: 'valid',
-                duplicateCount: hdfcResult.duplicateCount,
-                invalidCount: hdfcResult.invalidCount,
+                duplicateCount: deterministicResult.duplicateCount,
+                invalidCount: deterministicResult.invalidCount,
             });
             importedStatementId = Number(stmtResult[0].insertId);
         }
@@ -1023,26 +1045,26 @@ export class TransactionService {
                 .where(eq(importedStatements.id, importedStatementId));
         }
 
-        const totalDuplicates = hdfcResult.rows.filter(r => r.status === 'duplicate').length;
-        const totalInvalid = hdfcResult.rows.filter(r => r.status === 'invalid').length;
+        const totalDuplicates = deterministicResult.rows.filter(r => r.status === 'duplicate').length;
+        const totalInvalid = deterministicResult.rows.filter(r => r.status === 'invalid').length;
 
         return {
             success: importedCount > 0,
             message: importedCount > 0
-                ? `Successfully imported ${importedCount} transactions from HDFC statement.`
+                ? `Successfully imported ${importedCount} transactions from ${bankType} statement.`
                 : 'No new transactions were imported.',
             importedCount,
             duplicateCount: totalDuplicates,
             invalidCount: totalInvalid,
-            parser: 'HDFC_DETERMINISTIC',
+            parser: `${bankType}_DETERMINISTIC`,
             statementAlreadyImported: false,
             fileAlreadyImported: false,
-            totalRows: hdfcResult.rows.length,
+            totalRows: deterministicResult.rows.length,
             insertedRows: importedCount,
             skippedRows: totalDuplicates,
             errors,
-            validationWarnings: hdfcResult.validationWarnings,
-            rows: hdfcResult.rows,
+            validationWarnings: deterministicResult.validationWarnings,
+            rows: deterministicResult.rows,
         };
     }
 

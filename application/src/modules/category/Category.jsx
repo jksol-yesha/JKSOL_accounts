@@ -366,9 +366,9 @@ const Category = () => {
                     onBack={() => navigate('/transactions')}
                 />
             )}
-            className="category-laptop-page-shell bg-white !overflow-visible lg:!overflow-visible"
+            className="category-laptop-page-shell bg-white !overflow-y-auto lg:!overflow-visible"
             contentClassName="category-laptop-page-content bg-white flex flex-col p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
-            cardClassName="bg-white border-none shadow-none rounded-none overflow-visible lg:overflow-visible"
+            cardClassName="bg-white !border-none !shadow-none !rounded-none !overflow-visible lg:!overflow-visible"
         >
             <style>{`
                 @media print {

@@ -6,9 +6,11 @@
 export type ParsedStatementRow = {
   sourcePage: number;
   sourceRow: number;
+  serialNo?: number | null; // ICICI provides stable serial numbers
   transactionDate: string; // YYYY-MM-DD
   valueDate: string | null; // YYYY-MM-DD
   narration: string;
+  chequeNumber?: string | null; // ICICI cheque number column
   referenceNo: string | null;
   debitAmount: string | null; // Decimal string without commas, e.g. "1500.00"
   creditAmount: string | null; // Decimal string without commas, e.g. "25000.00"
@@ -17,8 +19,8 @@ export type ParsedStatementRow = {
 };
 
 export type ParsedStatementResult = {
-  parser: 'HDFC_DETERMINISTIC';
-  bankName: 'HDFC';
+  parser: 'HDFC_DETERMINISTIC' | 'AXIS_DETERMINISTIC' | 'ICICI_DETERMINISTIC';
+  bankName: 'HDFC' | 'AXIS' | 'ICICI';
   accountNumber: string | null;
   statementFromDate: string | null; // YYYY-MM-DD
   statementToDate: string | null; // YYYY-MM-DD

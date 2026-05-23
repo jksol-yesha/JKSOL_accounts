@@ -5,10 +5,6 @@ export default defineConfig({
     out: "./drizzle",
     dialect: "mysql",
     dbCredentials: {
-        host: process.env.DB_HOST || "localhost",
-        user: process.env.DB_USER || "root",
-        password: process.env.DB_PASSWORD || "",
-        database: process.env.DB_NAME || "test_db",
-        port: Number(process.env.DB_PORT) || 3306,
+        url: `mysql://${process.env.DB_USER}:${process.env.DB_PASSWORD}@${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME}`,
     },
 });

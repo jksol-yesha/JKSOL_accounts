@@ -123,7 +123,9 @@ const AuditDiffRow = ({ logKey, oldVal, newVal, action }) => {
     );
 };
 
-const AuditDetailsModal = ({ log, onClose }) => {
+const AUDIT_DRAWER_CLOSE_ANIMATION_MS = 280;
+
+const AuditDetailsModal = ({ log, onClose, isClosing }) => {
     if (!log) return null;
     
     // Process diffs safely out of hook line to ensure order since log can be null
@@ -133,8 +135,17 @@ const AuditDetailsModal = ({ log, onClose }) => {
     
     return (
         <div className="fixed inset-0 z-[110] flex justify-end">
-            <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={onClose} />
-            <div className="bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden animate-in slide-in-from-right duration-300">
+            <div 
+                className={cn(
+                    "absolute inset-0 bg-slate-900/40 backdrop-blur-sm",
+                    isClosing ? "animate-fade-out" : "animate-fade-in"
+                )} 
+                onClick={onClose} 
+            />
+            <div className={cn(
+                "bg-white w-[480px] max-w-full h-full shadow-2xl flex flex-col relative z-[120] overflow-hidden",
+                isClosing ? "animate-slide-out-right" : "animate-slide-in-right"
+            )}>
                 
                 {/* Header */}
                 <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between shrink-0 bg-white">
@@ -211,6 +222,35 @@ const AuditLogs = () => {
     );
 
     const [selectedLog, setSelectedLog] = useState(null);
+    const [shouldRenderAuditDrawer, setShouldRenderAuditDrawer] = useState(false);
+    const [isClosingAuditDrawer, setIsClosingAuditDrawer] = useState(false);
+    const auditCloseTimerRef = React.useRef(null);
+
+    const openAuditDrawer = (log) => {
+        if (auditCloseTimerRef.current) {
+            clearTimeout(auditCloseTimerRef.current);
+            auditCloseTimerRef.current = null;
+        }
+        setSelectedLog(log);
+        setIsClosingAuditDrawer(false);
+        setShouldRenderAuditDrawer(true);
+    };
+
+    const closeAuditDrawer = () => {
+        setIsClosingAuditDrawer(true);
+        auditCloseTimerRef.current = setTimeout(() => {
+            setShouldRenderAuditDrawer(false);
+            setIsClosingAuditDrawer(false);
+            setSelectedLog(null);
+            auditCloseTimerRef.current = null;
+        }, AUDIT_DRAWER_CLOSE_ANIMATION_MS);
+    };
+
+    useEffect(() => {
+        return () => {
+            if (auditCloseTimerRef.current) clearTimeout(auditCloseTimerRef.current);
+        };
+    }, []);
 
     // Access Control
     useEffect(() => {
@@ -311,7 +351,7 @@ const AuditLogs = () => {
                         <button 
                             onClick={(e) => { 
                                 e.stopPropagation(); 
-                                setSelectedLog(params.data); 
+                                openAuditDrawer(params.data); 
                             }}
                             className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-primary transition-colors focus:outline-none"
                         >
@@ -513,7 +553,7 @@ const AuditLogs = () => {
 
                                         {hasDetails && (
                                             <button
-                                                onClick={() => setSelectedLog(log)}
+                                                onClick={() => openAuditDrawer(log)}
                                                 className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-gray-50 text-gray-600 font-bold text-[10px] hover:bg-gray-100 transition-colors border border-gray-100"
                                             >
                                                 <FileJson size={12} />
@@ -562,8 +602,8 @@ const AuditLogs = () => {
                                 className="h-full w-full custom-ag-grid no-border-grid"
                                 overlayNoRowsTemplate='<span class="text-sm text-gray-500">No logs found</span>'
                                 onRowClicked={(e) => {
-                                    if(e.data && (e.data.oldValue || e.data.newValue)) {
-                                        setSelectedLog(e.data);
+                                     if(e.data && (e.data.oldValue || e.data.newValue)) {
+                                        openAuditDrawer(e.data);
                                     }
                                 }}
                             />
@@ -584,8 +624,8 @@ const AuditLogs = () => {
             </div>
             
             {/* Diff Modal overlay */}
-            {selectedLog && (
-                <AuditDetailsModal log={selectedLog} onClose={() => setSelectedLog(null)} />
+            {shouldRenderAuditDrawer && selectedLog && (
+                <AuditDetailsModal log={selectedLog} onClose={closeAuditDrawer} isClosing={isClosingAuditDrawer} />
             )}
         </div>
     );

@@ -2194,7 +2194,7 @@ const Transactions = () => {
 
                     <div
                         className="transactions-grid-shell w-full px-5 pb-1 relative flex flex-col print:hidden"
-                        style={{ height: 'calc(100vh - 135px)', minHeight: '400px' }}
+                        style={{ height: 'calc(100vh - 95px)', minHeight: '400px' }}
                         aria-busy={loading}
                     >
                         <div className="h-full w-full relative">
