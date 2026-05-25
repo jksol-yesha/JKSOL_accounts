@@ -226,7 +226,7 @@ const Profile = () => {
                                     name="name"
                                     value={formData.name}
                                     onChange={handleChange}
-                                    className="w-full h-[36px] px-3 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all text-[13px]"
+                                    className="w-full h-[36px] px-3 border border-gray-200 rounded-md hover:border-[#BAE6FD] hover:bg-[#F0F9FF] focus:outline-none focus:bg-[#F0F9FF] focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all text-[13px]"
                                     required
                                 />
                             </div>
@@ -241,7 +241,7 @@ const Profile = () => {
                                     name="email"
                                     value={formData.email}
                                     onChange={handleChange}
-                                    className="w-full h-[36px] px-3 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all text-[13px]"
+                                    className="w-full h-[36px] px-3 border border-gray-200 rounded-md hover:border-[#BAE6FD] hover:bg-[#F0F9FF] focus:outline-none focus:bg-[#F0F9FF] focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all text-[13px]"
                                     required
                                 />
                             </div>

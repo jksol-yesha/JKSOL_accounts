@@ -126,7 +126,6 @@ const fetchExchangeRatesIoRate = async (fromCurrency: string, toCurrency: string
         }
 
         const data: any = await response.json();
-        console.log(`[ExchangeRateService] exchangeratesapi.io raw response for ${fromCurrency},${toCurrency}:`, JSON.stringify(data));
         
         if (!data?.success) {
             console.warn(`[ExchangeRateService] exchangeratesapi.io error: ${data?.error?.info || 'Unknown error code: ' + (data?.error?.code || 'null')}`);
@@ -201,7 +200,6 @@ export const ExchangeRateService = {
         if (!normalizedFromCurrency || !normalizedToCurrency) return 1;
         if (normalizedFromCurrency === normalizedToCurrency) return 1;
         
-        console.log(`[ExchangeRateService] Requesting rate: ${normalizedFromCurrency} -> ${normalizedToCurrency} (Org: ${orgId})`);
 
         const todayStr = await this.getRateDate(orgId);
         const cacheKey = `${normalizedFromCurrency}_${normalizedToCurrency}_${todayStr}`;
@@ -210,14 +208,12 @@ export const ExchangeRateService = {
         // 1. Check Memory Cache
         if (rateCache[cacheKey]) {
             if (now - rateCache[cacheKey].timestamp < CACHE_TTL_MS) {
-                console.log(`[ExchangeRateService] Returning cached rate (memory): ${rateCache[cacheKey].rate}`);
                 return rateCache[cacheKey].rate;
             }
         }
 
         // 2. Check for Pending Requests (Deduplication)
         if (pendingRequests.has(cacheKey)) {
-            console.log(`[ExchangeRateService] Waiting for existing in-flight request: ${cacheKey}`);
             return pendingRequests.get(cacheKey)!;
         }
 
@@ -225,11 +221,9 @@ export const ExchangeRateService = {
         const fetchAndStore = async (): Promise<number> => {
             try {
                 // PRIMARY: Fetch live pair rate from fxapi.app
-                console.log(`[ExchangeRateService] Attempting PRIMARY fetch from fxapi.app...`);
                 const rate = await fetchFxApiRate(normalizedFromCurrency, normalizedToCurrency);
                 
                 if (rate) {
-                    console.log(`[ExchangeRateService] SUCCESS: Fetched LIVE rate from PRIMARY API: ${rate}`);
                     await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
                     rateCache[cacheKey] = { rate, timestamp: Date.now() };
                     return rate;
@@ -241,7 +235,6 @@ export const ExchangeRateService = {
 
             // SECONDARY: Fallback to other Public APIs only if Primary fails
             try {
-                console.log(`[ExchangeRateService] Attempting SECONDARY fetch from fallback APIs (Frankfurter/OpenER/exchangeratesapi.io)...`);
                 const secondaryProviders = [
                     () => fetchFrankfurterRate(normalizedFromCurrency, normalizedToCurrency),
                     () => fetchOpenErApiRate(normalizedFromCurrency, normalizedToCurrency),
@@ -252,7 +245,6 @@ export const ExchangeRateService = {
                     const rate = await fetchRate();
                     if (!rate) continue;
 
-                    console.log(`[ExchangeRateService] CAUTION: Using SECONDARY fallback rate: ${rate}`);
                     await persistRate(orgId, todayStr, normalizedFromCurrency, normalizedToCurrency, rate);
                     rateCache[cacheKey] = { rate, timestamp: Date.now() };
                     return rate;

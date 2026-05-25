@@ -352,7 +352,7 @@ export const DashboardService = {
         const orgBaseCurrency = org?.baseCurrency || 'INR';
         const displayCurrency = targetCurrency || orgBaseCurrency;
 
-        console.log(`[DashboardAPI] Resolved Dates: ${startDate} to ${endDate}`);
+
         
         const getDynamicTotal = async (
             filterFn: (t: typeof transactions) => any
@@ -438,8 +438,7 @@ export const DashboardService = {
         const expenseIds = getTypeIds('expense');
         const investmentIds = getTypeIds('investment', 'invest');
 
-        console.log(`[DashboardAPI] Summary Request: Org=${orgId}, Range=${startDate} - ${endDate}, Currency=${displayCurrency}, Branch=${JSON.stringify(branchId)}`);
-        console.log(`[DashboardAPI] Found Type IDs: Income=${JSON.stringify(incomeIds)}, Expense=${JSON.stringify(expenseIds)}`);
+
 
         // 2. Opening Balance (Sum IN - Sum OUT) before start date
         const openingIn = await getDynamicTotal(
@@ -544,7 +543,7 @@ export const DashboardService = {
         // 4. Closing Balance (Opening + Net Flow - Investment Outflow)
         const closingBalance = openingBalance + (totalIncome - totalExpense - totalInvestment);
 
-        console.log(`[DashboardAPI] Final: Opening=${openingBalance}, Income=${totalIncome}, Expense=${totalExpense}, Closing=${closingBalance}`);
+
 
         return {
             baseCurrency: displayCurrency, // Return the currency we converted to
@@ -758,7 +757,7 @@ export const DashboardService = {
             return `${Number(y) - 1}-${m}-${d}`;
         };
 
-        console.log(`[DashboardAPI] Trends Request: Org=${orgId}, Range=${currentFy.startDate} - ${currentFy.endDate}, Compare=${customCompareStartDate} - ${customCompareEndDate}`);
+
         
         const currentSeries = await buildPeriodSeries(currentFy, customStartDate, customEndDate);
         const compareSeries = (customCompareStartDate || compareFy)

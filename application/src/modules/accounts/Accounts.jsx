@@ -1845,7 +1845,7 @@ const Accounts = () => {
             <div className="relative group w-full sm:w-[240px]">
               <Search
                 size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-hover:text-blue-500 group-focus-within:text-blue-600 transition-colors"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors"
               />
               <input
                 ref={searchInputRef}
@@ -1855,7 +1855,7 @@ const Accounts = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search..."
-                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors group-hover:placeholder:text-blue-400 hover:border-blue-300 hover:bg-[#F0F9FF] focus:bg-[#F0F9FF] focus:border-blue-400 focus:placeholder:text-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
               />
             </div>
           </div>

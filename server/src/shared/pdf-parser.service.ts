@@ -96,7 +96,6 @@ ${text.substring(0, 100000)}
             const content = responseData.choices[0].message.content.trim();
             
             const parsed = JSON.parse(content);
-            console.log('OpenAI Extracted Bank Account:', parsed.accountNumber);
             return {
                 accountNumber: parsed.accountNumber || undefined,
                 transactions: parsed.transactions || []

@@ -1970,9 +1970,9 @@ const Transactions = () => {
                             <button
                                 type="button"
                                 onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className={`group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] ${isInsightsExpanded ? 'bg-blue-50 border-blue-200 text-blue-600 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]'}`}
+                                className="group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                             >
-                                <Activity size={14} className={isInsightsExpanded ? "text-blue-500" : "text-gray-400 group-hover:text-[#4A8AF4] transition-colors"} />
+                                <Activity size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
                                 <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
                             </button>
                         </div>
@@ -2095,6 +2095,7 @@ const Transactions = () => {
                                                     />
                                                     <Tooltip
                                                         cursor={{ fill: 'transparent' }}
+                                                        isAnimationActive={false}
                                                         content={({ active, payload, label }) => {
                                                             if (active && payload && payload.length) {
                                                                 return (
@@ -2151,6 +2152,7 @@ const Transactions = () => {
                                                         />
                                                         <Tooltip
                                                             cursor={{ fill: 'transparent' }}
+                                                            isAnimationActive={false}
                                                             content={({ active, payload, label }) => {
                                                                 if (active && payload && payload.length) {
                                                                     return (

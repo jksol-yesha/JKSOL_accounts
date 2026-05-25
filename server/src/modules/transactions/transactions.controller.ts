@@ -482,9 +482,7 @@ export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { b
         for (let i = 0; i < rows.length; i++) {
             const fileKey = `attachment_${i}`;
             if (body[fileKey]) {
-                console.log(`Found attachment for row ${i}`);
                 const attachmentPath = await processAttachment(body[fileKey]);
-                console.log(`attachmentPath for row ${i}:`, attachmentPath);
                 if (attachmentPath) {
                     rows[i].attachmentPath = attachmentPath;
                 }

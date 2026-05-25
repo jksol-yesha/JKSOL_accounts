@@ -8,7 +8,7 @@ import { CurrencyMasterService } from '../../shared/currency-master.service';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { read, utils, write } from 'xlsx';
 import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
-import { checkFileHashExists, detectBankType, processHDFCImport, processAxisImport, processICICIImport } from '../../services/statement-parsers/statementImportService';
+import { checkFileHashExists, detectBankType, processHDFCImport, processAxisImport, processICICIImport, processSBIImport } from '../../services/statement-parsers/statementImportService';
 import type { StatementImportResult } from '../../services/statement-parsers/types';
 
 import { DELETED_STATUS, isActiveStatus, isNotDeleted } from '../../shared/soft-delete';
@@ -816,7 +816,7 @@ export class TransactionService {
             const bankType = await detectBankType(buffer);
 
             // ─── Deterministic Paths ───
-            if (bankType === 'HDFC' || bankType === 'AXIS' || bankType === 'ICICI') {
+            if (bankType === 'HDFC' || bankType === 'AXIS' || bankType === 'ICICI' || bankType === 'SBI') {
                 return await this.importFromPDFDeterministic(
                     buffer, orgId, user, accountId, branchId, financialYearId, fileHash, bankType
                 );
@@ -848,7 +848,7 @@ export class TransactionService {
         branchId: number,
         financialYearId: number | undefined,
         fileHash: string,
-        bankType: 'HDFC' | 'AXIS' | 'ICICI'
+        bankType: 'HDFC' | 'AXIS' | 'ICICI' | 'SBI'
     ) {
         let targetAccountId = accountId;
 
@@ -901,6 +901,15 @@ export class TransactionService {
             });
         } else if (bankType === 'AXIS') {
             deterministicResult = await processAxisImport({
+                buffer,
+                orgId,
+                accountId: targetAccountId,
+                branchId,
+                fileHash,
+                accountNumber: account.accountNumber || '',
+            });
+        } else if (bankType === 'SBI') {
+            deterministicResult = await processSBIImport({
                 buffer,
                 orgId,
                 accountId: targetAccountId,

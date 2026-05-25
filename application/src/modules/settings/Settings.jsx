@@ -575,7 +575,7 @@ const Settings = () => {
                                                 value={formData.name}
                                                 onChange={(e) => setFormData({...formData, name: e.target.value})}
                                                 placeholder="John Doe"
-                                                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all"
+                                                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-md hover:border-[#BAE6FD] hover:bg-[#F0F9FF] focus:outline-none focus:bg-[#F0F9FF] focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -586,7 +586,7 @@ const Settings = () => {
                                                 value={formData.email}
                                                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                                                 placeholder="john@example.com"
-                                                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all"
+                                                className="w-full px-3 py-2 text-[13px] border border-gray-200 rounded-md hover:border-[#BAE6FD] hover:bg-[#F0F9FF] focus:outline-none focus:bg-[#F0F9FF] focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all"
                                             />
                                         </div>
                                         <div className="space-y-1.5">

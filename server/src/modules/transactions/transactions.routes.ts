@@ -167,12 +167,9 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             // Check if this is an HDFC statement for deterministic parsing
             const text = await PDFParserService.extractText(buffer);
             
-            console.log('[upload-statement] Extracted text length:', text.length);
-            console.log('[upload-statement] isHDFCStatement:', isHDFCStatement(text));
             
             // If PDF has essentially no extractable text, it's likely a scanned/image PDF
             if (!text || text.trim().length < 50) {
-                console.log('[upload-statement] PDF has no extractable text (likely scanned/image-based)');
                 set.status = 400;
                 return { 
                     success: false, 
@@ -190,20 +187,9 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
                 // Use deterministic HDFC parser
                 const hdfcResult = await parseHDFCStatement(buffer);
                 
-                console.log('[upload-statement] HDFC parse result:', {
-                    accountNumber: hdfcResult.accountNumber,
-                    rowCount: hdfcResult.rows.length,
-                    openingBalance: hdfcResult.openingBalance,
-                    closingBalance: hdfcResult.closingBalance,
-                    validationErrors: hdfcResult.validation.errors,
-                    validationWarnings: hdfcResult.validation.warnings,
-                });
+                
                 if (hdfcResult.rows.length === 0) {
-                    console.log('[upload-statement] No rows parsed! First 50 lines:');
-                    const lines = text.split('\n');
-                    for (let i = 0; i < Math.min(lines.length, 50); i++) {
-                        console.log(`  [line ${i}]: ${lines[i]}`);
-                    }
+                    // No rows parsed - could indicate format mismatch
                 }
                 
                 const mappedData = {
@@ -238,11 +224,6 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             if (isAxisStatement(text)) {
                 const axisResult = await parseAxisStatement(buffer);
                 
-                console.log('[upload-statement] Axis parse result:', {
-                    accountNumber: axisResult.accountNumber,
-                    rowCount: axisResult.rows.length,
-                    valid: axisResult.validation.isValid,
-                });
                 
                 const mappedData = {
                     accountNumber: axisResult.accountNumber || null,
@@ -277,11 +258,6 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             if (isICICIStatement(text)) {
                 const iciciResult = await parseICICIStatement(buffer);
                 
-                console.log('[upload-statement] ICICI parse result:', {
-                    accountNumber: iciciResult.accountNumber,
-                    rowCount: iciciResult.rows.length,
-                    valid: iciciResult.validation.isValid,
-                });
                 
                 const mappedData = {
                     accountNumber: iciciResult.accountNumber || null,
