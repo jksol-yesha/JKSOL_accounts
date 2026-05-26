@@ -585,18 +585,19 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                     })}
                 </div>
 
-                <div className="flex-none px-3 pb-3 flex flex-col gap-0.5">
+                <div className="flex-none px-3 pb-3 pt-2 flex flex-col gap-0.5 border-t border-slate-200/60">
                     <div className="relative" ref={logoutConfirmRef}>
                         <button
                             type="button"
                             onClick={openProfileLogoutConfirm}
                             className={cn(
-                                "flex w-full items-center transition-all duration-200 group relative border border-transparent rounded-lg text-slate-900 hover:bg-[#EEF0FC]",
-                                effectiveCollapsed ? "justify-center p-0 h-8 w-8 mx-auto" : "gap-2.5 py-1.5 px-2",
+                                "flex w-full items-center transition-all duration-200 group relative border border-transparent rounded-md text-slate-900 hover:bg-[#EEF0FC]",
+                                effectiveCollapsed ? "justify-center p-0 h-9 w-9 mx-auto" : "gap-3 py-[7px] px-3",
                                 showLogoutConfirm && "bg-[#EEF0FC]"
                             )}
                         >
-                            <div className={cn("flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200", effectiveCollapsed ? "h-8 w-8" : "h-7 w-7")}>
+                            <div className={cn("flex shrink-0 items-center justify-center", effectiveCollapsed ? "" : "w-[26px]")}>
+                                <div className={cn("flex items-center justify-center overflow-hidden rounded-full bg-white ring-1 ring-slate-200", effectiveCollapsed ? "h-8 w-8" : "h-[26px] w-[26px]")}>
                                 {user?.profilePhoto ? (
                                     <img
                                         src={user.profilePhoto}
@@ -604,10 +605,11 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                                         className="h-full w-full object-cover"
                                     />
                                 ) : (
-                                    <span className="text-[12px] font-bold text-slate-600">
+                                    <span className="text-[10px] font-bold text-slate-600">
                                         {String(displayName).charAt(0).toUpperCase()}
                                     </span>
                                 )}
+                                </div>
                             </div>
                             {!effectiveCollapsed && (
                                 <>
@@ -686,15 +688,15 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         className={() => {
                             const isItemActive = location.pathname.startsWith('/settings');
                             return cn(
-                                "flex items-center transition-all duration-200 group relative rounded-lg",
-                                effectiveCollapsed ? "justify-center p-0 h-8 w-8 mx-auto" : "gap-2.5 py-1.5 px-2",
+                                "flex items-center transition-all duration-200 group relative rounded-md border border-transparent",
+                                effectiveCollapsed ? "justify-center p-0 h-9 w-9 mx-auto" : "gap-3 py-[7px] px-3",
                                 isItemActive 
-                                    ? "text-slate-900 bg-slate-100 font-medium" 
-                                    : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
+                                    ? "bg-[#EEF0FC] text-slate-900 font-medium" 
+                                    : "text-slate-600 hover:text-slate-900 hover:bg-[#EEF0FC]"
                             );
                         }}
                     >
-                        <SettingsIcon size={15} strokeWidth={2} className="shrink-0" />
+                        <SettingsIcon size={18} strokeWidth={1.5} className="shrink-0" />
                         {!effectiveCollapsed && (
                             <span className="text-[13px]">Settings</span>
                         )}

@@ -17,6 +17,7 @@ const EnterOtp = () => {
 
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const [isLoading, setIsLoading] = useState(false);
+    const formRef = useRef(null);
     const [timer, setTimer] = useState(() => {
         if (!email && !token) return 300;
         const storedExpiration = sessionStorage.getItem(OTP_TIMER_KEY);
@@ -62,6 +63,13 @@ const EnterOtp = () => {
         if (element.nextSibling && element.value) {
             element.nextSibling.focus();
         }
+
+        // Auto-submit when all 6 digits are filled
+        if (element.value && newOtp.every(d => d !== '')) {
+            setTimeout(() => {
+                formRef.current?.requestSubmit();
+            }, 100);
+        }
     };
 
     const handleKeyDown = (e, index) => {
@@ -83,6 +91,13 @@ const EnterOtp = () => {
             const focusIndex = Math.min(pastedData.length, 5);
             const inputs = document.querySelectorAll('input[type="text"]');
             if (inputs[focusIndex]) inputs[focusIndex].focus();
+
+            // Auto-submit when all 6 digits are pasted
+            if (newOtp.every(d => d !== '')) {
+                setTimeout(() => {
+                    formRef.current?.requestSubmit();
+                }, 100);
+            }
         }
     };
 
@@ -128,8 +143,7 @@ const EnterOtp = () => {
         isSubmittingRef.current = true;
         setIsLoading(true);
 
-        // VIEW LOADER (REMOVE LATER)
-        await new Promise(resolve => setTimeout(resolve, 3000));
+
 
         try {
             let response;
@@ -201,7 +215,7 @@ const EnterOtp = () => {
             title="Enter Verification Code"
             subtitle={`We've sent a code to ${email || 'your email'}`}
         >
-            <form onSubmit={handleSubmit} className="w-full">
+            <form ref={formRef} onSubmit={handleSubmit} className="w-full">
                 <div className="flex justify-between gap-2 mb-6">
                     {otp.map((data, index) => (
                         <input
@@ -209,6 +223,7 @@ const EnterOtp = () => {
                             type="text"
                             className="w-11 h-12 sm:w-12 sm:h-12 text-center text-xl font-bold text-slate-900 bg-white border border-slate-300 rounded-md focus:border-sky-500 focus:ring-1 focus:ring-sky-500 focus:outline-none transition-colors"
                             maxLength="1"
+                            autoFocus={index === 0}
                             value={data}
                             onChange={(e) => handleChange(e.target, index)}
                             onKeyDown={(e) => handleKeyDown(e, index)}

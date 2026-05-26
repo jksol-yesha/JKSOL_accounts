@@ -1114,7 +1114,7 @@ export const DashboardService = {
             eq(accounts.orgId, orgId),
             isNotDeleted(accounts),
             inArray(accounts.status, [1, 2]),
-            inArray(accounts.subtype, [11, 12, 22]) // Cash, Bank, Credit Card
+            inArray(accounts.subtype, [11, 12, 13, 22]) // Cash, Bank, Wallet, Credit Card
         ));
 
         // Extract active account IDs to scope movement queries
@@ -1243,7 +1243,7 @@ export const DashboardService = {
 
                 if (state.subtype === 12) bank += state.currentBalance;
                 else if (state.subtype === 22) card += state.currentBalance;
-                else if (state.subtype === 11) cash += state.currentBalance;
+                else if (state.subtype === 11 || state.subtype === 13) cash += state.currentBalance;
             }
 
             resultSeries.push({
@@ -1276,7 +1276,7 @@ export const DashboardService = {
 
                 if (subtype === 12) totals.bank += balance;
                 else if (subtype === 22) totals.card += balance;
-                else if (subtype === 11) totals.cash += balance;
+                else if (subtype === 11 || subtype === 13) totals.cash += balance;
                 return totals;
             }, { bank: 0, card: 0, cash: 0 });
 

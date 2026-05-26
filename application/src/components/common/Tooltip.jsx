@@ -47,7 +47,7 @@ const Tooltip = ({ content, children, className = '', placement = 'top' }) => {
 
             {visible && position && createPortal(
                 <div
-                    className="pointer-events-none fixed z-[10000] rounded-md bg-slate-800 px-2.5 py-1.5 shadow-xl animate-in fade-in zoom-in-95 duration-150"
+                    className="pointer-events-none fixed z-[10000] rounded-md bg-slate-800 px-1.5 py-0.5 shadow-xl animate-in fade-in zoom-in-95 duration-150"
                     style={{ 
                         top: `${position.top}px`, 
                         left: `${position.left}px`,

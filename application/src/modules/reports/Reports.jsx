@@ -514,7 +514,7 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
                 className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
             >
                 <ShoppingBag size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
+                <span className={`${labelClassName} truncate text-[12px] font-medium text-slate-800`}>
                     {currentValue}
                 </span>
                 <ChevronDown size={14} className={`transition-transform ${chevronCompactClassName} ${isOpen ? 'rotate-180 text-[#4A8AF4]' : 'text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4]'}`} />
@@ -1856,13 +1856,7 @@ const Reports = () => {
             </button>
         </div>
     );
-    const profitLossCompactControlsRow = showProfitLossCompactControls ? (
-        <div className="w-full overflow-x-auto hide-scroll-indicator">
-            <div className="flex items-center justify-start min-w-max">
-                {profitLossCompactControls}
-            </div>
-        </div>
-    ) : null;
+    const profitLossCompactControlsRow = null;
 
 
     const extraFiltersNode = (
@@ -1959,6 +1953,54 @@ const Reports = () => {
                                         </div>
                                     </>
                                 )}
+                                {isProfitLossReport && (
+                                    <>
+                                        <div className="w-full sm:w-auto">
+                                            <ReportsCategorySelect
+                                                ref={categoryRef}
+                                                value={filters.category}
+                                                options={categoryFilterOptions}
+                                                onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
+                                                onKeyDown={(e) => handleKeyDown(e, 2)}
+                                            />
+                                        </div>
+                                        <div className="relative no-print">
+                                            <button
+                                                onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                                title="Export Options"
+                                            >
+                                                <Download size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
+                                                <span className="hidden sm:inline">Export</span>
+                                            </button>
+
+                                            {isExportDropdownOpen && (
+                                                <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsExportDropdownOpen(false);
+                                                            handleExportExcel();
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                    >
+                                                        <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                        Export as Excel
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setIsExportDropdownOpen(false);
+                                                            handleExportPdf();
+                                                        }}
+                                                        className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                    >
+                                                        <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                        Export as PDF
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
         </>
     );
 
@@ -2033,12 +2075,12 @@ const Reports = () => {
                         />
                     </div>
 
-                    <div className="reports-tablet-page flex-1 p-4 md:p-4 xl:px-6 xl:pt-2 xl:pb-4 space-y-4 animate-in fade-in duration-500 print:hidden">
+                    <div className="reports-tablet-page flex-1 space-y-4 animate-in fade-in duration-500 print:hidden overflow-visible">
                         {/* Filters & Inline Summary Section */}
-                        <div className="no-print report-filters flex flex-col 2xl:flex-row 2xl:justify-between items-start 2xl:items-center gap-4 px-5 w-full transition-all">
+                        <div className="no-print report-filters flex flex-col 2xl:flex-row 2xl:justify-between items-start 2xl:items-center gap-4 px-5 pt-3 w-full transition-all border-b border-gray-100 pb-4 relative z-20">
                             
                             {/* LEFT SIDE: Transaction Summary Metrics */}
-                            {isGenerated && reportData && reportData.summary ? (
+                            {isGenerated && reportData && reportData.summary && !isProfitLossReport ? (
                                 <div className="flex flex-col items-start w-full 2xl:w-auto">
                                     <div className="flex flex-row items-center gap-x-5 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full pb-2 2xl:pb-0 hide-scroll-indicator">
                                         {/* Opening */}
@@ -2084,16 +2126,13 @@ const Reports = () => {
                                     </div>
                                     {profitLossCompactControlsRow}
                                 </div>
-                            ) : showProfitLossCompactControls ? (
-                                profitLossCompactControlsRow
-                            ) : (
+                            ) : !isProfitLossReport ? (
                                 <div className="hidden xl:block flex-1" />
-                            )}
+                            ) : null}
 
                             {/* RIGHT SIDE: FILTERS */}
-                            {!showProfitLossCompactControls && (
-                                <div className="flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-3 w-full 2xl:w-auto shrink-0 justify-start 2xl:justify-end">
-                                <div className="w-full sm:flex-1 sm:min-w-[220px]">
+                                <div className={`flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-3 w-full 2xl:w-auto shrink-0 justify-start ${!isProfitLossReport ? '2xl:justify-end' : ''}`}>
+                                <div className="w-full sm:w-auto">
                                 <DateRangePicker
                                     ref={dateRangeRef}
                                     startDate={filters.startDate}
@@ -2118,7 +2157,6 @@ const Reports = () => {
                             </div>
                             {isDesktopView && extraFiltersNode}
                         </div>
-                            )}
                         </div>
 
                         {/* Report Content */}
