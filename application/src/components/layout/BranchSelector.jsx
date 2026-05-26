@@ -4,8 +4,15 @@ import { useBranch } from '../../context/BranchContext';
 import { useOrganization } from '../../context/OrganizationContext';
 import { ChevronDown, Building2, Check, Plus, Settings } from 'lucide-react';
 import ManageBranchModal from './ManageBranchModal';
+import { cn } from '../../utils/cn';
 
-const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLaptop = false }) => {
+const BranchSelector = ({
+    hideSettings = false,
+    flatSelectAll = false,
+    compactLaptop = false,
+    className = '',
+    triggerClassName = ''
+}) => {
     const {
         branches,
         selectedBranch,
@@ -38,16 +45,18 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
         const updatePosition = () => {
             if (!buttonRef.current) return;
             const rect = buttonRef.current.getBoundingClientRect();
-            const width = 288;
+            const isMobileViewport = window.innerWidth < 768;
+            const width = isMobileViewport ? rect.width : 288;
             const viewportWidth = window.innerWidth;
             const left = Math.min(
-                Math.max(12, rect.left + rect.width / 2 - width / 2),
+                Math.max(12, isMobileViewport ? rect.left : rect.left + rect.width / 2 - width / 2),
                 Math.max(12, viewportWidth - width - 12)
             );
 
             setDropdownPosition({
                 top: rect.bottom + 8,
-                left
+                left,
+                width: isMobileViewport ? width : undefined
             });
         };
 
@@ -150,11 +159,11 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
     const canManageBranches = ['owner', 'admin'].includes(selectedOrg?.role?.toLowerCase());
     const triggerCompactClassName = compactLaptop ? 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2' : '';
     const allBranchesLabelClassName = compactLaptop
-        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
-        : 'max-w-[150px]';
+        ? 'text-left lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'text-left md:max-w-[150px]';
     const selectionLabelClassName = compactLaptop
-        ? 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]'
-        : 'max-w-[120px]';
+        ? 'text-left lg:max-w-[94px] 2xl:max-w-[120px]'
+        : 'text-left md:max-w-[120px]';
     const selectionRowCompactClassName = compactLaptop ? 'lg:gap-1 2xl:gap-1.5' : '';
     const chevronCompactClassName = compactLaptop ? 'lg:ml-0.5 2xl:ml-1' : 'ml-1';
 
@@ -176,7 +185,7 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
 
     return (
         <>
-            <div className="relative" ref={dropdownRef}>
+            <div className={cn("relative", className)} ref={dropdownRef}>
                 <button
                     ref={buttonRef}
                     onClick={() => {
@@ -186,16 +195,20 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
                         else setHighlightedIndex(-1);
                     }}
                     onKeyDown={handleKeyDown}
-                    className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+                    className={cn(
+                        "group relative flex flex-nowrap items-center w-full gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 text-left hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all",
+                        triggerCompactClassName,
+                        triggerClassName
+                    )}
                 >
                     <Building2 size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                     {isAllBranchesApplied ? (
-                        <span className={`${allBranchesLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
+                        <span className={`${allBranchesLabelClassName} min-w-0 flex-1 truncate text-left text-[12px] font-medium text-slate-800`}>
                             All Branches
                         </span>
                     ) : selectedBranch?.id === 'all' || selectedBranch?.id === 'multi' ? (
-                        <div className={`flex items-center gap-1.5 min-w-0 ${selectionRowCompactClassName}`}>
-                            <span className={`${selectionLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
+                        <div className={`flex flex-1 items-center justify-start gap-1.5 min-w-0 ${selectionRowCompactClassName}`}>
+                            <span className={`${selectionLabelClassName} min-w-0 flex-1 truncate text-left text-[12px] font-medium text-slate-800`}>
                                 {allBranchLabel || 'All Branches'}
                             </span>
                             {remainingBranchCount > 0 && (
@@ -206,7 +219,7 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
                             )}
                         </div>
                     ) : (
-                        <span className={`${selectionLabelClassName} truncate text-[12px] font-medium text-slate-800`}>
+                        <span className={`${selectionLabelClassName} min-w-0 flex-1 truncate text-left text-[12px] font-medium text-slate-800`}>
                             {selectedBranch?.name || 'Select Branch'}
                         </span>
                     )}
@@ -220,7 +233,12 @@ const BranchSelector = ({ hideSettings = false, flatSelectAll = false, compactLa
                                 <div
                                     ref={dropdownMenuRef}
                                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 py-1 z-[100] animate-in fade-in zoom-in-95 duration-200"
-                                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                                    style={{
+                                        top: dropdownPosition.top,
+                                        left: dropdownPosition.left,
+                                        width: dropdownPosition.width,
+                                        minWidth: dropdownPosition.width
+                                    }}
                                 >
                                     <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                                         <div className="flex items-center gap-2">

@@ -38,6 +38,7 @@ const DateRangePicker = forwardRef(({
     // Refs
     const containerRef = useRef(null);
     const inputRef = useRef(null);
+    const dropdownRef = useRef(null);
     const usesDeferredApply = typeof onApplyRange === 'function';
 
     useImperativeHandle(ref, () => ({
@@ -67,13 +68,28 @@ const DateRangePicker = forwardRef(({
 
         const rect = inputRef.current.getBoundingClientRect();
         const viewportPadding = 12;
+        const isMobileViewport = window.innerWidth < 640;
+        const measuredWidth = dropdownRef.current?.offsetWidth || 0;
+        const fallbackWidth = presetOptions.length > 0 ? 420 : 230;
         const popupWidth = Math.min(
-            presetOptions.length > 0 ? 360 : 230,
+            measuredWidth || fallbackWidth,
             window.innerWidth - (viewportPadding * 2)
         );
         const spaceBelow = window.innerHeight - rect.bottom;
         const spaceAbove = rect.top;
         const showAbove = spaceBelow < 360 && spaceAbove > spaceBelow;
+
+        if (isMobileViewport) {
+            setDropdownStyles({
+                position: 'fixed',
+                left: viewportPadding,
+                right: viewportPadding,
+                zIndex: 10000,
+                ...(showAbove ? { bottom: window.innerHeight - rect.top + 8 } : { top: rect.bottom + 8 }),
+            });
+            return;
+        }
+
         const left = Math.max(
             viewportPadding,
             Math.min(rect.left, window.innerWidth - popupWidth - viewportPadding)
@@ -397,14 +413,15 @@ const DateRangePicker = forwardRef(({
             {isOpen && typeof document !== 'undefined' && createPortal(
                 <div
                     data-date-range-dropdown="true"
+                    ref={dropdownRef}
                     style={dropdownStyles}
-                    className="bg-white rounded-md shadow-md border border-slate-200 p-3 w-max select-none"
+                    className="w-[calc(100vw-24px)] max-w-[calc(100vw-24px)] overflow-hidden rounded-md border border-slate-200 bg-white p-3 shadow-md select-none sm:w-max sm:max-w-[calc(100vw-24px)]"
                 >
                     <div className="flex flex-col">
-                        <div className={presetOptions.length > 0 ? 'flex flex-col sm:flex-row gap-4' : ''}>
+                        <div className={presetOptions.length > 0 ? 'flex flex-row gap-3 sm:gap-4' : ''}>
                             {presetOptions.length > 0 && (
                                 <div 
-                                    className="w-full sm:w-32 md:w-36 sm:border-r sm:border-slate-200 sm:pr-4 py-1 max-h-[200px] sm:max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200"
+                                    className="w-[116px] shrink-0 border-r border-slate-200 py-1 pr-3 sm:w-32 sm:pr-4 md:w-36 max-h-[280px] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200"
                                     onMouseLeave={() => {
                                         if (effectiveStartDate) {
                                             const d = parseLocalDate(effectiveStartDate);
@@ -412,7 +429,7 @@ const DateRangePicker = forwardRef(({
                                         }
                                     }}
                                 >
-                                    <div className="flex flex-row sm:flex-col gap-1 sm:gap-0.5 overflow-x-auto sm:overflow-x-hidden pb-2 sm:pb-0">
+                                    <div className="flex flex-col gap-0.5 pb-0">
                                         {presetOptions.map((option, idx) => {
                                             const isSelected = (usesDeferredApply ? draftPreset : selectedPreset) === option.value;
                                             const isHighlighted = highlightedIndex === idx;
@@ -433,7 +450,7 @@ const DateRangePicker = forwardRef(({
                                                         setHoveredPreset(null);
                                                         setHighlightedIndex(-1);
                                                     }}
-                                                    className={`shrink-0 cursor-pointer w-auto sm:w-full flex items-center gap-2 rounded-md px-3 sm:px-2 py-1.5 text-left text-[12px] transition-colors ${
+                                                    className={`cursor-pointer w-full whitespace-nowrap rounded-md px-2 py-1.5 text-left text-[11px] leading-tight sm:px-2 sm:text-[12px] transition-colors ${
                                                         isSelected
                                                             ? 'bg-[#EEF0FC] text-[#2F5FC6] font-bold'
                                                             : isHighlighted 
@@ -449,27 +466,27 @@ const DateRangePicker = forwardRef(({
                                 </div>
                             )}
 
-                            <div className="w-fit shrink-0 py-1">
-                                <div className="flex items-center justify-between mb-4">
-                                    <button type="button" onClick={handlePrevMonth} className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 border border-slate-200 rounded-md flex items-center justify-center transition-opacity hover:bg-slate-100">
+                            <div className="min-w-0 flex-1 py-1">
+                                <div className="mb-3 flex items-center justify-between gap-2 sm:mb-4">
+                                    <button type="button" onClick={handlePrevMonth} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-transparent p-0 opacity-50 transition-opacity hover:bg-slate-100 hover:opacity-100 sm:h-7 sm:w-7">
                                         <ChevronLeft size={16} className="text-slate-600" />
                                     </button>
-                                    <div className="text-sm font-medium text-slate-900">
+                                    <div className="truncate text-[13px] font-medium text-slate-900 sm:text-sm">
                                         {monthNames[currentMonth.getMonth()]} {currentMonth.getFullYear()}
                                     </div>
-                                    <button type="button" onClick={handleNextMonth} className="h-7 w-7 bg-transparent p-0 opacity-50 hover:opacity-100 border border-slate-200 rounded-md flex items-center justify-center transition-opacity hover:bg-slate-100">
+                                    <button type="button" onClick={handleNextMonth} className="flex h-6 w-6 items-center justify-center rounded-md border border-slate-200 bg-transparent p-0 opacity-50 transition-opacity hover:bg-slate-100 hover:opacity-100 sm:h-7 sm:w-7">
                                         <ChevronRight size={16} className="text-slate-600" />
                                     </button>
                                 </div>
 
                                 <div className="grid grid-cols-7 gap-y-1">
                                     {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => (
-                                        <div key={d} className="text-center text-[0.8rem] font-medium text-slate-500 w-8 md:w-9">{d}</div>
+                                        <div key={d} className="w-7 text-center text-[0.72rem] font-medium text-slate-500 sm:w-8 sm:text-[0.8rem] md:w-9">{d}</div>
                                     ))}
                                     
                                     {/* Empty cells before start of month */}
                                     {Array.from({ length: firstDay }).map((_, i) => (
-                                        <div key={`empty-${i}`} className="h-8 w-8 md:h-9 md:w-9" />
+                                        <div key={`empty-${i}`} className="h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9" />
                                     ))}
                                     
                                     {Array.from({ length: days }).map((_, i) => {
@@ -487,7 +504,7 @@ const DateRangePicker = forwardRef(({
                                         const isRangeEnd = endStr === currentStr && startStr !== endStr;
 
                                         return (
-                                            <div key={day} className={`relative h-8 w-8 md:h-9 md:w-9 p-0
+                                            <div key={day} className={`relative h-7 w-7 sm:h-8 sm:w-8 md:h-9 md:w-9 p-0
                                                 ${inRange || isHoverPreview ? 'bg-[#EEF0FC]' : ''}
                                                 ${isRangeStart ? 'bg-[#EEF0FC] rounded-l-md' : ''}
                                                 ${isRangeEnd ? 'bg-[#EEF0FC] rounded-r-md' : ''}
@@ -496,7 +513,7 @@ const DateRangePicker = forwardRef(({
                                                     type="button"
                                                     onClick={() => handleDateClick(day)}
                                                     className={`
-                                                        absolute inset-0 flex items-center justify-center text-[12px] font-medium rounded-md transition-colors
+                                                        absolute inset-0 flex items-center justify-center rounded-md text-[11px] font-medium transition-colors sm:text-[12px]
                                                         ${isSelected ? 'bg-[#4A8AF4] text-white shadow-sm ring-1 ring-[#4A8AF4]' : ''}
                                                         ${!isSelected && (inRange || isHoverPreview) ? 'text-[#2F5FC6] bg-transparent rounded-none' : ''}
                                                         ${today && !isSelected ? 'bg-[#EEF0FC] text-[#2F5FC6] font-bold ring-1 ring-[#CBD4F7]' : ''}

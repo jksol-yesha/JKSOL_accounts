@@ -537,7 +537,7 @@ const CategoryRankings = ({ dashboardFilters }) => {
     const showRankingsOverlayLoader = useDelayedOverlayLoader(rankingsLoading, hasFetchedRankings);
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 xl:gap-4 h-full min-h-[300px] auto-rows-fr items-stretch">
+        <div className="grid min-h-0 grid-cols-1 items-stretch gap-3 lg:h-full lg:grid-cols-2 lg:auto-rows-fr xl:grid-cols-3 xl:gap-4">
             <AccountBalanceList accounts={accounts} initialLoading={showInitialAccountsLoader} overlayLoading={showAccountsOverlayLoader} hasFetchedOnce={hasFetchedAccounts} />
             <PnLBreakdownList categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings} />
             <InvestmentCardList accounts={accounts} categories={categories} initialLoading={showInitialRankingsLoader} overlayLoading={showRankingsOverlayLoader} hasFetchedOnce={hasFetchedRankings || hasFetchedAccounts} />

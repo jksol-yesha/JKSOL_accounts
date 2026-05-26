@@ -16,6 +16,9 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const { selectedBranch } = useBranch();
     const { selectedYear } = useYear();
     const { currentOrganization } = useOrganization();
+    const [isMobileViewport, setIsMobileViewport] = useState(() =>
+        typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    );
 
     const [accounts, setAccounts] = useState([]);
     const [categories, setCategories] = useState([]);
@@ -115,6 +118,15 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [isOpen, isRightPanelOpen, onClose, result]);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobileViewport(window.innerWidth < 768);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
 
     // Auto-clear branch assignment error if fixed
     useEffect(() => {
@@ -437,26 +449,41 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             ></div>
 
             <div className={cn(
-                "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[120] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden h-[85vh] w-[90vw] max-w-5xl",
-                isClosingDrawer ? "animate-slide-out-top" : "animate-slide-in-top"
+                "fixed z-[120] bg-white shadow-2xl flex flex-col overflow-hidden",
+                isMobileViewport
+                    ? "inset-0 h-[100dvh] w-screen rounded-none"
+                    : "top-1/2 left-1/2 h-[85vh] w-[90vw] max-w-5xl -translate-x-1/2 -translate-y-1/2 rounded-xl",
+                isMobileViewport
+                    ? (isClosingDrawer ? "animate-fade-out" : "animate-fade-in")
+                    : (isClosingDrawer ? "animate-slide-out-top" : "animate-slide-in-top")
             )}>
                 {/* Global Header */}
-                <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white gap-4 flex-none">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-[#4A8AF4]/10 text-[#4A8AF4] flex items-center justify-center shrink-0">
-                            <FileText size={20} strokeWidth={2.5} />
+                {isMobileViewport ? (
+                    <div className="border-b border-slate-200 bg-white px-4 py-3 flex-none">
+                        <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#4A8AF4]/10 text-[#4A8AF4]">
+                                    <FileText size={20} strokeWidth={2.5} />
+                                </div>
+                                <div className="min-w-0">
+                                    <h2 className="text-base font-bold text-slate-800">Review Statement</h2>
+                                    <p className="truncate text-[11px] font-medium text-slate-500">
+                                        {file?.name || 'Parsed Statement'} • {isProcessing ? 'Processing...' : `${transactions.length} records`}
+                                    </p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={onClose}
+                                className="rounded-full p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600"
+                            >
+                                <X size={18} />
+                            </button>
                         </div>
-                        <div>
-                            <h2 className="text-base font-bold text-slate-800">Review Statement</h2>
-                            <p className="text-[11px] font-medium text-slate-500">
-                                {file?.name || 'Parsed Statement'} • {isProcessing ? 'Processing...' : `${transactions.length} records`}
-                            </p>
-                        </div>
-                    </div>
 
-                    <div className="flex items-center gap-4 shrink-0">
-                        <div className="w-56 text-left">
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Global Target Account <span className="text-rose-500">*</span></label>
+                        <div className="mt-3 text-left">
+                            <label className="mb-0.5 block text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                                Global Target Account <span className="text-rose-500">*</span>
+                            </label>
                             <CustomSelect
                                 value={selectedAccount}
                                 onChange={(e) => setSelectedAccount(e.target.value)}
@@ -472,14 +499,51 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                 ))}
                             </CustomSelect>
                         </div>
-                        <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors self-start mt-3.5">
-                            <X size={18} />
-                        </button>
                     </div>
-                </div>
+                ) : (
+                    <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white gap-4 flex-none">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-[#4A8AF4]/10 text-[#4A8AF4] flex items-center justify-center shrink-0">
+                                <FileText size={20} strokeWidth={2.5} />
+                            </div>
+                            <div>
+                                <h2 className="text-base font-bold text-slate-800">Review Statement</h2>
+                                <p className="text-[11px] font-medium text-slate-500">
+                                    {file?.name || 'Parsed Statement'} • {isProcessing ? 'Processing...' : `${transactions.length} records`}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="flex items-center gap-4 shrink-0">
+                            <div className="w-56 text-left">
+                                <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Global Target Account <span className="text-rose-500">*</span></label>
+                                <CustomSelect
+                                    value={selectedAccount}
+                                    onChange={(e) => setSelectedAccount(e.target.value)}
+                                    isSearchable={true}
+                                    matchTriggerWidth={true}
+                                    placeholder="Select an account..."
+                                    className="w-full px-3 h-[32px] bg-slate-50 border border-slate-200 rounded-lg text-[12px] font-semibold text-slate-800 shadow-sm outline-none transition-all flex items-center justify-between hover:bg-slate-100"
+                                    dropdownClassName="z-[150]"
+                                >
+                                    <option value="">Select an account...</option>
+                                    {filteredAccounts.map(acc => (
+                                        <option key={acc.id} value={acc.id}>{acc.name} - {acc.accountNumber || 'No Num'}</option>
+                                    ))}
+                                </CustomSelect>
+                            </div>
+                            <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors self-start mt-3.5">
+                                <X size={18} />
+                            </button>
+                        </div>
+                    </div>
+                )}
 
                 {/* Main Content Area */}
-                <div className="flex-1 overflow-hidden flex bg-slate-50 relative">
+                <div className={cn(
+                    "flex-1 overflow-hidden flex bg-slate-50 relative",
+                    isMobileViewport ? "flex-col" : "flex-row",
+                )}>
                     {isProcessing && (
                         <div className="absolute inset-0 bg-slate-50/90 backdrop-blur-sm z-[100] flex flex-col items-center justify-center">
                             <Loader className="h-8 w-8 text-[#4A8AF4] mb-4" strokeWidth={2} />
@@ -528,29 +592,27 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                         </div>
                     ) : (
                         <>
-                            {/* Left Panel: Table */}
-                            <div className={`${!isRightPanelOpen ? 'w-full' : (activeRightTab === 'pdf' ? 'w-[50%]' : 'w-[70%]')} flex flex-col border-r border-slate-200 bg-white transition-all duration-300 ease-in-out`}>
+                            {/* Left Panel: Review List */}
+                            <div
+                                className={cn(
+                                    "flex flex-col bg-white transition-all duration-300 ease-in-out",
+                                    isMobileViewport
+                                        ? (isRightPanelOpen ? 'hidden' : 'w-full flex-1')
+                                        : `${!isRightPanelOpen ? 'w-full' : (activeRightTab === 'pdf' ? 'w-[50%]' : 'w-[70%]')} border-r border-slate-200`,
+                                )}
+                            >
                                 <div className="flex-1 relative overflow-hidden">
                                     <div className="absolute inset-0 overflow-auto">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
-                                                <tr>
-                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Type</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Amount</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 w-12"></th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100">
+                                        {isMobileViewport ? (
+                                            <div className="space-y-3 p-3">
                                                 {transactions.length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan="6" className="px-4 py-12 text-center text-slate-500 text-sm font-medium">No transactions found to review.</td>
-                                                    </tr>
+                                                    <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-10 text-center text-sm font-medium text-slate-500">
+                                                        No transactions found to review.
+                                                    </div>
                                                 ) : (
                                                     transactions.map((txn) => (
-                                                        <tr 
-                                                            key={txn._id} 
+                                                        <div
+                                                            key={txn._id}
                                                             onClick={(e) => {
                                                                 if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
                                                                     setFocusedTransactionId(txn._id);
@@ -558,37 +620,129 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                                     setIsRightPanelOpen(true);
                                                                 }
                                                             }}
-                                                            className={`cursor-pointer transition-colors ${focusedTransactionId === txn._id ? 'bg-[#4A8AF4]/5 shadow-[inset_3px_0_0_0_#4A8AF4]' : 'hover:bg-slate-50'}`}
+                                                            className={cn(
+                                                                "cursor-pointer rounded-xl border border-slate-200 bg-white p-3 shadow-sm transition-colors",
+                                                                focusedTransactionId === txn._id
+                                                                    ? 'bg-[#4A8AF4]/5 ring-1 ring-[#4A8AF4]/20'
+                                                                    : 'hover:bg-slate-50',
+                                                            )}
                                                         >
-                                                            <td className="px-3 py-2 text-xs font-medium text-slate-700">{txn.date}</td>
-                                                            <td className="px-3 py-2">
-                                                                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${txn.type === 'Income' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
-                                                                    {txn.type}
-                                                                </span>
-                                                            </td>
-                                                            <td className="px-3 py-2 text-xs font-medium text-slate-800 break-words whitespace-normal">{txn.description}</td>
-                                                            <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                            <td className="px-3 py-2 text-center">
-                                                                <button 
-                                                                    onClick={() => handleRemove(txn._id)}
-                                                                    className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                                                                    title="Remove row"
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                            </td>
-                                                        </tr>
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div className="min-w-0 flex-1">
+                                                                    <div className="text-xs font-semibold text-slate-800 break-words">
+                                                                        {txn.description || 'No description'}
+                                                                    </div>
+                                                                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                                        <span className="text-[11px] font-medium text-slate-500">
+                                                                            {txn.date || '-'}
+                                                                        </span>
+                                                                        <span className={cn(
+                                                                            "rounded-full px-2 py-0.5 text-[10px] font-bold",
+                                                                            txn.type === 'Income'
+                                                                                ? 'bg-emerald-100 text-emerald-700'
+                                                                                : 'bg-rose-100 text-rose-700',
+                                                                        )}>
+                                                                            {txn.type}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="flex shrink-0 items-start gap-2">
+                                                                    <div className="text-right">
+                                                                        <div className="text-xs font-bold text-slate-800">
+                                                                            {Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                                                        </div>
+                                                                    </div>
+                                                                    <button
+                                                                        onClick={() => handleRemove(txn._id)}
+                                                                        className="rounded-md p-1 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-500"
+                                                                        title="Remove row"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     ))
                                                 )}
-                                            </tbody>
-                                        </table>
+                                            </div>
+                                        ) : (
+                                            <table className="w-full text-left border-collapse">
+                                                <thead className="bg-slate-50 sticky top-0 z-10 shadow-sm">
+                                                    <tr>
+                                                        <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
+                                                        <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Type</th>
+                                                        <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
+                                                        <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Amount</th>
+                                                        <th className="px-3 py-2 border-b border-slate-200 w-12"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {transactions.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan="6" className="px-4 py-12 text-center text-slate-500 text-sm font-medium">No transactions found to review.</td>
+                                                        </tr>
+                                                    ) : (
+                                                        transactions.map((txn) => (
+                                                            <tr 
+                                                                key={txn._id} 
+                                                                onClick={(e) => {
+                                                                    if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                                                                        setFocusedTransactionId(txn._id);
+                                                                        setActiveRightTab('edit');
+                                                                        setIsRightPanelOpen(true);
+                                                                    }
+                                                                }}
+                                                                className={`cursor-pointer transition-colors ${focusedTransactionId === txn._id ? 'bg-[#4A8AF4]/5 shadow-[inset_3px_0_0_0_#4A8AF4]' : 'hover:bg-slate-50'}`}
+                                                            >
+                                                                <td className="px-3 py-2 text-xs font-medium text-slate-700">{txn.date}</td>
+                                                                <td className="px-3 py-2">
+                                                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${txn.type === 'Income' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+                                                                        {txn.type}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-3 py-2 text-xs font-medium text-slate-800 break-words whitespace-normal">{txn.description}</td>
+                                                                <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                                <td className="px-3 py-2 text-center">
+                                                                    <button 
+                                                                        onClick={() => handleRemove(txn._id)}
+                                                                        className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
+                                                                        title="Remove row"
+                                                                    >
+                                                                        <Trash2 size={14} />
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        )}
                                     </div>
                                 </div>
                             </div>
 
                             {/* Right Panel: Tabs & Form */}
-                            <div className={`${!isRightPanelOpen ? 'w-0 border-none overflow-hidden' : (activeRightTab === 'pdf' ? 'w-[50%] border-l' : 'w-[30%] border-l')} flex flex-col bg-slate-50 border-slate-200 transition-all duration-300 ease-in-out`}>
-                                <div className="flex p-2 bg-white border-b border-slate-200 items-center justify-end">
+                            <div
+                                className={cn(
+                                    "flex flex-col bg-slate-50 border-slate-200 transition-all duration-300 ease-in-out",
+                                    isMobileViewport
+                                        ? (!isRightPanelOpen ? 'hidden' : 'w-full flex-1 min-h-0')
+                                        : `${!isRightPanelOpen ? 'w-0 border-none overflow-hidden' : (activeRightTab === 'pdf' ? 'w-[50%] border-l' : 'w-[30%] border-l')}`,
+                                )}
+                            >
+                                <div className={cn(
+                                    "flex p-2 bg-white border-b border-slate-200 items-center",
+                                    isMobileViewport ? "justify-between" : "justify-end",
+                                )}>
+                                    {isMobileViewport && (
+                                        <button
+                                            onClick={() => setIsRightPanelOpen(false)}
+                                            className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                                            title="Back to list"
+                                        >
+                                            <X size={16} />
+                                        </button>
+                                    )}
                                     <div className="flex items-center gap-1">
                                         <button 
                                             onClick={() => setActiveRightTab('edit')} 
@@ -616,10 +770,13 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                 
                                 <div className="flex-1 overflow-hidden relative">
                                     {activeRightTab === 'edit' ? (
-                                        <div className="absolute inset-0 overflow-y-auto p-5 pt-4">
+                                        <div className={cn(
+                                            "absolute inset-0 overflow-y-auto p-5 pt-4",
+                                            isMobileViewport && "p-4 pt-3",
+                                        )}>
 
                                             {focusedTxn ? (
-                                                <div className="grid grid-cols-2 gap-x-3 gap-y-3">
+                                                <div className="grid grid-cols-1 gap-x-3 gap-y-3 md:grid-cols-2">
                                                     {/* Type */}
                                                     <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Transaction Type <span className="text-rose-500">*</span></label>
@@ -719,8 +876,8 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
 
                                                     
                                                     {/* ── GST Section ── */}
-                                                    <div className="col-span-2 mt-2 border-t border-slate-100 pt-3">
-                                                        <div className="flex items-center gap-4">
+                                                    <div className="col-span-1 mt-2 border-t border-slate-100 pt-3 md:col-span-2">
+                                                        <div className="flex flex-col items-start gap-3 md:flex-row md:items-center md:gap-4">
                                                             <div className="flex items-center gap-2">
                                                                 <label className="relative inline-flex items-center cursor-pointer">
                                                                     <input
@@ -737,7 +894,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             </div>
 
                                                             {focusedTxn.isTaxable && (
-                                                                <div className="flex items-center gap-2 pl-4 border-l border-gray-200 animate-in fade-in zoom-in-95 duration-200">
+                                                                <div className="flex items-center gap-2 animate-in fade-in zoom-in-95 duration-200 md:pl-4 md:border-l md:border-gray-200">
                                                                     <label className="relative inline-flex items-center cursor-pointer">
                                                                         <input
                                                                             type="checkbox"
@@ -756,7 +913,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
 
                                                         {focusedTxn.isTaxable && (
                                                             <>
-                                                                <div className="grid grid-cols-2 gap-x-5 gap-y-4 mt-4">
+                                                                <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 md:grid-cols-2">
                                                                     {/* GST Type */}
                                                                     <div className="space-y-2">
                                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize pl-1">
@@ -836,7 +993,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Description */}
-                                                    <div className="space-y-1 col-span-2 mt-2">
+                                                    <div className="space-y-1 col-span-1 mt-2 md:col-span-2">
                                                         <label className="text-[11px] font-bold text-slate-600 block capitalize">Notes</label>
                                                         <textarea 
                                                             value={focusedTxn.description || ''} 
@@ -848,7 +1005,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
 
                                                     {/* Attachment */}
-                                                    <div className="space-y-1 col-span-2 mt-4">
+                                                    <div className="space-y-1 col-span-1 mt-4 md:col-span-2">
                                                         <div className="flex items-center justify-between gap-3">
                                                             <label className="text-[11px] font-bold text-slate-600 block capitalize">Attachment (Invoice/Receipt)</label>
                                                         </div>
@@ -889,13 +1046,17 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     </div>
                                                 </div>
                                             ) : (
-                                                <div className="h-full flex flex-col items-center justify-center text-slate-400">
-                                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
-                                                        <List size={28} />
+                                                    <div className="h-full flex flex-col items-center justify-center text-slate-400">
+                                                        <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-300">
+                                                            <List size={28} />
+                                                        </div>
+                                                        <p className="text-sm font-semibold text-slate-500 text-center">No Transaction Selected</p>
+                                                    <p className="text-xs font-medium text-slate-400 text-center mt-2 max-w-[200px]">
+                                                        {isMobileViewport
+                                                            ? 'Select a transaction from the list above to edit its details.'
+                                                            : 'Select a transaction from the list on the left to edit its details.'}
+                                                    </p>
                                                     </div>
-                                                    <p className="text-sm font-semibold text-slate-500 text-center">No Transaction Selected</p>
-                                                    <p className="text-xs font-medium text-slate-400 text-center mt-2 max-w-[200px]">Select a transaction from the list on the left to edit its details.</p>
-                                                </div>
                                             )}
                                         </div>
                                     ) : activeRightTab === 'pdf' ? (
@@ -946,11 +1107,14 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                 </div>
 
                 {/* Footer */}
-                <div className="px-5 py-3 border-t border-slate-200 bg-white flex justify-between items-center flex-none">
+                <div className={cn(
+                    "px-5 py-3 border-t border-slate-200 bg-white flex flex-none",
+                    isMobileViewport ? "flex-col gap-3" : "items-center justify-between",
+                )}>
                     {!result ? (
                         <>
                             {/* Left: Numbers */}
-                            <div className="flex items-center gap-6 text-[13px]">
+                            <div className="flex flex-wrap items-center gap-4 text-[13px] md:gap-6">
                                 <div className="flex items-center gap-2">
                                     <span className="text-slate-500 font-medium">Credit:</span>
                                     <span className="font-bold text-emerald-600">{formatCurrency(totalCredit)}</span>
@@ -969,7 +1133,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                             
                             {/* Center: Error */}
                             {error && (
-                                <div className="flex-1 flex justify-end mr-6 animate-in fade-in slide-in-from-bottom-2">
+                                <div className={cn(
+                                    "animate-in fade-in slide-in-from-bottom-2",
+                                    isMobileViewport ? "w-full" : "flex-1 flex justify-end mr-6",
+                                )}>
                                     <div className="text-rose-600 text-[12px] font-semibold flex items-center gap-1.5">
                                         <AlertCircle size={14} /> <span>{error}</span>
                                     </div>
@@ -977,7 +1144,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                             )}
 
                             {/* Right: Buttons */}
-                            <div className={`flex items-center gap-3 ${!error ? 'ml-auto' : ''}`}>
+                            <div className={cn(
+                                "flex items-center gap-3",
+                                isMobileViewport ? "w-full justify-end" : (!error ? 'ml-auto' : ''),
+                            )}>
                                 <button 
                                     onClick={onClose}
                                     className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors"

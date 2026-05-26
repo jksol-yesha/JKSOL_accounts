@@ -1309,7 +1309,7 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
             {/* Drawer Container */}
             <div
                 className={cn(
-                    "fixed inset-y-0 right-0 z-[120] w-[480px] max-w-full bg-white shadow-2xl flex flex-col",
+                    "fixed inset-0 z-[120] h-[100dvh] w-screen bg-white shadow-2xl flex flex-col md:inset-y-0 md:right-0 md:left-auto md:h-auto md:w-[480px] md:max-w-full",
                     isClosingDrawer ? "animate-slide-out-right" : "animate-slide-in-right"
                 )}
             >

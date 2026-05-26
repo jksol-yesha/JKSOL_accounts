@@ -456,15 +456,15 @@ const AuditLogs = () => {
                 {/* Top Action Row */}
                 <div className="sticky top-0 z-20 -mx-4 -mt-1 mb-0 bg-slate-50/50 backdrop-blur supports-[backdrop-filter]:bg-slate-50/50 md:-mx-4 xl:-mx-6">
                     <div className="dashboard-header-pattern px-4 pt-2 pb-1 md:px-4 xl:px-6">
-                        <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
+                        <div className="flex items-center gap-2 w-full justify-end">
                             
-                            <div className="flex-shrink-0">
+                            <div className="flex-1 min-w-0 md:flex-none">
                                 <CustomSelect
                                     name="entity"
                                     value={filters.entity}
                                     onChange={handleFilterChange}
                                     showSelectedBackground={false}
-                                    className="h-9 w-full md:w-auto rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 >
                                     <option value="">All Entities</option>
                                     <option value="transaction">Transactions</option>
@@ -474,13 +474,13 @@ const AuditLogs = () => {
                                 </CustomSelect>
                             </div>
                             
-                            <div className="flex-shrink-0">
+                            <div className="flex-1 min-w-0 md:flex-none">
                                 <CustomSelect
                                     name="action"
                                     value={filters.action}
                                     onChange={handleFilterChange}
                                     showSelectedBackground={false}
-                                    className="h-9 w-full md:w-auto rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                                    className="h-9 w-full rounded-md border border-gray-200 bg-white px-3 py-1 text-xs font-medium text-gray-700 shadow-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
                                 >
                                     <option value="">All Actions</option>
                                     <option value="create">Create</option>
@@ -489,10 +489,10 @@ const AuditLogs = () => {
                                 </CustomSelect>
                             </div>
                             
-                            <div className="flex-shrink-0">
+                            <div className="shrink-0">
                                 <button
                                     onClick={() => fetchLogs()}
-                                    className="h-9 px-3 flex flex-row items-center justify-center gap-2 rounded-md border bg-white border-gray-200 text-gray-700 font-medium text-xs hover:bg-gray-50 shadow-sm transition-all outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+                                    className="h-9 w-9 md:w-auto md:px-3 flex items-center justify-center gap-2 rounded-md border bg-white border-gray-200 text-gray-700 font-medium text-xs hover:bg-gray-50 shadow-sm transition-all outline-none focus:ring-1 focus:ring-primary focus:border-primary"
                                     title="Refresh Logs"
                                 >
                                     {loading ? (
@@ -500,7 +500,7 @@ const AuditLogs = () => {
                                     ) : (
                                         <RefreshCw size={14} />
                                     )}
-                                    <span className="md:hidden lg:inline">Refresh</span>
+                                    <span className="hidden md:inline">Refresh</span>
                                 </button>
                             </div>
                             

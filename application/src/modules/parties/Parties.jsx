@@ -77,6 +77,7 @@ const Parties = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [hasFetchedOnce, setHasFetchedOnce] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
+    const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
 
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editingParty, setEditingParty] = useState(null);
@@ -416,9 +417,9 @@ const Parties = () => {
             >
 
                 {/* Toolbar */}
-                <div className="px-5 py-3 flex flex-row items-center justify-between gap-4 relative print:hidden min-h-[60px]">
-                    {/* Left: Actions */}
-                    <div className="flex items-center gap-3">
+                <div className="px-3 sm:px-5 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 sm:gap-4 relative print:hidden min-h-[60px]">
+                    {/* Left: Actions (and Mobile Search Toggle) */}
+                    <div className="flex items-center justify-between sm:justify-start w-full sm:w-auto">
                         {canCreateParty && (
                             <button
                                 onClick={() => { setEditingParty(null); setIsDrawerOpen(true); }}
@@ -429,11 +430,22 @@ const Parties = () => {
                                 <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Party</span>
                             </button>
                         )}
+                        <button
+                            type="button"
+                            onClick={() => setIsMobileSearchOpen(!isMobileSearchOpen)}
+                            className={cn(
+                                "sm:hidden flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] focus:outline-none focus-visible:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4]",
+                                isMobileSearchOpen && "border-[#BAE6FD] bg-[#F0F9FF] text-[#4A8AF4]"
+                            )}
+                            aria-label="Toggle search"
+                        >
+                            <Search size={14} />
+                        </button>
                     </div>
 
-                    {/* Right: Search */}
-                    <div className="flex items-center gap-3">
-                        <div className="relative group w-[240px]">
+                    {/* Right: Search Field */}
+                    <div className={cn("items-center gap-3 w-full sm:w-auto", isMobileSearchOpen ? "flex" : "hidden sm:flex")}>
+                        <div className="relative group w-full sm:w-[240px]">
                             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
                             <input
                                 type="text"
@@ -450,10 +462,10 @@ const Parties = () => {
 
                 {/* Table Section */}
                 <div
-                    className="parties-grid-shell relative w-full px-5 pb-1 flex flex-col"
-                    style={{ height: 'calc(100vh - 75px)', minHeight: '400px' }}
+                    className="parties-grid-shell relative w-full px-0 sm:px-5 pb-1 flex flex-col h-[calc(100vh-120px)] sm:h-[calc(100vh-75px)] min-h-[400px]"
                 >
-                    <div className="h-full w-full relative">
+                    {/* Desktop View (AG Grid) */}
+                    <div className="hidden sm:block h-full w-full relative">
                         <div className="absolute inset-0">
                             <AgGridReact
                                 ref={gridRef}
@@ -473,6 +485,85 @@ const Parties = () => {
                                 overlayNoRowsTemplate='<span class="ag-overlay-no-rows-center text-gray-500 font-medium text-sm">No parties found</span>'
                             />
                         </div>
+                    </div>
+
+                    {/* Mobile View (Card List) */}
+                    <div className="block sm:hidden flex-1 overflow-y-auto px-4 py-2 space-y-3 bg-slate-50/50">
+                        {isLoading ? (
+                            <div className="py-8 text-center text-sm font-medium text-gray-500 flex flex-col items-center gap-2">
+                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                Loading parties...
+                            </div>
+                        ) : filteredParties.length === 0 ? (
+                            <div className="py-8 text-center text-sm font-medium text-gray-500">No parties found</div>
+                        ) : (
+                            [...filteredParties]
+                                .sort((a, b) => {
+                                    if (a.isActive === b.isActive) return 0;
+                                    return a.isActive ? -1 : 1;
+                                })
+                                .map((party, index) => (
+                                <div key={party.id || index} className={cn("rounded-xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] border border-slate-200 p-4 flex flex-col gap-3 relative", !party.isActive ? "bg-[#fef2f2]" : "bg-white")}>
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0 flex-1">
+                                            <div className="truncate text-[14px] font-bold text-slate-800">
+                                                {party.companyName || '-'}
+                                            </div>
+                                            {party.name && party.name !== '-' && (
+                                                <div className="mt-0.5 text-[11px] font-medium text-slate-500">
+                                                    {party.name}
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0 -mr-2">
+                                            {canEditParty && (
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingParty(party);
+                                                        setIsDrawerOpen(true);
+                                                    }}
+                                                    className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-[#4A8AF4]"
+                                                    title="Edit"
+                                                >
+                                                    <Edit size={14} />
+                                                </button>
+                                            )}
+                                            {canDeleteParty && (
+                                                <button
+                                                    onClick={() => handleDelete(party)}
+                                                    className="rounded p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                                    title="Delete"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-y-3 gap-x-2 text-[12px]">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Phone No.</span>
+                                            <span className="font-semibold text-slate-700 truncate">{party.phone || '-'}</span>
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">Email</span>
+                                            <span className="font-semibold text-slate-700 truncate" title={party.email}>{party.email || '-'}</span>
+                                        </div>
+                                        {party.gstNo && (
+                                            <div className="flex flex-col col-span-2 mt-1">
+                                                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-0.5">GST No.</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="font-bold text-slate-700 uppercase tracking-wide">{party.gstNo}</span>
+                                                    <button onClick={() => handleCopy(party.gstNo, 'GST No.')} className="text-slate-400 hover:text-[#4A8AF4] bg-slate-50 hover:bg-[#F0F9FF] p-1 rounded-md transition-colors">
+                                                        <Copy size={12} strokeWidth={2.5} />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </div>
 

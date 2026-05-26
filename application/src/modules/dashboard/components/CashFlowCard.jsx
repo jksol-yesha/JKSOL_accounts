@@ -119,7 +119,7 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
     const showAllMonthTicks = displayData.length > 0 && displayData.every((item) => isMonthlyCashFlowLabel(item.label));
 
     return (
-        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full lg:row-span-1 lg:col-span-1 xl:col-span-2 overflow-hidden min-h-[280px] 2xl:min-h-[360px]">
+        <div className="bg-white rounded-lg border border-slate-200 shadow-sm flex flex-col w-full h-full overflow-hidden min-h-[300px] sm:min-h-[320px] lg:min-h-[280px] lg:row-span-1 lg:col-span-1 xl:col-span-2 2xl:min-h-[360px]">
             {/* Header */}
             <div className="px-5 py-4 border-b border-slate-200 flex justify-between items-center shrink-0 bg-[#F9F9FB]">
                 <h3 className="text-[13px] 2xl:text-[15px] font-medium text-slate-900 tracking-tight flex items-center gap-1.5 focus:outline-none">
@@ -132,7 +132,7 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                 {isLoading && <LoadingOverlay />}
 
                 {/* Left Side: Graph */}
-                <div className="flex-1 p-5 relative min-h-[160px] 2xl:min-h-[220px]">
+                <div className="relative h-[240px] p-4 sm:h-[260px] sm:p-5 lg:h-auto lg:min-h-[160px] lg:flex-1 2xl:min-h-[220px]">
                     <ResponsiveContainer width="100%" height="100%">
                         <AreaChart data={displayData} margin={{ top: 10, right: 10, left: -20, bottom: 8 }}>
                             <defs>
@@ -190,10 +190,10 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                 </div>
 
                 {/* Right Side: Summary Stats block */}
-                <div className="lg:w-[210px] border-t lg:border-t-0 lg:border-l border-slate-100 flex flex-col justify-center px-5 py-6 lg:py-6 shrink-0 gap-7">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-5 border-t border-slate-100 px-4 py-4 sm:gap-x-5 sm:px-5 sm:py-5 lg:w-[210px] lg:flex lg:flex-col lg:justify-center lg:border-t-0 lg:border-l lg:px-5 lg:py-6 lg:gap-7 shrink-0">
 
                     {/* Opening Balance */}
-                    <div className="flex flex-col items-end text-right">
+                    <div className="flex flex-col items-start text-left lg:items-end lg:text-right">
                         <span className="text-xs font-medium text-slate-500 mb-1">
                             Opening Balance
                         </span>
@@ -205,7 +205,7 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                     </div>
 
                     {/* Incoming */}
-                    <div className="flex flex-col items-end text-right">
+                    <div className="flex flex-col items-start text-left lg:items-end lg:text-right">
                         <span className="text-xs font-medium text-emerald-600 mb-1">
                             Incoming
                         </span>
@@ -218,7 +218,7 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                     </div>
 
                     {/* Outgoing */}
-                    <div className="flex flex-col items-end text-right">
+                    <div className="flex flex-col items-start border-t border-slate-100/60 pt-3 text-left lg:border-t-0 lg:pt-0 lg:items-end lg:text-right">
                         <span className="text-xs font-medium text-rose-500 mb-1">
                             Outgoing
                         </span>
@@ -231,7 +231,7 @@ const CashFlowCard = ({ stats = {}, chartData = [], isLoading = false }) => {
                     </div>
 
                     {/* Closing Balance */}
-                    <div className="flex flex-col items-end text-right pt-3 border-t border-slate-100/60 w-full justify-end">
+                    <div className="col-span-1 flex w-full flex-col items-start justify-end border-t border-slate-100/60 pt-3 text-left lg:items-end lg:text-right">
                         <span className="text-xs font-medium text-blue-500 mb-1">
                             Closing Balance
                         </span>

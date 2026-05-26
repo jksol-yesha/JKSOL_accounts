@@ -711,6 +711,27 @@ const getDisplayClosingBalance = (account) => {
   return Number(value) || 0;
 };
 
+const isAccountActive = (account) =>
+  Boolean(
+    account?.isActive ||
+      account?.status === 1 ||
+      account?.status === "active",
+  );
+
+const getAccountIconComponent = (account) => {
+  const subtype = Number(account?.subtype ?? account?.subType);
+  const type = Number(account?.type ?? account?.accountType);
+
+  if (subtype === 12) return Landmark;
+  if (subtype === 21 || subtype === 22) return CreditCard;
+  if (type === 20) return PiggyBank;
+  if (subtype === 13) return Briefcase;
+  if (subtype === 11) return Wallet;
+  if (type === 4) return Activity;
+
+  return Banknote;
+};
+
 const BranchTooltip = ({ branchNames }) => {
   if (!branchNames || branchNames.length === 0)
     return <span className="text-gray-400 text-xs">-</span>;
@@ -835,6 +856,9 @@ const Accounts = () => {
     open: false,
     account: null,
   });
+  const [isMobileViewport, setIsMobileViewport] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth < 768 : false,
+  );
   const [isDesktopView, setIsDesktopView] = useState(() =>
     typeof window !== "undefined" ? window.innerWidth >= 1280 : true,
   );
@@ -864,6 +888,7 @@ const Accounts = () => {
   const [chartVisible, setChartVisible] = useState(false);
   const [trendData, setTrendData] = useState([]);
   const [isTrendLoading, setIsTrendLoading] = useState(false);
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
   const [listFilter] = useState("All Accounts");
   const chartToggleRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -948,6 +973,26 @@ const Accounts = () => {
     if (event.key !== "Enter") return;
     event.preventDefault();
     focusNextAccountsControl("search");
+  };
+
+  const handleMobileSearchToggle = () => {
+    if (searchTerm.trim()) {
+      setIsMobileSearchOpen(true);
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 0);
+      return;
+    }
+
+    setIsMobileSearchOpen((current) => {
+      const nextValue = !current;
+      if (nextValue) {
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+        }, 0);
+      }
+      return nextValue;
+    });
   };
 
   const handleRefresh = () => {
@@ -1164,11 +1209,18 @@ const Accounts = () => {
 
   useEffect(() => {
     const handleResize = () => {
+      setIsMobileViewport(window.innerWidth < 768);
       setIsDesktopView(window.innerWidth >= 1280);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
+
+  useEffect(() => {
+    if (!isMobileViewport) {
+      setIsMobileSearchOpen(false);
+    }
+  }, [isMobileViewport]);
 
 
 
@@ -1266,6 +1318,10 @@ const Accounts = () => {
     return result;
   }, [accounts, searchTerm, listFilter, groupBy]);
 
+  const hasVisibleAccounts = filteredAccounts.some(
+    (account) => !account.isGroupHeader,
+  );
+
   const handleCreateAccount = () => {
     setDrawerState({ open: true, account: null });
   };
@@ -1341,30 +1397,18 @@ const Accounts = () => {
   };
 
   const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
+  const showFullMobileTrend = isMobileViewport && chartTimeframe === "30D";
+  const mobileTrendChartWidth = showFullMobileTrend
+    ? Math.max(chartData.length * 36, 900)
+    : 0;
+  const showMobileSearchField =
+    isMobileViewport && (isMobileSearchOpen || searchTerm.trim().length > 0);
 
   // Cell Renderers define how specific columns render complex UI
   const NameCellRenderer = (params) => {
     if (!params.data) return null;
     const account = params.data;
-    let IconComponent = Banknote;
-    if (account.subtype === 12 || account.subtype === "12")
-      IconComponent = Landmark;
-    else if (
-      account.subtype === 22 ||
-      account.subtype === "22" ||
-      account.subtype === 21 ||
-      account.subtype === "21"
-    )
-      IconComponent = CreditCard;
-    else if (account.type === 20 || account.type === "20")
-      IconComponent = PiggyBank;
-    else if (account.subtype === 13 || account.subtype === "13")
-      IconComponent = Briefcase;
-    else if (account.subtype === 11 || account.subtype === "11")
-      IconComponent = Wallet;
-    else if (account.type === 4 || account.type === "4")
-      IconComponent = Activity;
-
+    const IconComponent = getAccountIconComponent(account);
     const txns = account.totalTransactions || 0;
 
     return (
@@ -1643,7 +1687,7 @@ const Accounts = () => {
         <div className="px-5 pt-2 pb-0 print:hidden relative z-10">
           <div className="px-2 py-2">
             {/* Metrics Row */}
-            <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-4 sm:flex sm:flex-wrap sm:items-center sm:gap-x-12 sm:gap-y-4">
               <SummaryItem
                 title="Cash in Hand"
                 amount={cashBalance}
@@ -1679,7 +1723,7 @@ const Accounts = () => {
             </div>
 
             {/* Chart Toggle */}
-            <div className="mt-4 border-t border-gray-50 flex justify-between items-center">
+            <div className="mt-4 flex flex-col items-start gap-2 border-t border-gray-50 sm:flex-row sm:items-center sm:justify-between">
               <button
                 ref={chartToggleRef}
                 type="button"
@@ -1707,87 +1751,120 @@ const Accounts = () => {
 
             {/* Chart Section */}
             {chartVisible && (
-              <div className="h-[220px] w-full mt-6 transition-all relative">
+              <div
+                className={cn(
+                  "relative mt-6 transition-all",
+                  showFullMobileTrend
+                    ? "h-[240px] overflow-x-auto overflow-y-hidden pb-1"
+                    : "h-[220px] w-full",
+                )}
+              >
                 {isTrendLoading && (
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-xl">
                     <Loader className="h-6 w-6 text-[#4A8AF4]" />
                   </div>
                 )}
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartData}
-                    margin={{ top: 5, right: 14, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#f3f4f6"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={{ stroke: "#f3f4f6" }}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
-                      dy={8}
-                      padding={{
-                        left: chartTimeframe === "30D" && isDesktopView ? 0 : 4,
-                        right: chartTimeframe === "30D" && isDesktopView ? 18 : 8,
+                <div
+                  className="h-full"
+                  style={{
+                    width: showFullMobileTrend
+                      ? `${mobileTrendChartWidth}px`
+                      : "100%",
+                  }}
+                >
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart
+                      data={chartData}
+                      margin={{
+                        top: 5,
+                        right: isMobileViewport ? 10 : 14,
+                        left: isMobileViewport ? -8 : -20,
+                        bottom: 0,
                       }}
-                      interval={
-                        chartTimeframe === "30D" && isDesktopView
-                          ? 0
-                          : "preserveStartEnd"
-                      }
-                      minTickGap={
-                        chartTimeframe === "30D" && isDesktopView ? 0 : 12
-                      }
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
-                      tickFormatter={(val) => {
-                        const absVal = Math.abs(val);
-                        const sign = val < 0 ? "-" : "";
-                        if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
-                        if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
-                        return val;
-                      }}
-                    />
-                    <Tooltip
-                      content={
-                        <CustomTooltip currency={preferences.currency} />
-                      }
-                    />
-                    <Line
-                      type="monotone"
-                      name="Bank Balance"
-                      dataKey="bank"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
-                    />
-                    <Line
-                      type="monotone"
-                      name="Card Balance"
-                      dataKey="card"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#8b5cf6" }}
-                    />
-                    <Line
-                      type="monotone"
-                      name="Cash in Hand"
-                      dataKey="cash"
-                      stroke="#6b7280"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#6b7280" }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                    >
+                      <CartesianGrid
+                        strokeDasharray="3 3"
+                        vertical={false}
+                        stroke="#f3f4f6"
+                      />
+                      <XAxis
+                        dataKey="date"
+                        axisLine={{ stroke: "#f3f4f6" }}
+                        tickLine={false}
+                        tick={{
+                          fill: "#9CA3AF",
+                          fontSize: isMobileViewport ? 9 : 10,
+                          fontWeight: 500,
+                        }}
+                        dy={8}
+                        padding={{
+                          left: chartTimeframe === "30D" && isDesktopView ? 0 : 4,
+                          right: chartTimeframe === "30D" && isDesktopView ? 18 : 8,
+                        }}
+                        interval={
+                          chartTimeframe === "30D" &&
+                          (isDesktopView || showFullMobileTrend)
+                            ? 0
+                            : "preserveStartEnd"
+                        }
+                        minTickGap={
+                          chartTimeframe === "30D" &&
+                          (isDesktopView || showFullMobileTrend)
+                            ? 0
+                            : 12
+                        }
+                      />
+                      <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tick={{
+                          fill: "#9CA3AF",
+                          fontSize: isMobileViewport ? 9 : 10,
+                          fontWeight: 500,
+                        }}
+                        tickFormatter={(val) => {
+                          const absVal = Math.abs(val);
+                          const sign = val < 0 ? "-" : "";
+                          if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
+                          if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
+                          return val;
+                        }}
+                      />
+                      <Tooltip
+                        content={
+                          <CustomTooltip currency={preferences.currency} />
+                        }
+                      />
+                      <Line
+                        type="monotone"
+                        name="Bank Balance"
+                        dataKey="bank"
+                        stroke="#10b981"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
+                      />
+                      <Line
+                        type="monotone"
+                        name="Card Balance"
+                        dataKey="card"
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4, strokeWidth: 0, fill: "#8b5cf6" }}
+                      />
+                      <Line
+                        type="monotone"
+                        name="Cash in Hand"
+                        dataKey="cash"
+                        stroke="#6b7280"
+                        strokeWidth={2}
+                        dot={false}
+                        activeDot={{ r: 4, strokeWidth: 0, fill: "#6b7280" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               </div>
             )}
           </div>
@@ -1795,16 +1872,16 @@ const Accounts = () => {
         {/* Minimal Horizontal Divider */}
         <hr className="mx-5 mt-3 mb-1 border-t border-gray-200/70" />
         {/* Custom List Header */}
-        <div className="px-5 pb-3 pt-1 flex flex-wrap items-center justify-between gap-2 print:hidden relative z-10 w-full">
+        <div className="relative z-10 grid w-full grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-5 pb-3 pt-1 print:hidden md:flex md:flex-row md:flex-wrap md:items-start md:justify-between md:gap-2">
           {/* LEFT SIDE: Add & Refresh */}
-          <div className="flex items-center gap-1.5 w-full sm:w-auto">
+          <div className="min-w-0 md:flex md:w-auto md:flex-none md:items-center md:gap-1.5">
             <button
               ref={addAccountButtonRef}
               type="button"
               onClick={handleCreateAccount}
               onKeyDown={handleAddAccountKeyDown}
               className={cn(
-                "group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all text-[12px] font-medium",
+                "group flex h-[32px] min-w-0 flex-1 items-center justify-center gap-1.5 px-3 rounded-md border border-blue-200 bg-blue-50/50 text-[12px] font-medium text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:ring-2 focus-visible:ring-blue-100 md:flex-none",
                 drawerState.open && "bg-[#F0F9FF] border-[#BAE6FD]"
               )}
             >
@@ -1812,37 +1889,106 @@ const Accounts = () => {
               <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Account</span>
             </button>
 
-            <button
-              ref={refreshButtonRef}
-              type="button"
-              onClick={handleRefresh}
-              onKeyDown={handleRefreshKeyDown}
-              className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-            >
-              {loading ? (
-                <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
-              ) : (
-                <RefreshCcw size={14} strokeWidth={2} />
-              )}
-            </button>
+            {!isMobileViewport && (
+              <button
+                ref={refreshButtonRef}
+                type="button"
+                onClick={handleRefresh}
+                onKeyDown={handleRefreshKeyDown}
+                className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] focus:outline-none focus-visible:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4]"
+              >
+                {loading ? (
+                  <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
+                ) : (
+                  <RefreshCcw size={14} strokeWidth={2} />
+                )}
+              </button>
+            )}
           </div>
 
+          {isMobileViewport && (
+            <div className="contents">
+              <div className="min-w-0 flex-1 [&>div]:w-full [&>div>button]:w-full">
+                <FilterDropdown
+                  ref={groupFilterRef}
+                  value={groupBy}
+                  onChange={setGroupBy}
+                  onFocusNext={() => {
+                    focusNextAccountsControl("group");
+                  }}
+                  placeholder="Group"
+                  options={[
+                    { label: "Type", value: "type" },
+                    { label: "Subtype", value: "subtype" },
+                  ]}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleMobileSearchToggle}
+                className={cn(
+                  "flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] focus:outline-none focus-visible:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4]",
+                  showMobileSearchField && "border-[#BAE6FD] bg-[#F0F9FF] text-[#4A8AF4]",
+                )}
+                aria-label="Search accounts"
+              >
+                <Search size={14} />
+              </button>
+              <button
+                ref={refreshButtonRef}
+                type="button"
+                onClick={handleRefresh}
+                onKeyDown={handleRefreshKeyDown}
+                className="flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] focus:outline-none focus-visible:border-[#BAE6FD] focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4]"
+              >
+                {loading ? (
+                  <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
+                ) : (
+                  <RefreshCcw size={14} strokeWidth={2} />
+                )}
+              </button>
+            </div>
+          )}
+
           {/* RIGHT SIDE: Group & Search */}
-          <div className="flex items-center gap-1.5 w-full sm:w-auto">
-            <FilterDropdown
-              ref={groupFilterRef}
-              value={groupBy}
-              onChange={setGroupBy}
-              onFocusNext={() => {
-                focusNextAccountsControl("group");
-              }}
-              placeholder="Group"
-              options={[
-                { label: "Type", value: "type" },
-                { label: "Subtype", value: "subtype" },
-              ]}
-            />
-            <div className="relative group w-full sm:w-[240px]">
+          {!isMobileViewport && (
+            <div className="md:flex md:w-auto md:flex-row md:items-center md:gap-1.5">
+              <div className="shrink-0">
+                <FilterDropdown
+                  ref={groupFilterRef}
+                  value={groupBy}
+                  onChange={setGroupBy}
+                  onFocusNext={() => {
+                    focusNextAccountsControl("group");
+                  }}
+                  placeholder="Group"
+                  options={[
+                    { label: "Type", value: "type" },
+                    { label: "Subtype", value: "subtype" },
+                  ]}
+                />
+              </div>
+              <div className="relative group w-full md:w-[240px]">
+                <Search
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors"
+                />
+                <input
+                  ref={searchInputRef}
+                  id="accounts-search-input"
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search..."
+                  className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                />
+              </div>
+            </div>
+          )}
+
+          {showMobileSearchField && (
+            <div className="relative col-span-4 group w-full md:hidden">
               <Search
                 size={14}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors"
@@ -1855,11 +2001,200 @@ const Accounts = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={handleSearchKeyDown}
                 placeholder="Search..."
-                className="w-full pl-8 pr-3 h-[32px] bg-white border border-gray-200 rounded-md text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 outline-none transition-all shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                className="h-[32px] w-full rounded-md border border-gray-200 bg-white pl-8 pr-3 text-[13px] font-medium placeholder:text-gray-400 placeholder:transition-colors shadow-[0_1px_2px_rgba(0,0,0,0.05)] outline-none transition-all focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100"
               />
             </div>
-          </div>
+          )}
         </div>
+        {isMobileViewport && (
+          <div className="w-full px-5 pb-8 relative md:hidden" aria-busy={loading}>
+            <div className="space-y-3">
+              {loading && !hasFetchedOnce ? (
+                <div className="flex min-h-[240px] items-center justify-center rounded-2xl border border-gray-200 bg-white/95 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                  <Loader className="h-7 w-7 text-[#4A8AF4]" />
+                </div>
+              ) : hasVisibleAccounts ? (
+                filteredAccounts.map((account) => {
+                  if (account.isGroupHeader) {
+                    return (
+                      <div key={account.id} className="pt-2 first:pt-0">
+                        <div className="px-1 text-[11px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                          {account.groupName}
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  const IconComponent = getAccountIconComponent(account);
+                  const isActive = isAccountActive(account);
+                  const isBankAccount = isAssetBankAccount(account);
+                  const transactionCount = Number(account.totalTransactions) || 0;
+                  const openingBalance = getDisplayBalance(account);
+                  const closingBalance = getDisplayClosingBalance(account);
+
+                  return (
+                    <div
+                      key={account.id}
+                      className={cn(
+                        "rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]",
+                        !isActive && "bg-[#fef2f2]",
+                      )}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-slate-100 bg-slate-50 text-slate-500">
+                          <IconComponent size={18} strokeWidth={2.1} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-bold text-slate-800">
+                                {account.name || "-"}
+                              </div>
+                              <div className="mt-1 flex items-center justify-between gap-3">
+                                <span className="text-[11px] font-medium text-slate-500">
+                                  {account.subtypeLabel || account.typeLabel || "-"}
+                                </span>
+                                {transactionCount > 0 ? (
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      navigate(
+                                        `/transactions?accountId=${account.id}&disableDateFilter=true`,
+                                      )
+                                    }
+                                    className="inline-flex shrink-0 items-center text-[11px] font-semibold text-[#4A8AF4] transition-colors hover:text-[#3b71ca]"
+                                  >
+                                    {transactionCount} txns
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => setDrawerState({ open: true, account })}
+                                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-slate-50 hover:text-[#4A8AF4]"
+                                title="Edit"
+                              >
+                                <Edit size={15} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(account)}
+                                className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                title="Delete"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                        <MobileAccountField
+                          label="Opening Balance"
+                          value={
+                            <CompactCurrency
+                              amount={openingBalance}
+                              currencyOverride={account.baseCurrency}
+                            />
+                          }
+                          valueClassName={
+                            openingBalance < 0 ? "text-rose-600" : "text-emerald-700"
+                          }
+                        />
+                        <MobileAccountField
+                          label="Closing Balance"
+                          value={
+                            <CompactCurrency
+                              amount={closingBalance}
+                              currencyOverride={account.baseCurrency}
+                            />
+                          }
+                          valueClassName={
+                            closingBalance < 0 ? "text-rose-600" : "text-emerald-700"
+                          }
+                        />
+                        <MobileAccountField
+                          label="Date"
+                          value={formatDate(account.openingBalanceDate) || "-"}
+                        />
+                        <MobileAccountField
+                          label="Created By"
+                          value={account.createdByDisplayName || "-"}
+                        />
+                        {account.description ? (
+                          <MobileAccountField
+                            label="Description"
+                            value={account.description}
+                            colSpan={2}
+                          />
+                        ) : null}
+                      </div>
+
+                      {isBankAccount ? (
+                        <div className="mt-4 border-t border-slate-100 pt-3">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400">
+                              Bank Details
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyBankDetails(account)}
+                              className="inline-flex shrink-0 items-center justify-center p-1 text-slate-600 transition-colors hover:text-slate-800"
+                              aria-label={
+                                copiedBankDetailsId === account.id
+                                  ? "Bank details copied"
+                                  : "Copy bank details"
+                              }
+                              title={
+                                copiedBankDetailsId === account.id
+                                  ? "Bank details copied"
+                                  : "Copy bank details"
+                              }
+                            >
+                              {copiedBankDetailsId === account.id ? (
+                                <Check size={13} className="text-emerald-600" />
+                              ) : (
+                                <Copy size={13} />
+                              )}
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+                            {getBankDetailItems(account).map((item) => (
+                              <MobileAccountField
+                                key={item.label}
+                                label={item.label}
+                                value={item.value || "-"}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/95 px-4 py-10 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                  <div className="text-sm font-semibold text-slate-700">
+                    No accounts found
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">
+                    Try a different search or add a new account.
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {showOverlayLoader && (
+              <LoadingOverlay
+                label="Loading accounts..."
+                className="rounded-2xl"
+              />
+            )}
+          </div>
+        )}
         {/* Table View (AG Grid) */}
         {(isDesktopView || typeof window === "undefined") &&
           (() => {

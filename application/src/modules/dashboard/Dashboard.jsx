@@ -458,35 +458,42 @@ const Dashboard = () => {
     ];
 
     return (
-        <div className="dashboard-tablet-page dashboard-small-desktop-page flex flex-col h-full min-h-0 bg-white">
-            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-y-auto overflow-x-hidden px-4 md:px-4 xl:px-6 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:gap-4 xl:gap-3">
+        <div className="dashboard-tablet-page dashboard-small-desktop-page flex min-h-full flex-col bg-white md:h-full md:min-h-0">
+            <div className="dashboard-tablet-shell dashboard-small-desktop-shell flex-1 min-h-0 no-scrollbar overflow-visible overflow-x-hidden px-4 pb-4 animate-in fade-in duration-500 flex flex-col gap-3 md:overflow-y-auto md:px-4 md:gap-4 xl:px-6 xl:gap-3">
                 {/* Top Action Row */}
                 <div className="sticky top-0 z-30 -mx-4 mb-0 bg-white border-b border-slate-100/50 md:-mx-4 xl:-mx-6" style={{ zIndex: 40 }}>
-                    <div className="dashboard-header-pattern px-4 pt-4 pb-2 md:px-4 xl:px-6">
-                        <div className="flex flex-col md:flex-row justify-end items-end md:items-center gap-2 md:gap-3">
-                            <div className="flex-shrink-0">
+                    <div className="dashboard-header-pattern px-4 pt-4 pb-3 md:px-4 md:pb-2 xl:px-6">
+                        <div className="flex flex-col items-stretch gap-2 md:flex-row md:items-center md:justify-end md:gap-3">
+                            <div className="w-full flex-shrink-0 md:w-auto">
                                 <DateRangePicker
                                     startDate={dashboardFilters.dateRange?.startDate}
                                     endDate={dashboardFilters.dateRange?.endDate}
                                     selectedPreset={dashboardFilters.dateRange?.preset}
                                     presetOptions={datePresets}
                                     onApplyRange={(range) => updateDashboardDateRange(range, { forceRefresh: true })}
-                                    className=""
+                                    className="w-full md:w-auto"
                                 />
                             </div>
 
-                            <div className="flex-shrink-0">
-                                <BranchSelector />
-                            </div>
-
-                            <div className="flex-shrink-0">
-                                <CurrencySelector className="h-[32px]"
-                                    value={dashboardFilters.currency}
-                                    onChange={(val) => {
-                                        setDashboardFilters(prev => ({ ...prev, currency: val }));
-                                        updatePreferences({ currency: val });
-                                    }}
-                                />
+                            <div className="flex flex-row items-center gap-2 w-full md:w-auto md:flex md:justify-end">
+                                <div className="flex-1 min-w-0 md:flex-none md:w-auto">
+                                    <BranchSelector
+                                        className="w-full md:w-auto"
+                                        triggerClassName="w-full justify-between md:w-auto md:justify-start"
+                                    />
+                                </div>
+    
+                                <div className="flex-shrink-0 md:w-auto">
+                                    <CurrencySelector
+                                        className="h-[32px] w-[90px] justify-between px-2 md:w-auto md:justify-center md:px-2.5"
+                                        triggerTextClassName="flex-1 justify-start md:flex-initial"
+                                        value={dashboardFilters.currency}
+                                        onChange={(val) => {
+                                            setDashboardFilters(prev => ({ ...prev, currency: val }));
+                                            updatePreferences({ currency: val });
+                                        }}
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -495,7 +502,7 @@ const Dashboard = () => {
                 <div className="w-full relative">
                     <div className="flex flex-col gap-3 md:gap-4 xl:gap-3 w-full">
                         {/* Stat Cards - 4 Column Grid */}
-                        <div className="dashboard-tablet-stat-grid grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 items-start gap-3 flex-none">
+                        <div className="dashboard-tablet-stat-grid grid grid-cols-1 items-start gap-3 flex-none md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                             {allStats.map((stat, index) => (
                                 <div key={`${statsCacheKey}-${index}`} className="w-full self-start">
                                     <StatCard {...stat} isLoading={isDashboardLoading} />
@@ -504,7 +511,7 @@ const Dashboard = () => {
                         </div>
 
                         {/* Category Rankings */}
-                        <div className="flex-none min-h-[300px] relative transition-all duration-300" key={`${statsCacheKey}-rankings`}>
+                        <div className="relative flex-none min-h-0 transition-all duration-300 md:min-h-[300px]" key={`${statsCacheKey}-rankings`}>
                             <CategoryRankings dashboardFilters={dashboardFilters} />
                         </div>
 

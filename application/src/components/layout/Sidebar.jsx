@@ -1,7 +1,6 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-    X,
     LogOut,
     ChevronDown,
     ChevronRight,
@@ -380,7 +379,7 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
             {/* Mobile Overlay */}
             {isOpen && (
                 <div
-                    className="fixed inset-0 bg-black/20 z-[60] md:hidden backdrop-blur-md transition-opacity"
+                    className="fixed inset-0 bg-black/5 z-[60] md:hidden backdrop-blur-[1px] transition-opacity"
                     onClick={onClose}
                 />
             )}
@@ -419,16 +418,6 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
                         buttonProps={{ 'data-sidebar-focusable': 'true' }}
                     />
                 </div>
-
-                {/* Mobile Close Button */}
-                <button
-                    onClick={onClose}
-                    onKeyDown={handleSidebarButtonKeyDown}
-                    data-sidebar-focusable="true"
-                    className="md:hidden p-2 -mr-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200/50 rounded-lg transition-colors absolute top-4 right-4"
-                >
-                    <X size={20} />
-                </button>
 
                 {/* Navigation */}
                 <div className={cn(

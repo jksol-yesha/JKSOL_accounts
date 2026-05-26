@@ -305,6 +305,60 @@ const DescriptionTooltip = ({ description }) => {
     );
 };
 
+const MobileTransactionField = ({
+    label,
+    value,
+    colSpan = 1,
+    valueClassName = '',
+    truncateValue = false,
+    title,
+}) => (
+    <div className={cn("min-w-0 space-y-0.5", colSpan === 2 && "col-span-2")}>
+        <div className="text-[9px] font-bold uppercase tracking-[0.18em] text-slate-400">
+            {label}
+        </div>
+        <div
+            className={cn(
+                "text-xs font-medium text-slate-700",
+                truncateValue ? "truncate" : "break-words",
+                valueClassName,
+            )}
+            title={title}
+        >
+            {value}
+        </div>
+    </div>
+);
+
+const getTransactionPartyName = (txn) =>
+    txn?.contact ||
+    txn?.payee ||
+    txn?.counterpartyName ||
+    txn?.party ||
+    txn?.name ||
+    '-';
+
+const getTransactionTypeLabel = (txn) =>
+    txn?.transactionType?.name || txn?.txnType || '-';
+
+const getTransactionAmountValue = (txn) =>
+    Number(
+        txn?.amountBaseCurrency ??
+            txn?.amountBase ??
+            txn?.finalAmountLocal ??
+            txn?.amountLocal ??
+            0,
+    ) || 0;
+
+const getTransactionNotes = (txn) => txn?.notes || txn?.description || '';
+
+const getTransactionAttachmentPath = (txn) =>
+    txn?.attachmentPath ||
+    txn?.attachment ||
+    txn?.receiptUrl ||
+    txn?.attachmentUrl ||
+    null;
+
 const enrichTransaction = (txn) => {
     // If already enriched or no entries, return as is (but ensure name fields exist)
     let accountName = txn.account?.name || '-';
@@ -898,6 +952,9 @@ const Transactions = () => {
     // Toolbar States
     const [searchTerm, setSearchTerm] = useState('');
     const [visibleColumns, setVisibleColumns] = useState(DEFAULT_VISIBLE_TXN_COLUMNS);
+    const [isMobileViewport, setIsMobileViewport] = useState(() =>
+        typeof window !== 'undefined' ? window.innerWidth < 768 : false,
+    );
 
 
 
@@ -1073,6 +1130,8 @@ const Transactions = () => {
     const columnSettingsKey = `${TXN_TABLE_COLUMN_STORAGE_KEY}:${user?.id || 'user'}`;
     const showInitialLoader = loading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
+    const showMobileSearchField =
+        isMobileViewport && (isMobileSearchOpen || searchTerm.trim().length > 0);
 
     useEffect(() => {
         try {
@@ -1116,6 +1175,25 @@ const Transactions = () => {
             // Ignore storage errors
         }
     }, [columnSettingsKey, user?.id, visibleColumns]);
+
+    useEffect(() => {
+        const handleResize = () => {
+            setIsMobileViewport(window.innerWidth < 768);
+        };
+
+        window.addEventListener('resize', handleResize);
+        return () => window.removeEventListener('resize', handleResize);
+    }, []);
+
+    useEffect(() => {
+        if (!isMobileViewport) {
+            setIsMobileSearchOpen(false);
+        }
+    }, [isMobileViewport]);
+
+    const handleMobileSearchToggle = () => {
+        setIsMobileSearchOpen((current) => !current);
+    };
 
 
 
@@ -1453,6 +1531,8 @@ const Transactions = () => {
     }, [scopedTransactions]);
 
     const COLORS = ['#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+    const mobileTrendChartWidth = Math.max(insightsData.trendData.length * 42, 640);
+    const mobileTaxChartWidth = Math.max(insightsData.gstTrendData.length * 42, 640);
 
 
     const handleFilterReset = () => {
@@ -1906,163 +1986,361 @@ const Transactions = () => {
                     </div>
 
                     {/* Global Filters & Actions Row */}
-                    <div className="px-5 pt-3 pb-4 flex flex-col xl:flex-row justify-between xl:items-center gap-4 print:hidden relative z-20 w-full bg-transparent border-b border-gray-100">
-                        {/* LEFT SIDE: Core Filters */}
-                        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
-                            <div className={isDateFilterDisabled ? "pointer-events-none opacity-60" : ""}>
-                                <DateRangePicker
-                                    startDate={appliedFilters.dateRange?.startDate}
-                                    endDate={appliedFilters.dateRange?.endDate}
-                                    selectedPreset={appliedFilters.dateRange?.preset}
-                                    presetOptions={datePresets}
-                                    onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
-                                    className="h-[32px]"
-                                />
-                            </div>
+                    {isMobileViewport ? (
+                        <div className="relative z-20 w-full border-b border-gray-100 bg-transparent px-5 pb-4 pt-3 print:hidden">
+                            <div className="space-y-2.5">
+                                <div className={cn("w-full", isDateFilterDisabled && "pointer-events-none opacity-60")}>
+                                    <DateRangePicker
+                                        startDate={appliedFilters.dateRange?.startDate}
+                                        endDate={appliedFilters.dateRange?.endDate}
+                                        selectedPreset={appliedFilters.dateRange?.preset}
+                                        presetOptions={datePresets}
+                                        onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
+                                        className="h-[32px] w-full"
+                                    />
+                                </div>
 
-                            <BranchSelector flatSelectAll hideSettings />
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="min-w-0 [&>div]:w-full [&>div>button]:w-full">
+                                        <BranchSelector
+                                            flatSelectAll
+                                            hideSettings
+                                            className="w-full"
+                                            triggerClassName="w-full justify-between"
+                                        />
+                                    </div>
+                                    <div className="min-w-0 [&>div]:w-full">
+                                        <CurrencySelector
+                                            value={appliedFilters.currency}
+                                            onChange={(val) => {
+                                                setAppliedFilters(prev => ({ ...prev, currency: val }));
+                                                updatePreferences({ currency: val });
+                                            }}
+                                            className="w-full justify-between px-3"
+                                            triggerTextClassName="text-[12px]"
+                                            optionTextClassName="text-[12px]"
+                                        />
+                                    </div>
+                                    <div className="min-w-0 [&>div]:w-full">
+                                        <FilterDropdown
+                                            value={appliedFilters.party}
+                                            onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
+                                            placeholder="Party"
+                                            options={availableParties}
+                                            isMultiSelect
+                                            showSelectAll
+                                            flatSelectAll
+                                            keepButtonNeutral
+                                            neutralCountBadge
+                                            selectAllLabel="All Parties"
+                                            allDisplayLabel="All Parties"
+                                            buttonClassName="w-full text-slate-800 h-[32px]"
+                                        />
+                                    </div>
+                                    <div className="min-w-0 [&>div]:w-full">
+                                        <FilterDropdown
+                                            value={appliedFilters.type}
+                                            onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
+                                            placeholder="Type"
+                                            options={[
+                                                { label: "Income", value: "income" },
+                                                { label: "Expense", value: "expense" },
+                                                { label: "Transfer", value: "transfer" },
+                                                { label: "Investment", value: "investment" },
+                                            ]}
+                                            isMultiSelect={true}
+                                            showSelectAll={false}
+                                            hideApplyButton={true}
+                                            keepButtonNeutral
+                                            neutralCountBadge
+                                            allDisplayLabel="All Types"
+                                            buttonClassName="w-full h-[32px]"
+                                        />
+                                    </div>
+                                </div>
 
-                            <CurrencySelector
-                                value={appliedFilters.currency}
-                                onChange={(val) => {
-                                    setAppliedFilters(prev => ({ ...prev, currency: val }));
-                                    updatePreferences({ currency: val });
-                                }}
-                                triggerTextClassName="text-[12px]"
-                                optionTextClassName="text-[12px]"
-                            />
-
-                            <FilterDropdown
-                                value={appliedFilters.party}
-                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
-                                placeholder="Party"
-                                options={availableParties}
-                                isMultiSelect
-                                showSelectAll
-                                flatSelectAll
-                                keepButtonNeutral
-                                neutralCountBadge
-                                selectAllLabel="All Parties"
-                                allDisplayLabel="All Parties"
-                                buttonClassName="w-[120px] text-slate-800 h-[32px]"
-                            />
-
-                            <FilterDropdown
-                                value={appliedFilters.type}
-                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
-                                placeholder="Type"
-                                options={[
-                                    { label: "Income", value: "income" },
-                                    { label: "Expense", value: "expense" },
-                                    { label: "Transfer", value: "transfer" },
-                                    { label: "Investment", value: "investment" },
-                                ]}
-                                isMultiSelect={true}
-                                showSelectAll={false}
-                                hideApplyButton={true}
-                                keepButtonNeutral
-                                neutralCountBadge
-                                allDisplayLabel="All Types"
-                                buttonClassName="w-[110px] h-[32px]"
-                            />
-
-
-                            <button
-                                type="button"
-                                onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <Activity size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
-                            </button>
-                        </div>
-
-                        {/* RIGHT SIDE: Utilities & Search */}
-                        <div className="shrink-0 flex flex-wrap items-center justify-start xl:justify-end gap-2 flex-none mt-2 xl:mt-0">
-                            <label className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-blue-600 hover:bg-blue-50 hover:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer">
-                                <input 
-                                    type="file" 
-                                    accept=".pdf" 
-                                    className="hidden" 
-                                    onChange={async (e) => {
-                                        const file = e.target.files[0];
-                                        if (file) {
-                                            setUploadedFile(file);
-                                            setIsUploadingStatement(true);
-                                            setIsImportReviewModalOpen(true);
-                                            setParsedStatementData(null);
-                                            const formData = new FormData();
-                                            formData.append('file', file);
-                                            try {
-                                                const res = await apiService.transactions.uploadStatement(formData);
-                                                if (res.success) {
-                                                    setParsedStatementData(res.data);
+                                <div className="flex items-center gap-2">
+                                    <label className="group flex h-[32px] min-w-0 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-blue-200 bg-blue-50/50 px-3 text-[12px] font-medium text-blue-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-blue-300 hover:bg-blue-50 focus-within:border-blue-300 focus-within:bg-blue-50 focus-within:ring-2 focus-within:ring-blue-100">
+                                        <input
+                                            type="file"
+                                            accept=".pdf"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                                const file = e.target.files[0];
+                                                if (file) {
+                                                    setUploadedFile(file);
+                                                    setIsUploadingStatement(true);
+                                                    setIsImportReviewModalOpen(true);
+                                                    setParsedStatementData(null);
+                                                    const formData = new FormData();
+                                                    formData.append('file', file);
+                                                    try {
+                                                        const res = await apiService.transactions.uploadStatement(formData);
+                                                        if (res.success) {
+                                                            setParsedStatementData(res.data);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('Failed to parse statement', error);
+                                                        alert(error.response?.data?.message || 'Failed to parse statement');
+                                                        setIsImportReviewModalOpen(false);
+                                                    } finally {
+                                                        setIsUploadingStatement(false);
+                                                        e.target.value = null;
+                                                    }
                                                 }
-                                            } catch (error) {
-                                                console.error('Failed to parse statement', error);
-                                                alert(error.response?.data?.message || 'Failed to parse statement');
-                                                setIsImportReviewModalOpen(false);
-                                            } finally {
-                                                setIsUploadingStatement(false);
-                                                e.target.value = null;
-                                            }
-                                        }
-                                    }}
-                                />
-                                {isUploadingStatement ? (
-                                    <span className="font-medium text-blue-400">Parsing...</span>
-                                ) : (
-                                    <span className="font-medium">Import Statement</span>
-                                )}
-                            </label>
+                                            }}
+                                        />
+                                        {isUploadingStatement ? (
+                                            <span className="font-medium text-blue-400">Parsing...</span>
+                                        ) : (
+                                            <span className="font-medium">Import Statement</span>
+                                        )}
+                                    </label>
 
-                            <div className="relative" ref={exportDropdownRef}>
-                                <button
-                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="group h-[32px] px-2 flex items-center justify-center rounded-md text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
-                                >
-                                    <MoreVertical size={16} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
-                                </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
+                                        className="group flex h-[32px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-[12px] font-medium text-gray-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] outline-none transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4]"
+                                    >
+                                        <Activity size={14} className="text-gray-400 transition-colors group-hover:text-[#4A8AF4]" />
+                                        <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
+                                    </button>
 
-                                {isExportDropdownOpen && (
-                                    <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                    <button
+                                        type="button"
+                                        onClick={handleMobileSearchToggle}
+                                        className={cn(
+                                            "flex h-[32px] w-[32px] shrink-0 items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4]",
+                                            showMobileSearchField && "border-[#BAE6FD] bg-[#F0F9FF] text-[#4A8AF4]",
+                                        )}
+                                        aria-label="Search transactions"
+                                    >
+                                        <Search size={14} />
+                                    </button>
+
+                                    <div className="relative shrink-0" ref={exportDropdownRef}>
                                         <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                setIsImportHistoryOpen(true);
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
+                                            onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                            className="group flex h-[32px] w-[32px] items-center justify-center rounded-md border border-gray-200 bg-white text-gray-600 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all hover:border-[#BAE6FD] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] focus:outline-none"
                                         >
-                                            <History size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Import History
+                                            <MoreVertical size={16} className="text-gray-500 transition-colors group-hover:text-[#4A8AF4]" />
                                         </button>
-                                        <div className="h-px bg-gray-100 my-1"></div>
-                                        <div className="px-4 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Export As</div>
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                handleClientExportExcel();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
-                                        >
-                                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Excel Document
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                handleClientExportPDF();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
-                                        >
-                                            <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            PDF Document
-                                        </button>
+
+                                        {isExportDropdownOpen && (
+                                            <div className="absolute right-0 mt-1.5 w-48 rounded-lg border border-gray-200 bg-white py-1.5 shadow-[0_8px_30px_rgb(0,0,0,0.12)] z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                <button
+                                                    onClick={() => {
+                                                        setIsExportDropdownOpen(false);
+                                                        setIsImportHistoryOpen(true);
+                                                    }}
+                                                    className="group flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] font-medium text-slate-700 transition-colors hover:bg-[#EEF0FC] hover:text-[#4A8AF4]"
+                                                >
+                                                    <History size={14} className="text-gray-400 transition-colors group-hover:text-[#4A8AF4]" />
+                                                    Import History
+                                                </button>
+                                                <div className="my-1 h-px bg-gray-100"></div>
+                                                <div className="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">Export As</div>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsExportDropdownOpen(false);
+                                                        handleClientExportExcel();
+                                                    }}
+                                                    className="group flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] font-medium text-slate-700 transition-colors hover:bg-[#EEF0FC] hover:text-[#4A8AF4]"
+                                                >
+                                                    <Download size={14} className="text-gray-400 transition-colors group-hover:text-[#4A8AF4]" />
+                                                    Excel Document
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        setIsExportDropdownOpen(false);
+                                                        handleClientExportPDF();
+                                                    }}
+                                                    className="group flex w-full items-center gap-2 px-4 py-2 text-left text-[12px] font-medium text-slate-700 transition-colors hover:bg-[#EEF0FC] hover:text-[#4A8AF4]"
+                                                >
+                                                    <Download size={14} className="text-gray-400 transition-colors group-hover:text-[#4A8AF4]" />
+                                                    PDF Document
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {showMobileSearchField && (
+                                    <div className="relative">
+                                        <Search
+                                            size={14}
+                                            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            placeholder="Search transactions..."
+                                            className="h-[32px] w-full rounded-md border border-gray-200 bg-white pl-8 pr-3 text-[13px] font-medium placeholder:text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)] outline-none transition-all focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100"
+                                        />
                                     </div>
                                 )}
                             </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="px-5 pt-3 pb-4 flex flex-col xl:flex-row justify-between xl:items-center gap-4 print:hidden relative z-20 w-full bg-transparent border-b border-gray-100">
+                            {/* LEFT SIDE: Core Filters */}
+                            <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-0">
+                                <div className={isDateFilterDisabled ? "pointer-events-none opacity-60" : ""}>
+                                    <DateRangePicker
+                                        startDate={appliedFilters.dateRange?.startDate}
+                                        endDate={appliedFilters.dateRange?.endDate}
+                                        selectedPreset={appliedFilters.dateRange?.preset}
+                                        presetOptions={datePresets}
+                                        onApplyRange={(range) => setAppliedFilters(prev => ({ ...prev, dateRange: range }))}
+                                        className="h-[32px]"
+                                    />
+                                </div>
+
+                                <BranchSelector flatSelectAll hideSettings />
+
+                                <CurrencySelector
+                                    value={appliedFilters.currency}
+                                    onChange={(val) => {
+                                        setAppliedFilters(prev => ({ ...prev, currency: val }));
+                                        updatePreferences({ currency: val });
+                                    }}
+                                    triggerTextClassName="text-[12px]"
+                                    optionTextClassName="text-[12px]"
+                                />
+
+                                <FilterDropdown
+                                    value={appliedFilters.party}
+                                    onChange={(val) => setAppliedFilters(prev => ({ ...prev, party: val }))}
+                                    placeholder="Party"
+                                    options={availableParties}
+                                    isMultiSelect
+                                    showSelectAll
+                                    flatSelectAll
+                                    keepButtonNeutral
+                                    neutralCountBadge
+                                    selectAllLabel="All Parties"
+                                    allDisplayLabel="All Parties"
+                                    buttonClassName="w-[120px] text-slate-800 h-[32px]"
+                                />
+
+                                <FilterDropdown
+                                    value={appliedFilters.type}
+                                    onChange={(val) => setAppliedFilters(prev => ({ ...prev, type: val }))}
+                                    placeholder="Type"
+                                    options={[
+                                        { label: "Income", value: "income" },
+                                        { label: "Expense", value: "expense" },
+                                        { label: "Transfer", value: "transfer" },
+                                        { label: "Investment", value: "investment" },
+                                    ]}
+                                    isMultiSelect={true}
+                                    showSelectAll={false}
+                                    hideApplyButton={true}
+                                    keepButtonNeutral
+                                    neutralCountBadge
+                                    allDisplayLabel="All Types"
+                                    buttonClassName="w-[110px] h-[32px]"
+                                />
+
+
+                                <button
+                                    type="button"
+                                    onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
+                                    className="group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                >
+                                    <Activity size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                    <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
+                                </button>
+                            </div>
+
+                            {/* RIGHT SIDE: Utilities & Search */}
+                            <div className="shrink-0 flex flex-wrap items-center justify-start xl:justify-end gap-2 flex-none mt-2 xl:mt-0">
+                                <label className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-blue-200 bg-blue-50/50 text-blue-600 hover:bg-blue-50 hover:border-blue-300 focus-within:bg-blue-50 focus-within:border-blue-300 focus-within:ring-2 focus-within:ring-blue-100 transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] cursor-pointer">
+                                    <input 
+                                        type="file" 
+                                        accept=".pdf" 
+                                        className="hidden" 
+                                        onChange={async (e) => {
+                                            const file = e.target.files[0];
+                                            if (file) {
+                                                setUploadedFile(file);
+                                                setIsUploadingStatement(true);
+                                                setIsImportReviewModalOpen(true);
+                                                setParsedStatementData(null);
+                                                const formData = new FormData();
+                                                formData.append('file', file);
+                                                try {
+                                                    const res = await apiService.transactions.uploadStatement(formData);
+                                                    if (res.success) {
+                                                        setParsedStatementData(res.data);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('Failed to parse statement', error);
+                                                    alert(error.response?.data?.message || 'Failed to parse statement');
+                                                    setIsImportReviewModalOpen(false);
+                                                } finally {
+                                                    setIsUploadingStatement(false);
+                                                    e.target.value = null;
+                                                }
+                                            }
+                                        }}
+                                    />
+                                    {isUploadingStatement ? (
+                                        <span className="font-medium text-blue-400">Parsing...</span>
+                                    ) : (
+                                        <span className="font-medium">Import Statement</span>
+                                    )}
+                                </label>
+
+                                <div className="relative" ref={exportDropdownRef}>
+                                    <button
+                                        onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
+                                        className="group h-[32px] px-2 flex items-center justify-center rounded-md text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all"
+                                    >
+                                        <MoreVertical size={16} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
+                                    </button>
+
+                                    {isExportDropdownOpen && (
+                                        <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <button
+                                                onClick={() => {
+                                                    setIsExportDropdownOpen(false);
+                                                    setIsImportHistoryOpen(true);
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
+                                            >
+                                                <History size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                Import History
+                                            </button>
+                                            <div className="h-px bg-gray-100 my-1"></div>
+                                            <div className="px-4 py-1 text-[10px] font-bold text-gray-400 uppercase tracking-wider">Export As</div>
+                                            <button
+                                                onClick={() => {
+                                                    setIsExportDropdownOpen(false);
+                                                    handleClientExportExcel();
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
+                                            >
+                                                <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                Excel Document
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setIsExportDropdownOpen(false);
+                                                    handleClientExportPDF();
+                                                }}
+                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-[#4A8AF4] transition-colors flex items-center gap-2 group"
+                                            >
+                                                <Download size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
+                                                PDF Document
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Conditionally Visible Charts */}
                     <div className="px-5 w-full print:hidden">
@@ -2079,7 +2357,16 @@ const Transactions = () => {
                                         <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
                                             <TrendingUp size={14} className="text-primary" /> Cash Flow Trend
                                         </h3>
-                                        <div className="h-[220px] w-full">
+                                        <div
+                                            className={cn(
+                                                "h-[220px] w-full",
+                                                isMobileViewport && "overflow-x-auto overflow-y-hidden pb-1",
+                                            )}
+                                        >
+                                            <div
+                                                className="h-full"
+                                                style={{ width: '100%' }}
+                                            >
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={insightsData.trendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barGap={2} barSize={8}>
                                                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -2128,6 +2415,7 @@ const Transactions = () => {
                                                     <Bar dataKey="expense" name="Expense" fill="#f43f5e" radius={[4, 4, 0, 0]} />
                                                 </BarChart>
                                             </ResponsiveContainer>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -2135,8 +2423,17 @@ const Transactions = () => {
                                         <h3 className="text-[13px] font-bold text-gray-900 mb-6 flex items-center gap-2">
                                             <FileText size={14} className="text-black" /> Tax Paid
                                         </h3>
-                                        <div className="h-[220px] w-full">
+                                        <div
+                                            className={cn(
+                                                "h-[220px] w-full",
+                                                isMobileViewport && "overflow-x-auto overflow-y-hidden pb-1",
+                                            )}
+                                        >
                                             {insightsData.totalGstPaid > 0 ? (
+                                                <div
+                                                    className="h-full"
+                                                    style={{ width: '100%' }}
+                                                >
                                                 <ResponsiveContainer width="100%" height="100%">
                                                     <BarChart data={insightsData.gstTrendData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }} barSize={12}>
                                                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
@@ -2180,6 +2477,7 @@ const Transactions = () => {
                                                         <Bar dataKey="gstPaid" name="Tax Paid" fill="#6366f1" radius={[4, 4, 0, 0]} />
                                                     </BarChart>
                                                 </ResponsiveContainer>
+                                                </div>
                                             ) : (
                                                 <div className="h-full flex flex-col items-center justify-center text-center text-[12px] font-medium text-gray-400 gap-2">
                                                     <FileText size={24} className="text-gray-200" />
@@ -2193,90 +2491,264 @@ const Transactions = () => {
                         </div>
                     </div>
 
-
-                    <div
-                        className="transactions-grid-shell w-full px-5 pb-1 relative flex flex-col print:hidden"
-                        style={{ height: 'calc(100vh - 95px)', minHeight: '400px' }}
-                        aria-busy={loading}
-                    >
-                        <div className="h-full w-full relative">
-                            <div className="absolute inset-0">
-                                <AgGridReact
-                                    ref={gridRef}
-                                    theme={themeQuartz}
-                                    rowData={filteredTransactions}
-                                    columnDefs={colDefs}
-                                    defaultColDef={defaultColDef}
-                                    rowSelection="multiple"
-                                    rowHeight={36}
-                                    headerHeight={44}
-                                    animateRows={true}
-                                    pagination={true}
-                                    paginationPageSize={50}
-                                    paginationPageSizeSelector={[25, 50, 100, 200]}
-                                    onRowClicked={(event) => {
-                                        const target = event.event?.target;
-                                        if (target && target.closest && target.closest('.attachment-btn')) {
-                                            return;
-                                        }
-                                        if (canEditTxn(event.data)) {
-                                            handleEdit(event.data);
-                                        }
-                                    }}
-                                    context={{
-                                        handleEdit,
-                                        handleDelete,
-                                        canEditTxn,
-                                        setFullScreenAttachment,
-                                        formatCurrency,
-                                        formatDate,
-                                        visibleColumns,
-                                        setVisibleColumns
-                                    }}
-                                    loadingOverlayComponent={CustomGridOverlay}
-                                    loadingOverlayComponentParams={{ isLoading: true }}
-                                    noRowsOverlayComponent={CustomGridOverlay}
-                                    noRowsOverlayComponentParams={{ isLoading: loading }}
-                                />
+                    {isMobileViewport ? (
+                        <div className="relative w-full px-5 pb-6 print:hidden" aria-busy={loading}>
+                            <div className="mb-4 flex items-center justify-between px-2">
+                                <div>
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <ArrowDownLeft size={12} className="text-emerald-600" />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">Inflow</span>
+                                    </div>
+                                    <div className="text-[13px] font-extrabold text-slate-900">
+                                        <CompactCurrency amount={insightsData.totalIncome} placement="top" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <ArrowUpRight size={12} className="text-rose-600" />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">Outflow</span>
+                                    </div>
+                                    <div className="text-[13px] font-extrabold text-slate-900">
+                                        <CompactCurrency amount={insightsData.totalExpense} placement="top" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-1.5 mb-1">
+                                        <Activity size={12} className={insightsData.netFlow >= 0 ? "text-primary" : "text-rose-600"} />
+                                        <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-500">Net Flow</span>
+                                    </div>
+                                    <div className={cn("text-[13px] font-extrabold", insightsData.netFlow >= 0 ? "text-primary" : "text-rose-600")}>
+                                        <CompactCurrency amount={insightsData.netFlow} placement="top" />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        {/* Summary Overlay portalled into AG Grid Footer */}
-                        {pagingPanel && createPortal(
-                            <div className="flex items-center gap-6 print:hidden mr-auto pl-5 h-full pointer-events-auto" style={{ order: -1 }}>
-                                <div className="flex items-center gap-2.5 min-w-fit">
-                                    <div className="">
-                                        <ArrowDownLeft size={16} className="text-emerald-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
-                                        <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalIncome} placement="top" /></div>
-                                    </div>
+                            {showInitialLoader ? (
+                                <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-gray-200 bg-white/95 shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                                    <Loader className="h-7 w-7 text-[#4A8AF4]" />
                                 </div>
-                                <div className="flex items-center gap-2.5 min-w-fit">
-                                    <div className="">
-                                        <ArrowUpRight size={16} className="text-rose-600" />
-                                    </div>
-                                    <div>
-                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
-                                        <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalExpense} placement="top" /></div>
-                                    </div>
+                            ) : filteredTransactions.length > 0 ? (
+                                <div className="space-y-3">
+                                    {filteredTransactions.map((txn, index) => {
+                                        const partyName = getTransactionPartyName(txn);
+                                        const typeLabel = getTransactionTypeLabel(txn);
+                                        const normalizedType = String(typeLabel).toLowerCase();
+                                        const amount = getTransactionAmountValue(txn);
+                                        const notes = getTransactionNotes(txn);
+                                        const attachmentPath = getTransactionAttachmentPath(txn);
+                                        const amountColor =
+                                            normalizedType === 'income'
+                                                ? 'text-emerald-600'
+                                                : normalizedType === 'expense'
+                                                    ? 'text-rose-600'
+                                                    : 'text-slate-900';
+                                        const typeBadgeClassName =
+                                            normalizedType === 'income'
+                                                ? 'bg-emerald-50 text-emerald-700'
+                                                : normalizedType === 'expense'
+                                                    ? 'bg-rose-50 text-rose-600'
+                                                    : normalizedType === 'transfer'
+                                                        ? 'bg-sky-50 text-sky-700'
+                                                        : 'bg-slate-100 text-slate-600';
+                                        const canEdit = canEditTxn(txn);
+
+                                        return (
+                                            <div
+                                                key={txn.baseKey || txn.id || index}
+                                                className="rounded-2xl border border-gray-200 bg-white/95 p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)]"
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="truncate text-sm font-bold text-slate-800">
+                                                            {partyName}
+                                                        </div>
+                                                    </div>
+                                                    <div className="shrink-0 text-right">
+                                                        <div className={cn("text-sm font-extrabold", amountColor)}>
+                                                            <CompactCurrency amount={amount} placement="top" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="mt-1 flex items-center justify-between gap-3">
+                                                    <div className="flex flex-wrap items-center gap-2">
+                                                        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide", typeBadgeClassName)}>
+                                                            {typeLabel}
+                                                        </span>
+                                                        <span className="text-[11px] font-medium text-slate-400">
+                                                            {formatDate(txn.txnDate) || '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0 -mr-2">
+                                                        {attachmentPath ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setFullScreenAttachment({ isOpen: true, path: attachmentPath })}
+                                                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-[#F0F9FF] hover:text-[#4A8AF4]"
+                                                                title="View Attachment"
+                                                            >
+                                                                <Paperclip size={14} strokeWidth={2.4} />
+                                                            </button>
+                                                        ) : null}
+                                                        {canEdit ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => handleEdit(txn)}
+                                                                className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-[#4A8AF4]"
+                                                                title="Edit"
+                                                            >
+                                                                <Edit size={14} />
+                                                            </button>
+                                                        ) : null}
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => handleDelete(e, txn)}
+                                                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3">
+                                                    <MobileTransactionField
+                                                        label="Account"
+                                                        value={txn.account?.name || '-'}
+                                                        truncateValue
+                                                        title={txn.account?.name || '-'}
+                                                    />
+                                                    <MobileTransactionField
+                                                        label="Category"
+                                                        value={txn.category?.name || '-'}
+                                                    />
+                                                    <MobileTransactionField
+                                                        label="Amount"
+                                                        value={<CompactCurrency amount={amount} placement="top" />}
+                                                        valueClassName={amountColor}
+                                                    />
+                                                    <MobileTransactionField
+                                                        label="Created By"
+                                                        value={txn.createdByName || txn.createdByDisplayName || txn.creatorName || '-'}
+                                                    />
+                                                    {hasBranchColumn ? (
+                                                        <MobileTransactionField
+                                                            label="Branch"
+                                                            value={txn.branchNames?.join(', ') || '-'}
+                                                            colSpan={2}
+                                                        />
+                                                    ) : null}
+                                                    {notes ? (
+                                                        <MobileTransactionField
+                                                            label="Notes"
+                                                            value={notes}
+                                                            colSpan={2}
+                                                        />
+                                                    ) : null}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                                <div className="flex items-center gap-2.5 min-w-fit pl-5 border-l border-gray-200">
-                                    <div className="">
-                                        <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
-                                    </div>
-                                    <div>
-                                        <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
-                                        <div className={cn("text-sm font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
-                                            <CompactCurrency amount={insightsData.netFlow} placement="top" />
+                            ) : (
+                                <div className="rounded-2xl border border-dashed border-slate-200 bg-white/95 px-4 py-12 text-center shadow-[0_8px_24px_rgba(15,23,42,0.04)]">
+                                    <div className="text-sm font-semibold text-slate-700">No transactions found</div>
+                                    <div className="mt-1 text-xs text-slate-400">Try adjusting your filters or import a new statement.</div>
+                                </div>
+                            )}
+
+                            {showOverlayLoader && (
+                                <LoadingOverlay
+                                    label="Loading transactions..."
+                                    className="rounded-2xl"
+                                />
+                            )}
+                        </div>
+                    ) : (
+                        <div
+                            className="transactions-grid-shell w-full px-5 pb-1 relative flex flex-col print:hidden"
+                            style={{ height: 'calc(100vh - 95px)', minHeight: '400px' }}
+                            aria-busy={loading}
+                        >
+                            <div className="h-full w-full relative">
+                                <div className="absolute inset-0">
+                                    <AgGridReact
+                                        ref={gridRef}
+                                        theme={themeQuartz}
+                                        rowData={filteredTransactions}
+                                        columnDefs={colDefs}
+                                        defaultColDef={defaultColDef}
+                                        rowSelection="multiple"
+                                        rowHeight={36}
+                                        headerHeight={44}
+                                        animateRows={true}
+                                        pagination={true}
+                                        paginationPageSize={50}
+                                        paginationPageSizeSelector={[25, 50, 100, 200]}
+                                        onRowClicked={(event) => {
+                                            const target = event.event?.target;
+                                            if (target && target.closest && target.closest('.attachment-btn')) {
+                                                return;
+                                            }
+                                            if (canEditTxn(event.data)) {
+                                                handleEdit(event.data);
+                                            }
+                                        }}
+                                        context={{
+                                            handleEdit,
+                                            handleDelete,
+                                            canEditTxn,
+                                            setFullScreenAttachment,
+                                            formatCurrency,
+                                            formatDate,
+                                            visibleColumns,
+                                            setVisibleColumns
+                                        }}
+                                        loadingOverlayComponent={CustomGridOverlay}
+                                        loadingOverlayComponentParams={{ isLoading: true }}
+                                        noRowsOverlayComponent={CustomGridOverlay}
+                                        noRowsOverlayComponentParams={{ isLoading: loading }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Summary Overlay portalled into AG Grid Footer */}
+                            {pagingPanel && createPortal(
+                                <div className="flex items-center gap-6 print:hidden mr-auto pl-5 h-full pointer-events-auto" style={{ order: -1 }}>
+                                    <div className="flex items-center gap-2.5 min-w-fit">
+                                        <div className="">
+                                            <ArrowDownLeft size={16} className="text-emerald-600" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Inflow</div>
+                                            <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalIncome} placement="top" /></div>
                                         </div>
                                     </div>
-                                </div>
-                            </div>,
-                            pagingPanel
-                        )}
-                    </div>
+                                    <div className="flex items-center gap-2.5 min-w-fit">
+                                        <div className="">
+                                            <ArrowUpRight size={16} className="text-rose-600" />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Total Outflow</div>
+                                            <div className="text-sm font-extrabold text-gray-900 whitespace-nowrap leading-none"><CompactCurrency amount={insightsData.totalExpense} placement="top" /></div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2.5 min-w-fit pl-5 border-l border-gray-200">
+                                        <div className="">
+                                            <Activity size={16} className={insightsData.netFlow >= 0 ? "text-primary" : "text-red-600"} />
+                                        </div>
+                                        <div>
+                                            <div className="text-xs font-semibold text-gray-500 mb-[2px] leading-none">Net Flow</div>
+                                            <div className={cn("text-sm font-extrabold whitespace-nowrap leading-none", insightsData.netFlow >= 0 ? "text-primary" : "text-red-600")}>
+                                                <CompactCurrency amount={insightsData.netFlow} placement="top" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>,
+                                pagingPanel
+                            )}
+                        </div>
+                    )}
 
                     {/* Print Only Simple HTML Table (Dynamically Built) */}
                     <div id="txn-print-container" className="hidden print:block txn-print-surface w-full"></div>

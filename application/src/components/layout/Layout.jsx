@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { ArrowUp } from 'lucide-react';
+import { ArrowRight, ArrowUp } from 'lucide-react';
 
 import Sidebar from './Sidebar';
 import { SidebarLayoutProvider } from './SidebarLayoutContext';
@@ -33,6 +33,21 @@ const Footer = ({ className }) => (
         <p>© 2026 JKSOL. All rights reserved.</p>
     </footer>
 );
+
+const MobileTopBar = ({ onOpenSidebar }) => {
+    return (
+        <div className="md:hidden flex-none bg-[#f4f6fe] px-4 pt-3 pb-2 no-print print:hidden">
+            <button
+                type="button"
+                onClick={onOpenSidebar}
+                aria-label="Open sidebar"
+                className="flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+            >
+                <ArrowRight size={24} strokeWidth={2.2} />
+            </button>
+        </div>
+    );
+};
 
 const Layout = ({ children }) => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -125,7 +140,6 @@ const Layout = ({ children }) => {
         return () => window.removeEventListener(scrollModeEventName, handleScrollModeChange);
     }, [location.pathname]);
 
-    // Prevent back navigation
     React.useEffect(() => {
         // Push current state to history stack
         window.history.pushState(null, document.title, window.location.href);
@@ -178,7 +192,7 @@ const Layout = ({ children }) => {
             <SidebarLayoutProvider value={sidebarLayoutValue}>
                 <div className="flex h-screen bg-white overflow-hidden print:h-auto print:overflow-visible print:bg-white">
                 <div className={cn(
-                    "no-print print:hidden flex-none",
+                    "no-print print:hidden w-0 md:flex-none md:w-auto",
                     usesSidebarHoverOverlay && "md:w-[50px] lg:w-[52px]"
                 )}>
                     <Sidebar
@@ -189,18 +203,22 @@ const Layout = ({ children }) => {
                 </div>
 
                 <div className="flex-1 flex flex-col min-w-0 transition-all duration-300 ease-in-out print:w-full print:block print:h-auto print:overflow-visible">
+                    <MobileTopBar
+                        onOpenSidebar={() => setIsSidebarOpen(true)}
+                    />
+
                     <main
                         id="app-main-content"
                         tabIndex={-1}
                         className={cn(
                         "flex-1 no-scrollbar relative min-h-0 flex flex-col print:h-auto print:overflow-visible print:block print:w-full print:flex-none",
-                        isDashboard ? "overflow-hidden" : "overflow-y-auto"
+                        isDashboard && !isMobileViewport ? "overflow-hidden" : "overflow-y-auto"
                     )}
                         ref={mainRef}
                     >
                         <div className={cn(
                             "w-full flex flex-col print:h-auto print:block print:w-full",
-                            "h-full min-h-0 flex-1", isDashboard && "overflow-hidden"
+                            "h-full min-h-0 flex-1", isDashboard && !isMobileViewport && "overflow-hidden"
                         )}>
                             <div className={cn(
                                 "flex-1 min-h-0"

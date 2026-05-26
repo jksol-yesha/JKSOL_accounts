@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
+    ArrowLeft,
     Filter,
     ArrowUpCircle,
     ArrowDownCircle,
@@ -139,8 +139,8 @@ const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onK
         const updatePosition = () => {
             if (!buttonRef.current) return;
             const rect = buttonRef.current.getBoundingClientRect();
-            const width = 288;
             const viewportWidth = window.innerWidth;
+            const width = Math.min(Math.max(rect.width, 240), viewportWidth - 24);
             const left = Math.min(
                 Math.max(12, rect.left + rect.width / 2 - width / 2),
                 Math.max(12, viewportWidth - width - 12)
@@ -148,7 +148,8 @@ const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onK
 
             setDropdownPosition({
                 top: rect.bottom + 8,
-                left
+                left,
+                width
             });
         };
 
@@ -247,9 +248,9 @@ const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onK
     };
 
     const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
-    const allTypesLabelClassName = 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]';
-    const selectionLabelClassName = 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
-    const selectionRowCompactClassName = 'lg:gap-1 2xl:gap-1.5';
+    const allTypesLabelClassName = 'min-w-0 flex-1 lg:max-w-[118px] 2xl:max-w-[150px]';
+    const selectionLabelClassName = 'min-w-0 flex-1 lg:max-w-[94px] 2xl:max-w-[120px]';
+    const selectionRowCompactClassName = 'flex-1 lg:gap-1 2xl:gap-1.5';
     const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
 
     return (
@@ -262,7 +263,7 @@ const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onK
                     setHighlightedIndex(next ? 0 : -1);
                 }}
                 onKeyDown={handleTriggerKeyDown}
-                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+                className={`group relative flex w-full items-center justify-between gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
             >
                 <Filter size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 {isAllSelected ? (
@@ -289,7 +290,7 @@ const ReportsTypeMultiSelect = React.forwardRef(({ value, options, onChange, onK
                 <div
                     ref={dropdownMenuRef}
                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
-                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width, minWidth: dropdownPosition.width }}
                 >
                     <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                         <div className="flex items-center gap-2">
@@ -384,8 +385,8 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
         const updatePosition = () => {
             if (!buttonRef.current) return;
             const rect = buttonRef.current.getBoundingClientRect();
-            const width = 288;
             const viewportWidth = window.innerWidth;
+            const width = Math.min(Math.max(rect.width, 240), viewportWidth - 24);
             const left = Math.min(
                 Math.max(12, rect.left + rect.width / 2 - width / 2),
                 Math.max(12, viewportWidth - width - 12)
@@ -393,7 +394,8 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
 
             setDropdownPosition({
                 top: rect.bottom + 8,
-                left
+                left,
+                width
             });
         };
 
@@ -488,8 +490,8 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
 
     const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
     const labelClassName = currentValue === ALL_CATEGORIES_VALUE
-        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
-        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+        ? 'min-w-0 flex-1 lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'min-w-0 flex-1 lg:max-w-[94px] 2xl:max-w-[120px]';
     const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
 
     return (
@@ -511,7 +513,7 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
                     }
                 }}
                 onKeyDown={handleTriggerKeyDown}
-                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+                className={`group relative flex w-full items-center justify-between gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
             >
                 <ShoppingBag size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
@@ -524,7 +526,7 @@ const ReportsCategorySelect = React.forwardRef(({ value, options, onChange, onKe
                 <div
                     ref={dropdownMenuRef}
                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
-                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width, minWidth: dropdownPosition.width }}
                 >
                     <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                         <button
@@ -615,8 +617,8 @@ const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKey
         const updatePosition = () => {
             if (!buttonRef.current) return;
             const rect = buttonRef.current.getBoundingClientRect();
-            const width = 288;
             const viewportWidth = window.innerWidth;
+            const width = Math.min(Math.max(rect.width, 240), viewportWidth - 24);
             const left = Math.min(
                 Math.max(12, rect.left + rect.width / 2 - width / 2),
                 Math.max(12, viewportWidth - width - 12)
@@ -624,7 +626,8 @@ const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKey
 
             setDropdownPosition({
                 top: rect.bottom + 8,
-                left
+                left,
+                width
             });
         };
 
@@ -719,8 +722,8 @@ const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKey
 
     const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
     const labelClassName = currentValue === ALL_ACCOUNTS_VALUE
-        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
-        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+        ? 'min-w-0 flex-1 lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'min-w-0 flex-1 lg:max-w-[94px] 2xl:max-w-[120px]';
     const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
 
     return (
@@ -742,7 +745,7 @@ const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKey
                     }
                 }}
                 onKeyDown={handleTriggerKeyDown}
-                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+                className={`group relative flex w-full items-center justify-between gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
             >
                 <Wallet size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
@@ -755,7 +758,7 @@ const ReportsAccountSelect = React.forwardRef(({ value, options, onChange, onKey
                 <div
                     ref={dropdownMenuRef}
                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-1 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
-                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width, minWidth: dropdownPosition.width }}
                 >
                     <div className="px-3 py-1.5 border-b border-slate-100 flex items-center justify-between">
                         <button
@@ -950,8 +953,8 @@ const ReportsPartySelect = React.forwardRef(({ value, options, onChange, onKeyDo
 
     const triggerCompactClassName = 'lg:px-2 lg:gap-1.5 2xl:px-3 2xl:gap-2';
     const labelClassName = currentValue === ALL_PARTIES_VALUE
-        ? 'max-w-[150px] lg:max-w-[118px] 2xl:max-w-[150px]'
-        : 'max-w-[120px] lg:max-w-[94px] 2xl:max-w-[120px]';
+        ? 'min-w-0 flex-1 lg:max-w-[118px] 2xl:max-w-[150px]'
+        : 'min-w-0 flex-1 lg:max-w-[94px] 2xl:max-w-[120px]';
     const chevronCompactClassName = 'lg:ml-0.5 2xl:ml-1';
 
     return (
@@ -973,7 +976,7 @@ const ReportsPartySelect = React.forwardRef(({ value, options, onChange, onKeyDo
                     }
                 }}
                 onKeyDown={handleTriggerKeyDown}
-                className={`group relative flex items-center gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
+                className={`group relative flex w-full items-center justify-between gap-2 px-3 h-[32px] rounded-md border border-gray-200 bg-white text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all ${triggerCompactClassName}`}
             >
                 <Users size={16} className="text-gray-400 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
                 <span className={`${labelClassName} truncate text-[12px] font-semibold text-slate-800`}>
@@ -986,7 +989,7 @@ const ReportsPartySelect = React.forwardRef(({ value, options, onChange, onKeyDo
                 <div
                     ref={dropdownMenuRef}
                     className="fixed min-w-[240px] w-64 bg-white rounded-md shadow-lg border border-slate-200 pt-0.5 pb-0 z-[100] animate-in fade-in zoom-in-95 duration-200"
-                    style={{ top: dropdownPosition.top, left: dropdownPosition.left }}
+                    style={{ top: dropdownPosition.top, left: dropdownPosition.left, width: dropdownPosition.width, minWidth: dropdownPosition.width }}
                 >
                     <div className="px-3 py-1 border-b border-slate-100 flex items-center justify-between">
                         <button
@@ -1051,7 +1054,7 @@ const Reports = () => {
     const { selectedOrg, loading: orgLoading } = useOrganization();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
-
+    const navigate = useNavigate();
     const { reportId } = useParams();
 
     // Convert URL slug to backend report type
@@ -1132,6 +1135,7 @@ const Reports = () => {
 
     // UI State
     const [searchTerm, setSearchTerm] = useState('');
+    const [showMobileSearch, setShowMobileSearch] = useState(false);
     const [currentPage, setCurrentPage] = useState(1);
     const [pageSize, setPageSize] = useState(10);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -1811,8 +1815,8 @@ const Reports = () => {
     const showProfitLossCompactControls = isProfitLossReport && !isProfitLossWideView;
 
     const profitLossCompactControls = (
-        <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            <div className="w-[220px] sm:w-[248px] shrink-0">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-2.5 sm:shrink-0">
+            <div className="w-full sm:w-[248px] sm:shrink-0">
                 <DateRangePicker
                     ref={dateRangeRef}
                     startDate={filters.startDate}
@@ -1834,31 +1838,33 @@ const Reports = () => {
                     className="reports-tablet-filter-input w-full"
                 />
             </div>
-            <div className="shrink-0">
+            <div className="w-full sm:w-auto sm:shrink-0">
                 <BranchSelector compactLaptop hideSettings />
             </div>
-            <div className="w-[140px] shrink-0">
-                <ReportsCategorySelect
-                    ref={categoryRef}
-                    value={filters.category}
-                    options={categoryFilterOptions}
-                    onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
-                    onKeyDown={(e) => handleKeyDown(e, 2)}
-                />
+            <div className="flex w-full items-center gap-2 sm:w-auto sm:shrink-0">
+                <div className="min-w-0 flex-1 sm:w-[140px] sm:flex-none">
+                    <ReportsCategorySelect
+                        ref={categoryRef}
+                        value={filters.category}
+                        options={categoryFilterOptions}
+                        onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
+                        onKeyDown={(e) => handleKeyDown(e, 2)}
+                    />
+                </div>
+                <button
+                    onClick={handleExportPdf}
+                    className="group h-[32px] w-[32px] shrink-0 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-slate-800 text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] no-print sm:w-auto sm:px-3"
+                    title="Export Report"
+                >
+                    <Download size={14} className="text-slate-600 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
+                    <span className="hidden sm:inline">Export</span>
+                </button>
             </div>
-            <button
-                onClick={handleExportPdf}
-                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-semibold text-slate-800 text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)] no-print shrink-0"
-                title="Export Report"
-            >
-                <Download size={14} className="text-slate-600 group-hover:text-[#4A8AF4] group-focus-visible:text-[#4A8AF4] transition-colors" />
-                <span className="hidden sm:inline">Export</span>
-            </button>
         </div>
     );
     const profitLossCompactControlsRow = showProfitLossCompactControls ? (
-        <div className="w-full overflow-x-auto hide-scroll-indicator">
-            <div className="flex items-center justify-start min-w-max">
+        <div className="w-full">
+            <div className="flex w-full items-stretch justify-start">
                 {profitLossCompactControls}
             </div>
         </div>
@@ -2027,6 +2033,17 @@ const Reports = () => {
             {!isPrinting && (
                 <>
                     <div className="no-print page-header flex-none">
+                        <div className="flex items-center px-4 pt-2 pb-1 md:px-5 xl:px-6">
+                            <button
+                                type="button"
+                                onClick={() => navigate(-1)}
+                                className="inline-flex items-center justify-center p-1 text-slate-600 transition-colors hover:text-slate-900"
+                                aria-label="Go back"
+                                title="Go back"
+                            >
+                                <ArrowLeft size={16} />
+                            </button>
+                        </div>
                         <PageHeader
                             title={`${filters.reportType} Report`}
                             breadcrumbs={['Portal', { label: 'Reports Hub', path: '/reports' }, filters.reportType]}
@@ -2040,7 +2057,7 @@ const Reports = () => {
                             {/* LEFT SIDE: Transaction Summary Metrics */}
                             {isGenerated && reportData && reportData.summary ? (
                                 <div className="flex flex-col items-start w-full 2xl:w-auto">
-                                    <div className="flex flex-row items-center gap-x-5 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full pb-2 2xl:pb-0 hide-scroll-indicator">
+                                    <div className="grid grid-cols-2 md:flex md:flex-row md:items-center gap-x-5 lg:gap-x-8 gap-y-3 shrink-0 overflow-x-auto w-full pb-2 2xl:pb-0 hide-scroll-indicator">
                                         {/* Opening */}
                                         <div className="flex items-center gap-2 lg:gap-3 shrink-0">
                                             <div className="w-8 h-8 xl:w-9 xl:h-9 rounded-lg border border-slate-200/60 bg-slate-50 flex items-center justify-center shrink-0">
@@ -2113,9 +2130,134 @@ const Reports = () => {
                                     buttonLabelClassName="!text-[12px] " dropdownItemClassName="!text-[12px] " className="reports-tablet-filter-input w-full min-w-[220px]"
                                 />
                             </div>
-                            <div className="w-full sm:w-auto mt-1 lg:mt-0 2xl:ml-1">
-                                <BranchSelector compactLaptop hideSettings />
-                            </div>
+                            
+                            {showMobileSearch ? (
+                                <div className="flex items-center gap-2 w-full lg:hidden mt-1">
+                                    <div className="relative flex-1">
+                                        <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            value={searchTerm}
+                                            onChange={(e) => setSearchTerm(e.target.value)}
+                                            autoFocus
+                                            placeholder="Search..."
+                                            className="w-full pl-10 pr-4 py-2 bg-[#f1f3f9] border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-[#BAE6FD] focus:border-[#4A8AF4] transition-all"
+                                        />
+                                    </div>
+                                    <button onClick={() => { setShowMobileSearch(false); setSearchTerm(''); }} className="p-2 bg-gray-100 rounded-xl text-gray-500 hover:bg-gray-200 transition-colors">
+                                        <X size={18} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="flex flex-col gap-2 w-full mt-1 lg:mt-0 lg:hidden">
+                                    {/* Mobile Row 1: Branch + Type */}
+                                    <div className="flex items-center gap-2 w-full">
+                                        <div className="flex-1 min-w-0">
+                                            <BranchSelector compactLaptop hideSettings />
+                                        </div>
+                                        {!isProfitLossReport && (
+                                            <div className="flex-1 min-w-0">
+                                                <ReportsTypeMultiSelect
+                                                    value={filters.type}
+                                                    options={typeFilterOptions}
+                                                    onChange={(nextValue) => setFilters({ ...filters, type: nextValue })}
+                                                />
+                                            </div>
+                                        )}
+                                        {isProfitLossReport && (
+                                            <>
+                                                <button onClick={() => setShowMobileSearch(true)} className="shrink-0 w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] transition-all bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                                                    <Search size={14} />
+                                                </button>
+                                                <div className="relative shrink-0">
+                                                    <button onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} className="w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] transition-all bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]" title="Export Report">
+                                                        <Download size={14} />
+                                                    </button>
+                                                    {isExportDropdownOpen && (
+                                                        <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                            <button
+                                                                onClick={() => { setIsExportDropdownOpen(false); handleExportExcel(); }}
+                                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                            >
+                                                                <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" /> Export as Excel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setIsExportDropdownOpen(false); handleExportPdf(); }}
+                                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                            >
+                                                                <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" /> Export as PDF
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+
+                                    {/* Mobile Row 2: Category + Icons */}
+                                    {!isProfitLossReport && (
+                                        <div className="flex items-center gap-2 w-full">
+                                            <div className="flex-1 min-w-0">
+                                                {(filters.reportType === 'Category-wise' || filters.reportType === 'Detailed') && (
+                                                    <ReportsCategorySelect
+                                                        value={filters.category}
+                                                        options={categoryFilterOptions}
+                                                        onChange={(nextValue) => setFilters({ ...filters, category: nextValue })}
+                                                    />
+                                                )}
+                                                {filters.reportType === 'Account-wise' && (
+                                                    <ReportsAccountSelect
+                                                        value={filters.account}
+                                                        options={accountFilterOptions}
+                                                        onChange={(nextValue) => setFilters({ ...filters, account: nextValue })}
+                                                    />
+                                                )}
+                                                {filters.reportType === 'Party-wise' && (
+                                                    <ReportsPartySelect
+                                                        value={filters.party}
+                                                        options={partyFilterOptions}
+                                                        onChange={(nextValue) => setFilters({ ...filters, party: nextValue })}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex items-center gap-2">
+                                                <button onClick={() => setShowMobileSearch(true)} className="flex-1 h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] transition-all bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                                                    <Search size={14} />
+                                                </button>
+                                                <div className="relative flex-1">
+                                                    <button onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)} className="w-full h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-[#F0F9FF] hover:border-[#BAE6FD] hover:text-[#4A8AF4] transition-all bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]" title="Export Report">
+                                                        <Download size={14} />
+                                                    </button>
+                                                    {isExportDropdownOpen && (
+                                                        <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
+                                                            <button
+                                                                onClick={() => { setIsExportDropdownOpen(false); handleExportExcel(); }}
+                                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                            >
+                                                                <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" /> Export as Excel
+                                                            </button>
+                                                            <button
+                                                                onClick={() => { setIsExportDropdownOpen(false); handleExportPdf(); }}
+                                                                className="w-full text-left px-4 py-2 text-[12px] font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
+                                                            >
+                                                                <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" /> Export as PDF
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Desktop Branch Selector */}
+                            {isDesktopView && (
+                                <div className="hidden lg:block 2xl:ml-1 min-w-[150px]">
+                                    <BranchSelector compactLaptop hideSettings />
+                                </div>
+                            )}
+                            
                             {isDesktopView && extraFiltersNode}
                         </div>
                             )}
@@ -2144,7 +2286,6 @@ const Reports = () => {
                                         onExportExcel={handleExportExcel}
                                         onExportPdf={handleExportPdf}
                                         filters={displayFilters}
-                                        renderExtraFilters={!isDesktopView ? extraFiltersNode : null}
                                     />
                                 </div>
                             </div>
