@@ -19,8 +19,8 @@ export type ParsedStatementRow = {
 };
 
 export type ParsedStatementResult = {
-  parser: 'HDFC_DETERMINISTIC' | 'AXIS_DETERMINISTIC' | 'ICICI_DETERMINISTIC' | 'SBI_DETERMINISTIC';
-  bankName: 'HDFC' | 'AXIS' | 'ICICI' | 'SBI';
+  parser: 'HDFC_DETERMINISTIC' | 'AXIS_DETERMINISTIC' | 'ICICI_DETERMINISTIC' | 'SBI_DETERMINISTIC' | 'YES_BANK_DETERMINISTIC_TEXT';
+  bankName: 'HDFC' | 'AXIS' | 'ICICI' | 'SBI' | 'YES BANK';
   accountNumber: string | null;
   statementFromDate: string | null; // YYYY-MM-DD
   statementToDate: string | null; // YYYY-MM-DD

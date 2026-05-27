@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Printer, ChevronRight, X, Download, FileSpreadsheet, FileText } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Search, Printer, ChevronRight, X, Download, FileSpreadsheet, FileText, Wallet, ArrowUpRight, ArrowDownLeft, Activity } from 'lucide-react';
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz } from "ag-grid-community";
 import Card from '../../../components/common/Card';
@@ -25,9 +26,10 @@ const ReportTableScreen = ({
     filters,
     renderExtraFilters
 }) => {
-    const [showSearch, setShowSearch] = useState(false);
+
     const [expandedProfitRows, setExpandedProfitRows] = useState({});
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
+    const [pagingPanel, setPagingPanel] = useState(null);
 
     const { formatCurrency, formatDate, preferences } = usePreferences();
 
@@ -359,98 +361,72 @@ const ReportTableScreen = ({
         return [];
     }, [reportData, searchTerm]);
 
+    useEffect(() => {
+        if (pagingPanel) return undefined;
+
+        const interval = setInterval(() => {
+            const panel = document.querySelector('.reports-grid-shell .ag-paging-panel');
+            if (panel) {
+                setPagingPanel(panel);
+                clearInterval(interval);
+            }
+        }, 100);
+
+        return () => clearInterval(interval);
+    }, [pagingPanel]);
+
+    const bottomSummaryItems = useMemo(() => {
+        if (!reportData?.summary || reportData?.type === 'profit-loss') return [];
+
+        const opening = reportData.openingBalance ?? reportData.summary.openingBalance ?? 0;
+        const debit = (Number(reportData.summary.expense) || 0) + (Number(reportData.summary.investment) || 0);
+        const credit = Number(reportData.summary.income) || 0;
+        const closing = reportData.closingBalance ?? reportData.summary.closingBalance ?? 0;
+
+        return [
+            {
+                label: 'Opening',
+                value: formatCurrency(opening, preferences.currency),
+                icon: Wallet,
+                iconClassName: 'text-slate-600',
+                iconWrapClassName: 'bg-slate-100 border border-slate-200/80'
+            },
+            {
+                label: 'Debit',
+                value: formatCurrency(debit, preferences.currency),
+                icon: ArrowUpRight,
+                iconClassName: 'text-rose-600',
+                iconWrapClassName: 'bg-rose-50 border border-rose-100'
+            },
+            {
+                label: 'Credit',
+                value: formatCurrency(credit, preferences.currency),
+                icon: ArrowDownLeft,
+                iconClassName: 'text-emerald-600',
+                iconWrapClassName: 'bg-emerald-50 border border-emerald-100'
+            },
+            {
+                label: 'Closing',
+                value: formatCurrency(closing, preferences.currency),
+                icon: Activity,
+                iconClassName: 'text-slate-700',
+                iconWrapClassName: 'bg-slate-100 border border-slate-200/80'
+            }
+        ];
+    }, [reportData, formatCurrency, preferences.currency]);
+
     return (
         <div className="flex flex-col min-h-full h-auto w-full">
             <div className="px-5 pt-3 pb-1.5 flex flex-row items-center justify-between gap-4 no-print relative z-20 w-full bg-transparent">
-                {showSearch ? (
-                    // Mobile Expanded Search View
-                    <div className="w-full flex items-center space-x-2 animate-in fade-in duration-200 xl:hidden">
-                        <div className="relative flex-1">
-                            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                            <input
-                                type="text"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                autoFocus
-                                placeholder="Search..."
-                                className="w-full pl-10 pr-4 py-2 bg-[#f1f3f9] border border-gray-100 rounded-xl text-sm outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                            />
-                        </div>
-                        <button
-                            onClick={() => {
-                                setShowSearch(false);
-                                setSearchTerm('');
-                            }}
-                            className="p-2 bg-gray-100 rounded-xl text-gray-500 hover:bg-gray-200 transition-colors"
-                        >
-                            <X size={18} />
-                        </button>
-                    </div>
-                ) : (
-                    <>
                         {/* Right Side Actions */}
                         <div className="flex items-center space-x-2 w-full justify-end">
                             {renderExtraFilters}
-                            {/* Mobile Search Toggle */}
-                            <button
-                                onClick={() => setShowSearch(true)}
-                                className="lg:hidden w-[32px] h-[32px] flex items-center justify-center rounded-md border border-gray-200 text-gray-700 hover:bg-gray-100 transition-all active:scale-95 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <Search size={14} />
-                            </button>
 
-                            <div className="relative no-print lg:hidden 2xl:block">
-                                <button
-                                    onClick={() => setIsExportDropdownOpen(!isExportDropdownOpen)}
-                                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] focus-visible:ring-2 focus-visible:ring-blue-100 transition-all font-medium text-[12px]  shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                    title="Export Options"
-                                >
-                                    <Download size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
-                                    <span className="hidden sm:inline">Export</span>
-                                </button>
-
-                                {isExportDropdownOpen && (
-                                    <div className="absolute right-0 mt-1.5 w-48 bg-white rounded-lg shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-gray-200 py-1.5 z-[100] animate-in fade-in slide-in-from-top-2 duration-200">
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                onExportExcel();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[12px]  font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
-                                        >
-                                            <FileSpreadsheet size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Export as Excel
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsExportDropdownOpen(false);
-                                                onExportPdf();
-                                            }}
-                                            className="w-full text-left px-4 py-2 text-[12px]  font-medium text-slate-700 hover:bg-[#EEF0FC] hover:text-slate-800 transition-colors flex items-center gap-2 group"
-                                        >
-                                            <FileText size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                            Export as PDF
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                            <div className="relative hidden 2xl:block w-[280px] no-print group">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-[#4A8AF4] transition-colors" />
-                                <input
-                                    type="text"
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    placeholder="Search..."
-                                    className="w-full h-[32px] pl-9 pr-4 bg-white border border-gray-200 rounded-md text-[12px] outline-none focus:border-[#BAE6FD] focus:ring-2 focus:ring-blue-100 transition-all font-medium placeholder:font-normal placeholder:text-gray-400 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                />
-                            </div>
                         </div>
-                    </>
-                )}
             </div>
 
             {/* Universal AG Grid Table View */}
-            <div className="w-full relative flex-1 min-h-[500px] flex flex-col px-5 pb-1 flex-1">
+            <div className="reports-grid-shell w-full relative flex-1 min-h-[500px] flex flex-col px-5 pb-1 flex-1">
                 <div className="flex-1 w-full relative">
                     <div className="absolute inset-0">
                         <AgGridReact
@@ -473,6 +449,35 @@ const ReportTableScreen = ({
                         />
                     </div>
                 </div>
+                {pagingPanel && bottomSummaryItems.length > 0 && createPortal(
+                    <div className="flex items-center gap-5 print:hidden mr-auto pl-4 h-full pointer-events-auto" style={{ order: -1 }}>
+                        {bottomSummaryItems.map((item, index) => {
+                            const Icon = item.icon;
+                            return (
+                                <div
+                                    key={item.label}
+                                    className={cn(
+                                        "flex items-center gap-2.5 min-w-fit",
+                                        index > 0 && "pl-5 border-l border-gray-200"
+                                    )}
+                                >
+                                    <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center shrink-0", item.iconWrapClassName)}>
+                                        <Icon size={14} className={item.iconClassName} />
+                                    </div>
+                                    <div>
+                                        <div className="text-[11px] font-semibold text-gray-500 mb-[2px] leading-none">
+                                            {item.label}
+                                        </div>
+                                        <div className="text-[13px] font-bold text-gray-900 whitespace-nowrap leading-none tabular-nums">
+                                            {item.value}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>,
+                    pagingPanel
+                )}
             </div>
         </div>
     );

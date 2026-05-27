@@ -27,6 +27,47 @@ const parseNumeric = (val: any): number | undefined => {
     return Number.isFinite(num) && num > 0 ? num : undefined;
 };
 
+const parseNumericListOrSingle = (val: any): number | number[] | undefined => {
+    if (val === undefined || val === null || val === '') return undefined;
+
+    if (Array.isArray(val)) {
+        const values = Array.from(
+            new Set(
+                val
+                    .map(Number)
+                    .filter((num) => Number.isFinite(num) && num > 0)
+            )
+        );
+
+        if (values.length === 0) return undefined;
+        return values.length === 1 ? values[0] : values;
+    }
+
+    const num = Number(val);
+    return Number.isFinite(num) && num > 0 ? num : undefined;
+};
+
+const parseStringListOrSingle = (val: any): string | string[] | undefined => {
+    if (val === undefined || val === null || val === '') return undefined;
+
+    const values = Array.isArray(val) ? val : [val];
+    const seen = new Set<string>();
+
+    const normalized = values
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+        .filter((item) => item !== 'All Parties')
+        .filter((item) => {
+            const key = item.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+    if (normalized.length === 0) return undefined;
+    return normalized.length === 1 ? normalized[0] : normalized;
+};
+
 const buildReportHeaderName = async (
     orgId: number,
     branchId: number | number[] | 'all'
@@ -79,9 +120,9 @@ export const generateReport = async ({ body, set, headers, user, orgId, branchId
         // Optional Filters
         const filters = {
             txnType: body.txnType,
-            categoryId: body.categoryId ? Number(body.categoryId) : undefined,
-            accountId: body.accountId ? Number(body.accountId) : undefined,
-            party: body.party ? String(body.party) : undefined
+            categoryId: parseNumericListOrSingle(body.categoryId),
+            accountId: parseNumericListOrSingle(body.accountId),
+            party: parseStringListOrSingle(body.party)
         };
 
         if (!branchId || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
@@ -177,9 +218,9 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
 
         const filters = {
             txnType: body.txnType,
-            categoryId: body.categoryId ? Number(body.categoryId) : undefined,
-            accountId: body.accountId ? Number(body.accountId) : undefined,
-            party: body.party ? String(body.party) : undefined
+            categoryId: parseNumericListOrSingle(body.categoryId),
+            accountId: parseNumericListOrSingle(body.accountId),
+            party: parseStringListOrSingle(body.party)
         };
 
         if (!branchId || !startDate || !endDate || !reportType || (Array.isArray(branchId) && branchId.length === 0)) {
@@ -245,12 +286,14 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
                 startDate,
                 endDate
             });
-            set.headers['content-type'] = 'text/html; charset=utf-8';
-            set.headers['content-disposition'] = 'inline; filename="reports.html"';
-            return new Response(html, {
+            const pdfBuffer = await ReportsService.renderPdfBufferFromHtml(html, 'reports');
+            const fileName = `reports-${new Date().toISOString().slice(0, 10)}.pdf`;
+
+            return new Response(pdfBuffer, {
                 headers: {
-                    'content-type': 'text/html; charset=utf-8',
-                    'content-disposition': 'inline; filename="reports.html"'
+                    'content-type': 'application/pdf',
+                    'content-disposition': `attachment; filename="${fileName}"`,
+                    'content-length': String(pdfBuffer.byteLength)
                 }
             });
         }

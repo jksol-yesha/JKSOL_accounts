@@ -6,6 +6,7 @@ import { PDFParserService } from '../../shared/pdf-parser.service';
 import { isHDFCStatement, parseHDFCStatement } from '../../services/statement-parsers/hdfcStatementParser';
 import { isAxisStatement, parseAxisStatement } from '../../services/statement-parsers/axisStatementParser';
 import { isICICIStatement, parseICICIStatement } from '../../services/statement-parsers/iciciStatementParser';
+import { isYesBankStatement, parseYesBankStatement } from '../../services/statement-parsers/yesBankStatementParser';
 import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
 
 // GET /types - Public endpoint for transaction types
@@ -285,6 +286,39 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
                 return {
                     success: true,
                     message: `Successfully parsed ${mappedData.transactions.length} transactions (ICICI Deterministic)`,
+                    data: mappedData
+                };
+            }
+
+            // ─── YES Bank Deterministic ───
+            if (isYesBankStatement(text)) {
+                const yesResult = await parseYesBankStatement(buffer);
+
+                const mappedData = {
+                    accountNumber: yesResult.accountNumber || null,
+                    bankName: 'YES BANK',
+                    parser: 'YES_BANK_DETERMINISTIC_TEXT',
+                    statementFromDate: yesResult.statementFromDate,
+                    statementToDate: yesResult.statementToDate,
+                    openingBalance: yesResult.openingBalance,
+                    closingBalance: yesResult.closingBalance,
+                    validation: yesResult.validation,
+                    transactions: yesResult.rows.map((row: any) => ({
+                        date: row.transactionDate,
+                        narration: row.narration,
+                        referenceNo: row.referenceNo,
+                        chequeNumber: row.chequeNumber,
+                        valueDate: row.valueDate,
+                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
+                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
+                        balance: parseFloat(row.closingBalance),
+                        hash: ''
+                    }))
+                };
+
+                return {
+                    success: true,
+                    message: `Successfully parsed ${mappedData.transactions.length} transactions (YES Bank Deterministic)`,
                     data: mappedData
                 };
             }

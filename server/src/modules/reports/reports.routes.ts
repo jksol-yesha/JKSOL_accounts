@@ -29,9 +29,9 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
             startDate: t.String(),
             endDate: t.String(),
             txnType: t.Optional(t.Union([t.String(), t.Array(t.String())])),
-            categoryId: t.Optional(t.Numeric()),
-            accountId: t.Optional(t.Numeric()),
-            party: t.Optional(t.String()),
+            categoryId: t.Optional(t.Union([t.Numeric(), t.Array(t.Numeric())])),
+            accountId: t.Optional(t.Union([t.Numeric(), t.Array(t.Numeric())])),
+            party: t.Optional(t.Union([t.String(), t.Array(t.String())])),
             targetCurrency: t.Optional(t.String())
         })
     })
@@ -43,9 +43,9 @@ export const reportsRoutes = new Elysia({ prefix: '/reports' })
             startDate: t.String(),
             endDate: t.String(),
             txnType: t.Optional(t.Union([t.String(), t.Array(t.String())])),
-            categoryId: t.Optional(t.Numeric()),
-            accountId: t.Optional(t.Numeric()),
-            party: t.Optional(t.String()),
+            categoryId: t.Optional(t.Union([t.Numeric(), t.Array(t.Numeric())])),
+            accountId: t.Optional(t.Union([t.Numeric(), t.Array(t.Numeric())])),
+            party: t.Optional(t.Union([t.String(), t.Array(t.String())])),
             targetCurrency: t.Optional(t.String()),
             searchTerm: t.Optional(t.String()),
             format: t.Optional(t.Union([t.Literal('csv'), t.Literal('pdf')]))

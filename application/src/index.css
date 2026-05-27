@@ -86,6 +86,14 @@
   font-size: 11px !important;
 }
 
+.reports-grid-shell .ag-paging-panel,
+.reports-grid-shell .ag-paging-panel .ag-label,
+.reports-grid-shell .ag-paging-panel .ag-picker-field-display,
+.reports-grid-shell .ag-paging-panel .ag-paging-number,
+.reports-grid-shell .ag-paging-panel .ag-paging-row-summary-panel-number {
+  font-size: 11px !important;
+}
+
 /* Explicit override for header background - Ultimate Fallback */
 .ag-header,
 .ag-header-row,

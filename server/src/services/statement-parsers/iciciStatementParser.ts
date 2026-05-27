@@ -62,6 +62,133 @@ function parseICICIHeaderDate(dateStr: string): string | null {
   return `${match[3]}-${monthNum}-${day}`;
 }
 
+type TrailingAmountFields = {
+  narration: string;
+  amount: string | null;
+  closingBalance: string | null;
+  ambiguousAmountToken: string | null;
+  ambiguousNarrationPrefix: string | null;
+};
+
+function isAmountLikeToken(value: string): boolean {
+  return /^[\d,]+\.\d{2}$/i.test(String(value || '').trim());
+}
+
+function splitTokenByAmountSuffix(rawToken: string, amount: string): { prefix: string, suffix: string } | null {
+  const token = String(rawToken || '');
+  const normalizedToken = token.replace(/,/g, '');
+  const normalizedAmount = String(amount || '').replace(/,/g, '');
+
+  if (!normalizedToken || !normalizedAmount || !normalizedToken.endsWith(normalizedAmount)) {
+    return null;
+  }
+
+  let remaining = normalizedAmount.length;
+  let splitIndex = token.length;
+
+  for (let i = token.length - 1; i >= 0; i--) {
+    if (token[i] !== ',') {
+      remaining -= 1;
+    }
+    if (remaining === 0) {
+      splitIndex = i;
+      break;
+    }
+  }
+
+  return {
+    prefix: token.slice(0, splitIndex),
+    suffix: token.slice(splitIndex),
+  };
+}
+
+function restoreNarrationFromAmbiguousToken(row: ParsedStatementRow, amount: string | null): void {
+  if (!amount) return;
+
+  const ambiguousToken = (row as any)._ambiguousAmountToken as string | undefined;
+  if (!ambiguousToken) return;
+
+  const split = splitTokenByAmountSuffix(ambiguousToken, amount);
+  if (!split) return;
+
+  const narrationPrefix = String((row as any)._ambiguousNarrationPrefix || '').trim();
+  row.narration = [narrationPrefix, split.prefix.trim()].filter(Boolean).join(' ').trim();
+}
+
+function extractICICITrailingFields(combinedText: string): TrailingAmountFields {
+  const workingText = String(combinedText || '')
+    .trim()
+    .replace(/\s+(?:CR|DR)$/i, '')
+    .trim();
+
+  const fallback: TrailingAmountFields = {
+    narration: workingText,
+    amount: null,
+    closingBalance: null,
+    ambiguousAmountToken: null,
+    ambiguousNarrationPrefix: null,
+  };
+
+  if (!workingText) return fallback;
+
+  const amountPattern = /[\d,]+\.\d{2}/g;
+  const amountMatches = Array.from(workingText.matchAll(amountPattern));
+  if (amountMatches.length === 0) return fallback;
+
+  const balanceMatch = amountMatches[amountMatches.length - 1]!;
+  const rawBalance = balanceMatch[0]!;
+  const closingBalance = normalizeAmount(rawBalance);
+  if (!closingBalance || balanceMatch.index == null) {
+    return fallback;
+  }
+
+  const beforeBalance = workingText.slice(0, balanceMatch.index).trimEnd();
+  if (!beforeBalance) {
+    return {
+      ...fallback,
+      narration: '',
+      closingBalance,
+    };
+  }
+
+  const tokens = beforeBalance.split(/\s+/).filter(Boolean);
+  const lastToken = tokens[tokens.length - 1] || '';
+  const lastTokenPrefix = tokens.slice(0, -1).join(' ').trim();
+
+  if (lastToken && isAmountLikeToken(lastToken) && lastToken.replace(/,/g, '').length < 15) {
+    return {
+      narration: lastTokenPrefix,
+      amount: normalizeAmount(lastToken),
+      closingBalance,
+      ambiguousAmountToken: null,
+      ambiguousNarrationPrefix: null,
+    };
+  }
+
+  const fusedRemarkAmountMatch = lastToken.match(/^(.+?)([\d,]+\.\d{2})$/);
+  if (fusedRemarkAmountMatch) {
+    const candidateAmount = fusedRemarkAmountMatch[2]!;
+
+    if (candidateAmount.replace(/,/g, '').length < 15) {
+      return {
+        narration: [lastTokenPrefix, fusedRemarkAmountMatch[1]!.trim()].filter(Boolean).join(' ').trim(),
+        amount: normalizeAmount(candidateAmount),
+        closingBalance,
+        ambiguousAmountToken: null,
+        ambiguousNarrationPrefix: null,
+      };
+    }
+  }
+
+  return {
+    narration: beforeBalance,
+    amount: null,
+    closingBalance,
+    ambiguousAmountToken: lastToken || null,
+    ambiguousNarrationPrefix: lastTokenPrefix || null,
+  };
+}
+
 // ─── Detection ───
 
 export function isICICIStatement(text: string): boolean {
@@ -117,13 +244,13 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
   // ─── Parse transaction rows ───
 
   // ICICI rows in extracted text start with a line matching:
-  //   <serialNo><DD.MM.YYYY><rest>
+  //   <serialNo><DD.MM.YYYY><rest> OR just <DD.MM.YYYY><rest>
   // where serialNo is 1+ digits immediately followed by DD.MM.YYYY
   // e.g., "101.01.2026" => serialNo=1, date=01.01.2026
-  //        "2131.01.2026" => serialNo=21, date=31.01.2026
+  //       "16.01.2026"  => no serialNo, date=16.01.2026
 
-  // The pattern: serialNo (1+ digits) then DD.MM.YYYY
-  const ROW_START = /^(\d+)(\d{2}\.\d{2}\.\d{4})(.*)$/;
+  // The pattern: optional serialNo (1+ digits) then DD.MM.YYYY
+  const ROW_START = /^(?:(\d+)\s*)?(\d{2}\.\d{2}\.\d{4})(.*)$/;
 
   interface RawBlock {
     serialNo: number;
@@ -155,7 +282,7 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
     if (rowMatch) {
       if (currentBlock) blocks.push(currentBlock);
       currentBlock = {
-        serialNo: parseInt(rowMatch[1]!, 10),
+        serialNo: rowMatch[1] ? parseInt(rowMatch[1], 10) : (blocks.length + 1),
         dateStr: rowMatch[2]!,
         textLines: [rowMatch[3] || ''],
         startLineIdx: i,
@@ -180,53 +307,18 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
     }
 
     // Combine all text lines for this block
-    const combinedText = block.textLines.join(' ').trim();
+    let combinedText = block.textLines.join(' ').trim();
+    // 7. Repair split balance decimal handling: merge split decimals
+    combinedText = combinedText.replace(/(\d+\.\d)\s+(\d)$/, '$1$2').replace(/(\d+\.)\s+(\d{1,2})$/, '$1$2');
 
-    // The amounts and balance are at the end of the combined text.
-    // ICICI format: narration text followed by amounts concatenated with balance.
-    //
-    // Possible patterns at the end:
-    //   <withdrawal><balance>    e.g., "150000.001167476.85"
-    //   <deposit><balance>       e.g., "1100000.001317476.85"
-    //
-    // We need to find two consecutive decimal numbers at the end.
-    // The tricky part: there's no separator between them.
-    // Strategy: find the last occurrence of a pattern like <digits>.<digits><digits>.<digits>
-    // at the end of the combined text.
+    const extractedFields = extractICICITrailingFields(combinedText);
+    const narration = extractedFields.narration;
+    const closingBalance = extractedFields.closingBalance;
+    const amount1 = extractedFields.amount;
 
-    let narration = combinedText;
-    let debitAmount: string | null = null;
-    let creditAmount: string | null = null;
-    let closingBalance: string | null = null;
-    let chequeNumber: string | null = null;
-
-    // Try to extract two consecutive amounts at the end of the text.
-    // The pattern: the text ends with two decimal numbers concatenated.
-    // e.g., "150000.001167476.85" => "150000.00" and "1167476.85"
-    //
-    // Regex: find all decimal number sequences at the end
-    const trailingAmountsMatch = combinedText.match(
-      /(\d+\.\d{2})(\d+\.\d{2})$/
-    );
-
-    if (trailingAmountsMatch) {
-      const amount1 = trailingAmountsMatch[1]!;
-      const amount2 = trailingAmountsMatch[2]!;
-      closingBalance = normalizeAmount(amount2);
-
-      // Determine if this is a debit or credit by checking which rows have
-      // amounts in which column. We need the context from the serial number
-      // and the block structure. For ICICI, we can use the balance chain.
-      // For now, store amount1 and classify later.
-      narration = combinedText.substring(0, trailingAmountsMatch.index).trim();
-
-      // Temporarily store — we'll classify debit vs credit using balance chain
-      (block as any)._amount = amount1;
-      (block as any)._balance = closingBalance;
-      (block as any)._narration = narration;
-    } else {
+    if (!closingBalance || !narration) {
       result.validation.warnings.push(
-        `Row S.No ${block.serialNo}: Could not extract amounts from end of text: "${combinedText.slice(-40)}"`
+        `Row S.No ${block.serialNo}: Could not extract valid non-fused amounts from end of text: "${combinedText.slice(-60)}"`
       );
       continue;
     }
@@ -248,8 +340,18 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
       rawText: [block.dateStr, ...block.textLines].join('\n'),
     });
 
+    const currentRow = result.rows[result.rows.length - 1] as ParsedStatementRow & Record<string, any>;
+
     // Store temporary amount for balance-chain classification
-    (result.rows[result.rows.length - 1] as any)._tempAmount = amount1FromBlock(block);
+    currentRow._tempAmount = amount1;
+    currentRow._ambiguousAmountToken = extractedFields.ambiguousAmountToken;
+    currentRow._ambiguousNarrationPrefix = extractedFields.ambiguousNarrationPrefix;
+
+    if (!amount1) {
+      result.validation.warnings.push(
+        `Row S.No ${block.serialNo}: Could not isolate transaction amount cleanly; will infer from balance chain if possible.`
+      );
+    }
   }
 
   // ─── Classify debit vs credit using balance chain ───
@@ -299,10 +401,6 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
 
 // ─── Internal helpers ───
 
-function amount1FromBlock(block: any): string {
-  return block._amount || '0';
-}
-
 /**
  * Classify each row as debit or credit using balance chain logic.
  * Since ICICI concatenates the amount and balance without column separation,
@@ -318,13 +416,16 @@ function classifyDebitsCredits(result: ParsedStatementResult): void {
 
   for (let i = 0; i < result.rows.length; i++) {
     const row = result.rows[i]!;
-    const tempAmount = (row as any)._tempAmount as string;
-    const amount = normalizeAmount(tempAmount);
-
-    if (!amount) continue;
+    const tempAmount = (row as any)._tempAmount as string | null | undefined;
+    let amount = normalizeAmount(tempAmount);
 
     let prevBalance: number;
     if (i === 0) {
+      if (!amount) {
+        delete (row as any)._tempAmount;
+        continue;
+      }
+
       // For the first row, we don't have a previous balance.
       // We can infer: if balance = prevBal - amount => debit, if balance = prevBal + amount => credit
       // Try both and see which one gives a consistent chain.
@@ -381,7 +482,22 @@ function classifyDebitsCredits(result: ParsedStatementResult): void {
     // For subsequent rows, use previous row's closing balance
     prevBalance = parseFloat(result.rows[i - 1]!.closingBalance);
     const currentBalance = parseFloat(row.closingBalance);
-    const amt = parseFloat(amount);
+    const balanceDelta = Math.abs(prevBalance - currentBalance);
+    const derivedAmount = balanceDelta > 0.009
+      ? normalizeAmount(balanceDelta.toFixed(2))
+      : null;
+
+    if (!amount && derivedAmount) {
+      amount = derivedAmount;
+      restoreNarrationFromAmbiguousToken(row, amount);
+    }
+
+    if (!amount) {
+      delete (row as any)._tempAmount;
+      continue;
+    }
+
+    let amt = parseFloat(amount);
 
     // Check: prevBalance - amt ≈ currentBalance => debit
     // Check: prevBalance + amt ≈ currentBalance => credit
@@ -389,6 +505,20 @@ function classifyDebitsCredits(result: ParsedStatementResult): void {
       row.debitAmount = amount;
     } else if (Math.abs(prevBalance + amt - currentBalance) < 0.01) {
       row.creditAmount = amount;
+    } else if (derivedAmount) {
+      amount = derivedAmount;
+      amt = parseFloat(amount);
+      restoreNarrationFromAmbiguousToken(row, amount);
+
+      if (Math.abs(prevBalance - amt - currentBalance) < 0.01) {
+        row.debitAmount = amount;
+      } else if (Math.abs(prevBalance + amt - currentBalance) < 0.01) {
+        row.creditAmount = amount;
+      } else if (currentBalance < prevBalance) {
+        row.debitAmount = amount;
+      } else {
+        row.creditAmount = amount;
+      }
     } else {
       // Fallback: if balance decreased, it's a debit
       if (currentBalance < prevBalance) {
@@ -519,3 +649,8 @@ function validateICICIStatement(result: ParsedStatementResult): void {
     warnings,
   };
 }
+
+export const __test__ = {
+  extractICICITrailingFields,
+  classifyDebitsCredits,
+};

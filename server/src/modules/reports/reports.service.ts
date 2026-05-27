@@ -1,6 +1,11 @@
 import { db } from '../../db';
 import { transactions, transactionEntries, categories, subCategories, accounts, transactionTypes, branches, organizations, currencies, parties } from '../../db/schema';
 import { eq, and, or, sql, gte, lte, lt, desc, asc, inArray } from 'drizzle-orm';
+import { constants as fsConstants } from 'node:fs';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { isNotDeleted } from '../../shared/soft-delete';
 
@@ -35,13 +40,40 @@ const appendBranchFilter = (conditions: any[], branchColumn: any, branchId: numb
 
 const normKey = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase();
 
+const REPORT_PDF_BROWSER_CANDIDATES = [
+    Bun.env.CHROME_BIN,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium'
+].filter(Boolean) as string[];
+
+const findAvailablePdfBrowser = async () => {
+    for (const candidate of REPORT_PDF_BROWSER_CANDIDATES) {
+        try {
+            await access(candidate, fsConstants.X_OK);
+            return candidate;
+        } catch {
+            // Try next installed browser candidate.
+        }
+    }
+
+    throw new Error('PDF export requires Google Chrome or Chromium to be installed on the server host');
+};
+
+const stripAutoPrintScripts = (html: string) => (
+    String(html || '').replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+);
+
 type ReportTxnTypeFilter = string | string[];
+type ReportCategoryFilter = number | number[];
+type ReportAccountFilter = number | number[];
+type ReportPartyFilter = string | string[];
 type ReportFilters = {
     txnType?: ReportTxnTypeFilter,
     txnTypeId?: number,
-    categoryId?: number,
-    accountId?: number,
-    party?: string
+    categoryId?: ReportCategoryFilter,
+    accountId?: ReportAccountFilter,
+    party?: ReportPartyFilter
 };
 
 const normalizeTxnTypeFilters = (txnType?: ReportTxnTypeFilter): string[] => {
@@ -64,15 +96,97 @@ const normalizeTxnTypeFilters = (txnType?: ReportTxnTypeFilter): string[] => {
 
 const hasActiveTxnTypeFilters = (txnType?: ReportTxnTypeFilter) => normalizeTxnTypeFilters(txnType).length > 0;
 
+const normalizeCategoryFilters = (categoryId?: ReportCategoryFilter): number[] => {
+    if (!categoryId) return [];
+
+    const values = Array.isArray(categoryId) ? categoryId : [categoryId];
+    const seen = new Set<number>();
+
+    return values
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .filter((value) => {
+            if (seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        });
+};
+
+const normalizeAccountFilters = (accountId?: ReportAccountFilter): number[] => {
+    if (!accountId) return [];
+
+    const values = Array.isArray(accountId) ? accountId : [accountId];
+    const seen = new Set<number>();
+
+    return values
+        .map((value) => Number(value))
+        .filter((value) => Number.isFinite(value) && value > 0)
+        .filter((value) => {
+            if (seen.has(value)) return false;
+            seen.add(value);
+            return true;
+        });
+};
+
+const normalizePartyFilters = (party?: ReportPartyFilter): string[] => {
+    if (!party) return [];
+
+    const values = Array.isArray(party) ? party : [party];
+    const seen = new Set<string>();
+
+    return values
+        .map((value) => String(value || '').trim())
+        .filter(Boolean)
+        .filter((value) => value !== 'All Parties')
+        .filter((value) => {
+            const key = value.toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+};
+
+const appendDirectAccountFilter = (
+    conditions: any[],
+    accountColumn: any,
+    accountId?: ReportAccountFilter
+) => {
+    const accountFilters = normalizeAccountFilters(accountId);
+    const firstAccountId = accountFilters[0];
+
+    if (accountFilters.length === 1 && firstAccountId !== undefined) {
+        conditions.push(eq(accountColumn, firstAccountId));
+    } else if (accountFilters.length > 1) {
+        conditions.push(inArray(accountColumn, accountFilters));
+    }
+};
+
+const appendTransactionEntryAccountExistsFilter = (
+    conditions: any[],
+    transactionIdColumn: any,
+    accountId?: ReportAccountFilter
+) => {
+    const accountFilters = normalizeAccountFilters(accountId);
+    const firstAccountId = accountFilters[0];
+
+    if (accountFilters.length === 1 && firstAccountId !== undefined) {
+        conditions.push(sql`EXISTS (SELECT 1 FROM transaction_entries te WHERE te.transaction_id = ${transactionIdColumn} AND te.account_id = ${firstAccountId})`);
+    } else if (accountFilters.length > 1) {
+        const joinedIds = sql.join(accountFilters.map((id) => sql`${id}`), sql`, `);
+        conditions.push(sql`EXISTS (SELECT 1 FROM transaction_entries te WHERE te.transaction_id = ${transactionIdColumn} AND te.account_id IN (${joinedIds}))`);
+    }
+};
+
 const pickAccountName = (
     txnType: string,
     entries: Array<{ accountId?: number | null, description: string | null, accountName: string | null }>,
-    preferredAccountId?: number
+    preferredAccountId?: ReportAccountFilter
 ) => {
     const byDesc = (d: string) => entries.find(e => (e.description || '').toLowerCase() === d.toLowerCase())?.accountName;
     const type = (txnType || '').toLowerCase();
-    if (preferredAccountId) {
-        const exactMatch = entries.find(e => Number(e.accountId) === Number(preferredAccountId))?.accountName;
+    const preferredAccountIds = normalizeAccountFilters(preferredAccountId);
+    if (preferredAccountIds.length > 0) {
+        const exactMatch = entries.find((e) => preferredAccountIds.includes(Number(e.accountId)))?.accountName;
         if (exactMatch) return exactMatch;
     }
 
@@ -107,16 +221,34 @@ const appendTxnAndCategoryFilters = (
             conditions.push(inArray(transactions.txnTypeId, typeIds));
         }
     }
-    if (filters?.categoryId) {
-        conditions.push(eq(transactions.categoryId, filters.categoryId));
+    const categoryFilters = normalizeCategoryFilters(filters?.categoryId);
+    const firstCategoryId = categoryFilters[0];
+    if (categoryFilters.length === 1 && firstCategoryId !== undefined) {
+        conditions.push(eq(transactions.categoryId, firstCategoryId));
+    } else if (categoryFilters.length > 1) {
+        conditions.push(inArray(transactions.categoryId, categoryFilters));
     }
-    if (filters?.accountId) {
-        conditions.push(sql`EXISTS (SELECT 1 FROM transaction_entries te WHERE te.transaction_id = ${transactions.id} AND te.account_id = ${filters.accountId})`);
-    }
-    if (filters?.party && filters.party !== 'All Parties') {
+    appendTransactionEntryAccountExistsFilter(conditions, transactions.id, filters?.accountId);
+    const partyFilters = normalizePartyFilters(filters?.party);
+    const firstPartyFilter = partyFilters[0];
+    if (partyFilters.length === 1 && firstPartyFilter !== undefined) {
         conditions.push(sql`(
-            EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND lower(COALESCE(p.company_name, p.name)) = lower(${filters.party}))
-            OR lower(${transactions.name}) = lower(${filters.party})
+            EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND lower(COALESCE(p.company_name, p.name)) = lower(${firstPartyFilter}))
+            OR lower(${transactions.name}) = lower(${firstPartyFilter})
+        )`);
+    } else if (partyFilters.length > 1) {
+        const partyConditions = sql.join(
+            partyFilters.map((partyName) => sql`lower(COALESCE(p.company_name, p.name)) = lower(${partyName})`),
+            sql` OR `
+        );
+        const txnNameConditions = sql.join(
+            partyFilters.map((partyName) => sql`lower(${transactions.name}) = lower(${partyName})`),
+            sql` OR `
+        );
+
+        conditions.push(sql`(
+            EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND (${partyConditions}))
+            OR (${txnNameConditions})
         )`);
     }
 };
@@ -184,12 +316,13 @@ const fetchDetailedRows = async (
 
     const orgList = await db.select().from(organizations).where(eq(organizations.id, orgId)).limit(1);
     const finalCurrency = targetCurrency || orgList[0]?.baseCurrency || 'USD';
+    const accountFilters = normalizeAccountFilters(filters?.accountId);
 
     const rows: any[] = [];
     for (const t of txns as any[]) {
         const txnEntries = entriesByTxn.get(t.id) || [];
-        if (filters?.accountId) {
-            const hasAccount = txnEntries.some(e => Number(e.accountId) === Number(filters.accountId));
+        if (accountFilters.length > 0) {
+            const hasAccount = txnEntries.some((e) => accountFilters.includes(Number(e.accountId)));
             if (!hasAccount) continue;
         }
 
@@ -357,20 +490,102 @@ export const ReportsService = {
         const selectedDateRange = reportMeta?.startDate && reportMeta?.endDate
             ? `${formatExportDate(reportMeta.startDate)} to ${formatExportDate(reportMeta.endDate)}`
             : '';
-        const renderTable = (headers: string[], rows: string[][]) => `
-            <table>
-                <thead>
-                    <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
-                </thead>
-                <tbody>
-                    ${rows.map((row) => `
-                        <tr>
-                            ${row.map((value, index) => `<td${index === row.length - 1 ? ' style="text-align:right;"' : ''}>${escapeHtml(value)}</td>`).join('')}
-                        </tr>
-                    `).join('')}
-                </tbody>
-            </table>
-        `;
+        const renderTable = (headers: string[], rows: string[][]) => {
+            const getColumnMeta = (header: string) => {
+                const lower = String(header || '').toLowerCase();
+                if (lower.includes('bank name') || lower.includes('account')) return { width: '18%', charsPerLine: 24 };
+                if (lower.includes('date')) return { width: '12%', charsPerLine: 14 };
+                if (lower.includes('type')) return { width: '10%', charsPerLine: 12 };
+                if (lower.includes('amount') || lower.includes('balance') || lower.includes('credit') || lower.includes('debit') || lower.includes('income') || lower.includes('expense') || lower.includes('investment')) {
+                    return { width: '14%', charsPerLine: 14 };
+                }
+                if (lower.includes('description') || lower.includes('notes') || lower.includes('particulars')) return { width: '22%', charsPerLine: 28 };
+                if (lower.includes('category')) return { width: '15%', charsPerLine: 20 };
+                if (lower.includes('party')) return { width: '15%', charsPerLine: 20 };
+                if (lower.includes('branch')) return { width: '10%', charsPerLine: 12 };
+                return { width: 'auto', charsPerLine: 18 };
+            };
+
+            const wrapText = (val: any) => {
+                const str = String(val ?? '');
+                // Insert zero-width space every 15 chars for massive unbreakable strings 
+                // This prevents `table-layout: auto` from exploding the canvas width
+                const wrapped = str.replace(/([^\s]{15})(?=[^\s])/g, '$1\u200B');
+                return escapeHtml(wrapped);
+            };
+
+            const columnMeta = headers.map((header) => getColumnMeta(header));
+            const estimateRowUnits = (row: string[]) => {
+                const maxLines = row.reduce((currentMax, value, index) => {
+                    const content = String(value ?? '').replace(/\u200B/g, '').trim();
+                    if (!content) return currentMax;
+
+                    const charsPerLine = columnMeta[index]?.charsPerLine || 18;
+                    const lines = content
+                        .split(/\r?\n/)
+                        .reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / charsPerLine)), 0);
+
+                    return Math.max(currentMax, lines);
+                }, 1);
+
+                return Math.max(2, maxLines + 1);
+            };
+
+            const chunkRowsForPrint = (allRows: string[][]) => {
+                const pages: string[][][] = [];
+                let currentPageRows: string[][] = [];
+                let currentUnits = 0;
+                let pageIndex = 0;
+
+                allRows.forEach((row) => {
+                    const rowUnits = estimateRowUnits(row);
+                    const pageBudget = pageIndex === 0 ? 28 : 34;
+
+                    if (currentPageRows.length > 0 && currentUnits + rowUnits > pageBudget) {
+                        pages.push(currentPageRows);
+                        currentPageRows = [row];
+                        currentUnits = rowUnits;
+                        pageIndex += 1;
+                        return;
+                    }
+
+                    currentPageRows.push(row);
+                    currentUnits += rowUnits;
+                });
+
+                if (currentPageRows.length > 0) {
+                    pages.push(currentPageRows);
+                }
+
+                return pages.length > 0 ? pages : [allRows];
+            };
+
+            const renderTablePage = (pageRows: string[][]) => `
+                <table>
+                    <colgroup>
+                        ${columnMeta.map((meta) => `<col style="width: ${meta.width};">`).join('')}
+                    </colgroup>
+                    <thead>
+                        <tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join('')}</tr>
+                    </thead>
+                    <tbody>
+                        ${pageRows.map((row) => `
+                            <tr>
+                                ${row.map((value, index) => `<td${index === row.length - 1 ? ' style="text-align:right;"' : ''}>${wrapText(value)}</td>`).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+
+            return chunkRowsForPrint(rows)
+                .map((pageRows, index, pages) => `
+                    <div class="report-table-page${index < pages.length - 1 ? ' report-table-page-break' : ''}">
+                        ${renderTablePage(pageRows)}
+                    </div>
+                `)
+                .join('');
+        };
         const renderMetricCards = (items: Array<{ label: string, value: string }>) => `
             <div class="metric-grid">
                 ${items.map((item) => `
@@ -610,7 +825,7 @@ export const ReportsService = {
                 <meta charset="utf-8" />
                 <title>${escapeHtml(reportType || 'Report')}</title>
                 <style>
-                    @page { margin: 0mm; }
+                    @page { size: A4 landscape; margin: 0mm; }
                     body { font-family: Arial, sans-serif; padding: 20mm; color: #111827; }
                     body.pnl-body {
                         font-family: Inter, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -626,10 +841,45 @@ export const ReportsService = {
                     .metric-card { border: 1px solid #e5e7eb; background: #f8fafc; border-radius: 10px; padding: 12px; }
                     .metric-label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: #6b7280; margin-bottom: 6px; }
                     .metric-value { font-size: 16px; font-weight: 700; color: #111827; }
-                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                    th, td { border: 1px solid #e5e7eb; padding: 6px 8px; vertical-align: top; }
-                    th { background: #f8fafc; text-align: left; font-weight: 700; }
-                    tbody tr:nth-child(even) { background: #fcfcfd; }
+                    .report-table-page {
+                        margin: 0 0 20px;
+                    }
+                    .report-table-page-break {
+                        page-break-after: always;
+                        break-after: page;
+                    }
+                    table {
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-size: 10px;
+                        table-layout: fixed;
+                        border: 2px solid #000;
+                        background-color: #ffffff;
+                        margin-bottom: 0;
+                        page-break-inside: auto;
+                    }
+                    thead { display: table-header-group; }
+                    tbody { display: table-row-group; }
+                    tr {
+                        background-color: #ffffff;
+                    }
+                    th, td { 
+                        border: 1px solid #000; 
+                        padding: 8px 10px; 
+                        vertical-align: middle; 
+                        word-break: break-all;
+                        word-wrap: break-word;
+                        overflow-wrap: break-word;
+                        color: #000;
+                        background-color: #ffffff;
+                    }
+                    th { 
+                        text-align: left; 
+                        font-weight: 700; 
+                        text-transform: uppercase;
+                        border-bottom: 2px solid #000;
+                    }
+                    tbody tr:last-child td { border-bottom: 1px solid #000; }
 
                     /* Profit & Loss Specific Styles */
                     .pnl-container { padding: 0; max-width: 1080px; margin: 0 auto; }
@@ -778,6 +1028,55 @@ export const ReportsService = {
         `;
     },
 
+    renderPdfBufferFromHtml: async (html: string, filePrefix = 'reports') => {
+        const browserPath = await findAvailablePdfBrowser();
+        const safePrefix = String(filePrefix || 'reports')
+            .trim()
+            .replace(/[^a-z0-9_-]+/gi, '-')
+            .replace(/^-+|-+$/g, '')
+            || 'reports';
+        const tempDir = await mkdtemp(join(tmpdir(), 'reports-pdf-'));
+        const htmlPath = join(tempDir, `${safePrefix}.html`);
+        const pdfPath = join(tempDir, `${safePrefix}.pdf`);
+
+        try {
+            await writeFile(htmlPath, stripAutoPrintScripts(html), 'utf8');
+
+            const process = Bun.spawn([
+                browserPath,
+                '--headless',
+                '--disable-gpu',
+                '--disable-extensions',
+                '--no-first-run',
+                '--no-default-browser-check',
+                '--allow-file-access-from-files',
+                '--no-pdf-header-footer',
+                `--print-to-pdf=${pdfPath}`,
+                pathToFileURL(htmlPath).href
+            ], {
+                stdout: 'pipe',
+                stderr: 'pipe'
+            });
+
+            const [exitCode, stdout, stderr] = await Promise.all([
+                process.exited,
+                process.stdout ? new Response(process.stdout).text() : Promise.resolve(''),
+                process.stderr ? new Response(process.stderr).text() : Promise.resolve('')
+            ]);
+
+            if (exitCode !== 0) {
+                const details = [stderr, stdout].map((value) => value.trim()).filter(Boolean).join('\n');
+                throw new Error(details ? `PDF export failed: ${details}` : 'PDF export failed');
+            }
+
+            return await readFile(pdfPath);
+        } catch (error: any) {
+            throw new Error(error?.message || 'Failed to render report PDF');
+        } finally {
+            await rm(tempDir, { recursive: true, force: true });
+        }
+    },
+
     // 1. Summary Report
     getSummary: async (orgId: number, branchId: number | number[] | 'all', startDate: string, endDate: string, filters?: ReportFilters, targetCurrency?: string, user?: any) => {
         // Fetch Types
@@ -803,9 +1102,7 @@ export const ReportsService = {
                 eq(accounts.orgId, orgId),
                 isNotDeleted(accounts)
             ];
-            if (filters?.accountId) {
-                accountConditions.push(eq(accounts.id, filters.accountId));
-            }
+            appendDirectAccountFilter(accountConditions, accounts.id, filters?.accountId);
 
             const accOpeningQuery = await db.select({
                 openingBalance: accounts.openingBalance,
@@ -990,9 +1287,7 @@ export const ReportsService = {
             eq(accounts.status, 1)
         ];
         // GLOBAL: Accounts are unified
-        if (filters?.accountId) {
-            accountConditions.push(eq(accounts.id, filters.accountId));
-        }
+        appendDirectAccountFilter(accountConditions, accounts.id, filters?.accountId);
 
         const accountRows = await db.select({
             id: accounts.id,
@@ -1032,9 +1327,7 @@ export const ReportsService = {
             lt(transactions.txnDate, startDate)
         ];
         // GLOBAL: Account past movements are global for consistent balance
-        if (filters?.accountId) {
-            openingMovementConditions.push(eq(transactionEntries.accountId, filters.accountId));
-        }
+        appendDirectAccountFilter(openingMovementConditions, transactionEntries.accountId, filters?.accountId);
 
         const openingMovementRows = await db.select({
             accountId: transactionEntries.accountId,
@@ -1067,9 +1360,7 @@ export const ReportsService = {
         ];
         appendBranchFilter(periodMovementConditions, transactions.branchId, branchId, user);
         appendTxnAndCategoryFilters(periodMovementConditions, types, filters);
-        if (filters?.accountId) {
-            periodMovementConditions.push(eq(transactionEntries.accountId, filters.accountId));
-        }
+        appendDirectAccountFilter(periodMovementConditions, transactionEntries.accountId, filters?.accountId);
 
         const periodMovementRows = await db.select({
             accountId: transactionEntries.accountId,
@@ -1123,6 +1414,7 @@ export const ReportsService = {
             }
         }
 
+        const selectedAccountFilters = normalizeAccountFilters(filters?.accountId);
         const tableData = Array.from(accountMap.values())
             .map((item) => {
                 const count = periodCountMap.get(item.accountId) || 0;
@@ -1132,7 +1424,7 @@ export const ReportsService = {
                     closingBalance: item.openingBalance + item.periodNet
                 };
             })
-            .filter(item => (filters?.accountId ? true : item.count > 0))
+            .filter((item) => (selectedAccountFilters.length > 0 ? true : item.count > 0))
             .sort((a, b) => a.name.localeCompare(b.name))
             .map(({ accountId, periodNet, ...rest }) => rest);
 
@@ -1174,7 +1466,9 @@ export const ReportsService = {
         const org = orgList[0];
         const finalCurrency = targetCurrency || org?.baseCurrency || 'USD';
 
-        if (filters?.accountId) {
+        const selectedLedgerAccountFilters = normalizeAccountFilters(filters?.accountId);
+        if (selectedLedgerAccountFilters.length === 1) {
+            const selectedLedgerAccountId = selectedLedgerAccountFilters[0] as number;
             const [selectedAccount] = await db.select({
                 id: accounts.id,
                 name: accounts.name,
@@ -1183,7 +1477,7 @@ export const ReportsService = {
             })
                 .from(accounts)
                 .leftJoin(currencies, eq(accounts.currencyId, currencies.id))
-                .where(and(eq(accounts.orgId, orgId), eq(accounts.id, filters.accountId), isNotDeleted(accounts), eq(accounts.status, 1)))
+                .where(and(eq(accounts.orgId, orgId), eq(accounts.id, selectedLedgerAccountId), isNotDeleted(accounts), eq(accounts.status, 1)))
                 .limit(1);
 
             if (!selectedAccount) {
@@ -1206,9 +1500,9 @@ export const ReportsService = {
                 eq(transactions.orgId, orgId),
                 isNotDeleted(transactions),
                 eq(transactions.status, 1),
-                lt(transactions.txnDate, startDate),
-                eq(transactionEntries.accountId, filters.accountId)
+                lt(transactions.txnDate, startDate)
             ];
+            appendDirectAccountFilter(accountPastConditions, transactionEntries.accountId, filters?.accountId);
             // GLOBAL: Ledger opening balance is global
 
             const pastEntryRows = await db.select({
@@ -1236,9 +1530,9 @@ export const ReportsService = {
                 isNotDeleted(transactions),
                 eq(transactions.status, 1),
                 gte(transactions.txnDate, startDate),
-                lte(transactions.txnDate, endDate),
-                eq(transactionEntries.accountId, filters.accountId)
+                lte(transactions.txnDate, endDate)
             ];
+            appendDirectAccountFilter(accountLedgerConditions, transactionEntries.accountId, filters?.accountId);
             appendBranchFilter(accountLedgerConditions, transactions.branchId, branchId, user);
             appendTxnAndCategoryFilters(accountLedgerConditions, types, filters);
 
@@ -1344,9 +1638,7 @@ export const ReportsService = {
                 eq(accounts.orgId, orgId),
                 isNotDeleted(accounts)
             ];
-            if (filters?.accountId) {
-                accountConditions.push(eq(accounts.id, filters.accountId));
-            }
+            appendDirectAccountFilter(accountConditions, accounts.id, filters?.accountId);
 
             const accOpeningQuery = await db.select({
                 openingBalance: accounts.openingBalance,
@@ -1510,16 +1802,34 @@ export const ReportsService = {
             baseConditions.push(inArray(transactions.txnTypeId, [incomeTypeId, expenseTypeId]));
         }
 
-        if (filters?.categoryId) {
-            baseConditions.push(eq(transactions.categoryId, filters.categoryId));
+        const categoryFilters = normalizeCategoryFilters(filters?.categoryId);
+        const firstCategoryId = categoryFilters[0];
+        if (categoryFilters.length === 1 && firstCategoryId !== undefined) {
+            baseConditions.push(eq(transactions.categoryId, firstCategoryId));
+        } else if (categoryFilters.length > 1) {
+            baseConditions.push(inArray(transactions.categoryId, categoryFilters));
         }
-        if (filters?.accountId) {
-            baseConditions.push(sql`EXISTS (SELECT 1 FROM transaction_entries te WHERE te.transaction_id = ${transactions.id} AND te.account_id = ${filters.accountId})`);
-        }
-        if (filters?.party && filters.party !== 'All Parties') {
+        appendTransactionEntryAccountExistsFilter(baseConditions, transactions.id, filters?.accountId);
+        const partyFilters = normalizePartyFilters(filters?.party);
+        const firstPartyFilter = partyFilters[0];
+        if (partyFilters.length === 1 && firstPartyFilter !== undefined) {
             baseConditions.push(sql`(
-                EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND lower(COALESCE(p.company_name, p.name)) = lower(${filters.party}))
-                OR lower(${transactions.name}) = lower(${filters.party})
+                EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND lower(COALESCE(p.company_name, p.name)) = lower(${firstPartyFilter}))
+                OR lower(${transactions.name}) = lower(${firstPartyFilter})
+            )`);
+        } else if (partyFilters.length > 1) {
+            const partyConditions = sql.join(
+                partyFilters.map((partyName) => sql`lower(COALESCE(p.company_name, p.name)) = lower(${partyName})`),
+                sql` OR `
+            );
+            const txnNameConditions = sql.join(
+                partyFilters.map((partyName) => sql`lower(${transactions.name}) = lower(${partyName})`),
+                sql` OR `
+            );
+
+            baseConditions.push(sql`(
+                EXISTS (SELECT 1 FROM parties p WHERE p.id = ${transactions.contactId} AND (${partyConditions}))
+                OR (${txnNameConditions})
             )`);
         }
 
