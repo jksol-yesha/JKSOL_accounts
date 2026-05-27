@@ -2,10 +2,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Calendar, DollarSign, Wallet, Check, ChevronDown, Download } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
+import CustomDatePicker from '../../../components/common/CustomDatePicker';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
 import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../../services/api';
 import { cn } from '../../../utils/cn';
+import AttachmentViewer from '../../../components/common/AttachmentViewer';
 import { notifyTransactionDataChanged } from '../transactionDataSync';
 
 const isPartyInactive = (party) => {
@@ -903,12 +905,10 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-[11px] font-extrabold text-gray-400 uppercase tracking-widest pl-1">Date</label>
-                            <input
-                                type="date"
+                            <CustomDatePicker
                                 required
                                 value={formData.txnDate}
                                 onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-bold text-slate-700 outline-none focus:border-black transition-all"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -1199,50 +1199,11 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
             </div>
 
             {/* Full Screen Attachment Viewer */}
-            {fullScreenAttachment.isOpen && fullScreenAttachment.path && (
-                <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200" onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}>
-                    <div className="relative w-full max-w-5xl bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-between p-4 border-b border-gray-100 bg-white">
-                            <h3 className="text-sm font-bold text-gray-800">Attachment Preview</h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!fullScreenAttachment.path) return;
-                                        void downloadAttachmentFile(fullScreenAttachment.path).catch((error) => {
-                                            console.error('Failed to download attachment:', error);
-                                            alert('Failed to download attachment');
-                                        });
-                                    }}
-                                    className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors flex items-center justify-center gap-2 px-3 bg-gray-50 hover:text-gray-900 border border-gray-100"
-                                    title="Download Attachment"
-                                >
-                                    <Download size={14} />
-                                    <span className="text-xs font-bold uppercase tracking-wider">Download</span>
-                                </button>
-                                <button
-                                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                                    className="p-1.5 hover:bg-rose-50 rounded-lg text-gray-400 hover:text-rose-600 transition-colors"
-                                >
-                                    <X size={20} />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-auto p-4 bg-gray-50 flex items-center justify-center min-h-[50vh]">
-                            {(() => {
-                                const p = fullScreenAttachment.path;
-                                const fullUrl = buildAttachmentUrl(p);
-                                const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                if (isImage) {
-                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg shadow-sm" />;
-                                } else {
-                                    return <iframe src={fullUrl} className="w-full h-[75vh] border-0 rounded-lg shadow-sm bg-white" title="Attachment Preview" />;
-                                }
-                            })()}
-                        </div>
-                    </div>
-                </div>
-            )}
+            <AttachmentViewer
+                path={fullScreenAttachment.path}
+                isOpen={fullScreenAttachment.isOpen}
+                onClose={() => setFullScreenAttachment({ isOpen: false, path: null })}
+            />
         </div>,
         document.body
     );

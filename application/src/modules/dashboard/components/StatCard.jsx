@@ -357,7 +357,7 @@ const StatCard = ({
                         <HoverTooltip content={amountTooltip}>
                             <span
                                 className="
-                                    text-xl lg:text-2xl
+                                    text-xl lg:text-[20px]
                                     font-medium
                                     text-slate-900
                                     leading-tight
@@ -371,7 +371,7 @@ const StatCard = ({
                     ) : (
                         <span
                             className="
-                                text-xl lg:text-2xl
+                                text-xl lg:text-[20px]
                                 font-medium
                                 text-slate-900
                                 leading-tight

@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Save, AlertCircle, X, ChevronDown, Download, ArrowRightLeft, Trash2 } from 'lucide-react';
+import AttachmentViewer from '../../../components/common/AttachmentViewer';
 import PageHeader from '../../../components/layout/PageHeader';
 import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
+import CustomDatePicker from '../../../components/common/CustomDatePicker';
 import { useBranch } from '../../../context/BranchContext';
 import { useYear } from '../../../context/YearContext';
 import { useOrganization } from '../../../context/OrganizationContext';
@@ -1444,23 +1446,17 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
-                                                <input
-                                                    type="date"
+                                                <CustomDatePicker
                                                     ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    onClick={(e) => {
-                                                        restoreDateInputFocus(e.currentTarget);
-                                                        e.currentTarget.showPicker?.();
-                                                        datePickerAdvanceOnEnterRef.current = true;
-                                                    }}
                                                     onBlur={() => {
                                                         datePickerAdvanceOnEnterRef.current = false;
                                                     }}
                                                     onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
-                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    error={errors.txnDate}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
@@ -1558,23 +1554,17 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
-                                                <input
-                                                    type="date"
+                                                <CustomDatePicker
                                                     ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    onClick={(e) => {
-                                                        restoreDateInputFocus(e.currentTarget);
-                                                        e.currentTarget.showPicker?.();
-                                                        datePickerAdvanceOnEnterRef.current = true;
-                                                    }}
                                                     onBlur={() => {
                                                         datePickerAdvanceOnEnterRef.current = false;
                                                     }}
                                                     onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
-                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    error={errors.txnDate}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
@@ -1766,23 +1756,17 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
                                                 <label className="text-[11px] font-bold text-slate-600 block capitalize">
                                                     Date <span className="text-rose-500">*</span>
                                                 </label>
-                                                <input
-                                                    type="date"
+                                                <CustomDatePicker
                                                     ref={setFieldRef('txnDate')}
                                                     data-nav-field="true"
                                                     required
                                                     value={formData.txnDate}
                                                     onChange={(e) => setFormData({ ...formData, txnDate: e.target.value })}
-                                                    onClick={(e) => {
-                                                        restoreDateInputFocus(e.currentTarget);
-                                                        e.currentTarget.showPicker?.();
-                                                        datePickerAdvanceOnEnterRef.current = true;
-                                                    }}
                                                     onBlur={() => {
                                                         datePickerAdvanceOnEnterRef.current = false;
                                                     }}
                                                     onKeyDown={(e) => handleFieldKeyDown(e, 'txnDate')}
-                                                    className={cn("w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all", errors.txnDate ? "border-rose-500 ring-2 ring-rose-500/20" : "border-gray-100")}
+                                                    error={errors.txnDate}
                                                 />
                                                 {errors.txnDate && <p className="text-[10px] font-bold text-rose-500 mt-0.5 pl-1">{errors.txnDate}</p>}
                                             </div>
@@ -2245,50 +2229,11 @@ const CreateTransaction = ({ isOpen, onClose, transactionToEdit, onSuccess, onDe
 
             {/* Full Screen Attachment Viewer */}
             {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(
-                <div 
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200" 
-                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                >
-                    <div 
-                        className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white">
-                            <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">Attachment</h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!fullScreenAttachment.path) return;
-                                        void downloadAttachmentFile(fullScreenAttachment.path);
-                                    }}
-                                    className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-md text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1.5 shadow-sm"
-                                >
-                                    <Download size={14} strokeWidth={2.5} />
-                                    <span className="text-[11px] font-extrabold uppercase tracking-widest">Download</span>
-                                </button>
-                                <button
-                                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                                >
-                                    <X size={16} strokeWidth={2.5} />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-auto bg-slate-50/50 p-6 flex items-center justify-center">
-                            {(() => {
-                                const p = fullScreenAttachment.path;
-                                const fullUrl = buildAttachmentUrl(p);
-                                const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                if (isImage) {
-                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg border border-slate-200 shadow-sm bg-white" />;
-                                } else {
-                                    return <iframe src={fullUrl} className="w-full h-[75vh] bg-white rounded-lg border border-slate-200 shadow-sm" />;
-                                }
-                            })()}
-                        </div>
-                    </div>
-                </div>,
+                <AttachmentViewer
+                    path={fullScreenAttachment.path}
+                    isOpen={fullScreenAttachment.isOpen}
+                    onClose={() => setFullScreenAttachment({ isOpen: false, path: null })}
+                />,
                 document.body
             )}
         </>

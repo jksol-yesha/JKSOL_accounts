@@ -38,7 +38,7 @@ const Tooltip = ({ content, children, className = '', placement = 'top' }) => {
         <>
             <span
                 ref={wrapperRef}
-                className={cn('cursor-default relative inline-block', className)}
+                className={cn('cursor-default', className)}
                 onMouseEnter={() => setVisible(true)}
                 onMouseLeave={() => setVisible(false)}
             >

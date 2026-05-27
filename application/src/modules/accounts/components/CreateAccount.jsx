@@ -11,6 +11,7 @@ import {
   FileText,
 } from "lucide-react";
 import CustomSelect from "../../../components/common/CustomSelect";
+import CustomDatePicker from "../../../components/common/CustomDatePicker";
 import apiService from "../../../services/api";
 import { useOrganization } from "../../../context/OrganizationContext";
 import {
@@ -1595,30 +1596,17 @@ const CreateAccount = ({
                 <label className="text-[11px] font-bold text-slate-600 block">
                   As of Date <span className="text-rose-500">*</span>
                 </label>
-                <input
-                  type="date"
+                <CustomDatePicker
                   name="openingBalanceDate"
                   ref={setFieldRef("openingBalanceDate")}
                   value={formData.openingBalanceDate}
                   max={new Date().toISOString().split("T")[0]}
                   onChange={handleChange}
-                  onClick={(e) => {
-                    // We only call restoreDateInputFocus on initial click to ensure focus is clean
-                    // but we allow subsequent interactions to be native
-                    restoreDateInputFocus(e.currentTarget);
-                    e.currentTarget.showPicker?.();
-                    datePickerAdvanceOnEnterRef.current = true;
-                  }}
                   onBlur={() => {
                     datePickerAdvanceOnEnterRef.current = false;
                   }}
                   onKeyDown={(e) => handleFieldKeyDown(e, "openingBalanceDate")}
-                  className={cn(
-                    "w-full px-3 py-1.5 bg-white border rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none transition-all accounts-laptop-date-input",
-                    errors.openingBalanceDate
-                      ? "border-rose-500 focus:ring-rose-500/20"
-                      : "border-slate-200 focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10",
-                  )}
+                  error={errors.openingBalanceDate}
                 />
                 {errors.openingBalanceDate && (
                   <p className="text-[10px] font-bold text-rose-500 mt-0.5">

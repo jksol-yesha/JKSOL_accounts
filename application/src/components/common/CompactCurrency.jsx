@@ -14,9 +14,11 @@ const CompactCurrency = ({ amount, currencyOverride = null, className = '', plac
     }
 
     return (
-        <Tooltip content={fullText} className={className} placement={placement}>
-            {compactText}
-        </Tooltip>
+        <span className={className}>
+            <Tooltip content={fullText} placement={placement}>
+                {compactText}
+            </Tooltip>
+        </span>
     );
 };
 

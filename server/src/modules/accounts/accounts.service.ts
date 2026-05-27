@@ -172,26 +172,10 @@ export const getAllAccounts = async (
             .groupBy(accounts.id, currencies.code)
         : Promise.resolve([]);
 
-    const transactionCountPromise = db.select({
-        accountId: transactionEntries.accountId,
-        count: sql<number>`count(DISTINCT ${transactionEntries.transactionId})`
-    })
-        .from(transactionEntries)
-        .innerJoin(transactions, and(
-            eq(transactions.id, transactionEntries.transactionId),
-            eq(transactions.orgId, orgId),
-            eq(transactions.status, 1),
-            isNotDeleted(transactions),
-            ...(selectedFinancialYear ? [eq(transactions.financialYearId, selectedFinancialYear.id)] : [])
-        ))
-        .where(inArray(transactionEntries.accountId, accountIds))
-        .groupBy(transactionEntries.accountId);
-
-    const [allTimeBalanceRows, beforeFinancialYearBalanceRows, withinFinancialYearBalanceRows, transactionCountRows] = await Promise.all([
+    const [allTimeBalanceRows, beforeFinancialYearBalanceRows, withinFinancialYearBalanceRows] = await Promise.all([
         allTimeBalancePromise,
         beforeFinancialYearBalancePromise,
-        withinFinancialYearBalancePromise,
-        transactionCountPromise
+        withinFinancialYearBalancePromise
     ]);
 
     for (const log of accountUpdateAudits as any[]) {
@@ -244,12 +228,6 @@ export const getAllAccounts = async (
         accumulateConvertedNetDeltas(withinFinancialYearBalanceRows as any[])
     ]);
 
-    const transactionCountByAccount = new Map<number, number>();
-    for (const row of transactionCountRows as any[]) {
-        const accountId = Number(row.accountId);
-        if (accountId) transactionCountByAccount.set(accountId, Number(row.count || 0));
-    }
-
     const enriched = await Promise.all(rows.map(async (row) => {
         const acc = row.account;
         const openingBalanceLocal = Number(acc.openingBalance || 0);
@@ -294,7 +272,6 @@ export const getAllAccounts = async (
             bankLogoKey: bankMeta.bankLogoKey,
             typeLabel: getAccountTypeName(acc.accountType),
             subtypeLabel: getAccountSubtypeName(acc.subtype),
-            totalTransactions: transactionCountByAccount.get(accountId) || 0,
             isActive: acc.status === 1
         };
     }));

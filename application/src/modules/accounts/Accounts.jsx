@@ -311,9 +311,10 @@ const FilterDropdown = React.forwardRef(
                   onMouseEnter={() => setHighlightedIndex(index)}
                   onClick={() => {
                     if (showApplyFooter) {
-                      setStagedValue(option.value);
+                      setStagedValue(stagedValue === option.value ? (defaultValue || "") : option.value);
                     } else {
-                      handleSelect(option.value);
+                      // Toggle: clicking the already-selected option deselects it
+                      handleSelect(value === option.value ? (defaultValue || "") : option.value);
                     }
                   }}
                   className={cn(
@@ -873,7 +874,7 @@ const Accounts = () => {
   const chartEnterStepRef = useRef("idle");
 
   const [groupBy, setGroupBy] = useState(() => {
-    return localStorage.getItem("accounts_groupBy_preset") || "none";
+    return localStorage.getItem("accounts_groupBy_preset") || "";
   });
 
   useEffect(() => {
@@ -1220,7 +1221,7 @@ const Accounts = () => {
       if (!aActive && bActive) return 1;
 
       // Secondary Sort: Grouping
-      if (groupBy !== "none") {
+      if (groupBy) {
         const groupA =
           groupBy === "subtype"
             ? String(a.subtypeLabel || "").toLowerCase()
@@ -1235,7 +1236,7 @@ const Accounts = () => {
       return 0;
     });
 
-    if (groupBy !== "none") {
+    if (groupBy) {
       // Sort the list by the grouped label first
       result.sort((a, b) => {
         const valA = String((groupBy === "type" ? a.typeLabel : a.subtypeLabel) || "Unknown").trim();
@@ -1365,7 +1366,6 @@ const Accounts = () => {
     else if (account.type === 4 || account.type === "4")
       IconComponent = Activity;
 
-    const txns = account.totalTransactions || 0;
 
     return (
       <div className="flex items-center gap-2 h-full w-full group justify-between pr-2">
@@ -1379,19 +1379,6 @@ const Accounts = () => {
             textClassName="text-[12px] font-semibold text-gray-800 text-left cursor-default leading-snug"
           />
         </div>
-        {txns > 0 ? (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              e.preventDefault();
-              navigate(`/transactions?accountId=${account.id}&disableDateFilter=true`);
-            }}
-            className="shrink-0 text-[#4A8AF4] hover:text-[#3b71ca] hover:underline cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-100 rounded-sm text-[12px] font-medium whitespace-nowrap"
-            title={`View ${txns} transactions`}
-          >
-            {txns} txn{txns !== 1 ? 's' : ''}
-          </button>
-        ) : null}
       </div>
     );
   };
@@ -1431,28 +1418,7 @@ const Accounts = () => {
 
 
 
-  const ActionCellRenderer = (params) => {
-    if (!params.data || params.data.isGroupHeader) return null;
-    const account = params.data;
-    return (
-      <div className="flex items-center justify-end gap-1.5 h-full pr-1">
-        <button
-          onClick={() => setDrawerState({ open: true, account })}
-          className="p-1 text-gray-400 hover:text-[#4A8AF4] transition-colors"
-          title="Edit"
-        >
-          <Edit size={14} />
-        </button>
-        <button
-          onClick={() => handleDelete(account)}
-          className="p-1 text-gray-400 hover:text-rose-600 transition-colors"
-          title="Delete"
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    );
-  };
+
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const columnDefs = useMemo(
@@ -1520,14 +1486,6 @@ const Accounts = () => {
         minWidth: 90,
         cellClass: "text-[12px] text-gray-400",
       },
-      {
-        headerName: "Action",
-        minWidth: 80,
-        maxWidth: 100,
-        cellRenderer: ActionCellRenderer,
-        sortable: false,
-        filter: false,
-      },
     ],
     [preferences.currency],
   );
@@ -1542,7 +1500,7 @@ const Accounts = () => {
       headerClass:
         "text-[11px] font-semibold text-gray-700 uppercase tracking-wider bg-[#F9F9FB] !bg-[#F9F9FB]",
       comparator: (valueA, valueB, nodeA, nodeB, isDescending) => {
-        if (groupBy !== "none" && nodeA?.data && nodeB?.data) {
+        if (groupBy && nodeA?.data && nodeB?.data) {
           const groupA =
             groupBy === "subtype"
               ? String(nodeA.data.subtypeLabel || "").toLowerCase()
@@ -1631,172 +1589,17 @@ const Accounts = () => {
       <PageContentShell
         header={
           <PageHeader
-            title="Account Overview"
-            breadcrumbs={["Accounts", "Overview"]}
+            title="Ledger"
+            breadcrumbs={["Ledger", "Overview"]}
           />
         }
         className="!overflow-visible lg:!overflow-visible"
         contentClassName="p-0 lg:p-0 !overflow-visible lg:!overflow-visible"
         cardClassName="border-none shadow-none rounded-none !overflow-visible max-h-none lg:!max-h-none"
       >
-        {/* Summary Component Box */}
-        <div className="px-5 pt-2 pb-0 print:hidden relative z-10">
-          <div className="px-2 py-2">
-            {/* Metrics Row */}
-            <div className="flex flex-wrap items-center gap-x-12 gap-y-4">
-              <SummaryItem
-                title="Cash in Hand"
-                amount={cashBalance}
-                icon={Banknote}
-                colorClass="text-amber-600"
-                bgClass="bg-amber-50"
-                currency={preferences.currency}
-              />
-              <SummaryItem
-                title="Bank Balance"
-                amount={bankBalance}
-                icon={Landmark}
-                colorClass="text-emerald-600"
-                bgClass="bg-emerald-50"
-                currency={preferences.currency}
-              />
-              <SummaryItem
-                title="Card Balance"
-                amount={cardBalance}
-                icon={CreditCard}
-                colorClass="text-indigo-600"
-                bgClass="bg-indigo-50"
-                currency={preferences.currency}
-              />
-              <SummaryItem
-                title="Investment"
-                amount={investmentBalance}
-                icon={Briefcase}
-                colorClass="text-blue-600"
-                bgClass="bg-blue-50"
-                currency={preferences.currency}
-              />
-            </div>
-
-            {/* Chart Toggle */}
-            <div className="mt-4 border-t border-gray-50 flex justify-between items-center">
-              <button
-                ref={chartToggleRef}
-                type="button"
-                onClick={() => handleChartVisibilityChange(!chartVisible)}
-                onKeyDown={handleChartToggleKeyDown}
-                onFocus={() => syncChartEnterStep(chartVisible)}
-                onBlur={() => syncChartEnterStep(chartVisible)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded-md -ml-2 text-[12px] font-semibold text-primary outline-none focus-visible:bg-[#F0F9FF] focus-visible:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:text-[#4A8AF4] transition-all"
-              >
-                <TrendingUp size={14} />
-                {chartVisible ? "Hide Chart" : "Show Chart"}
-                {chartVisible ? (
-                  <ChevronUp size={14} />
-                ) : (
-                  <ChevronDown size={14} />
-                )}
-              </button>
-              {chartVisible && (
-                <div className="flex items-center gap-1.5 text-gray-500 text-[11px] font-semibold">
-                  <Calendar size={13} />
-                  <span>Last 30 days</span>
-                </div>
-              )}
-            </div>
-
-            {/* Chart Section */}
-            {chartVisible && (
-              <div className="h-[220px] w-full mt-6 transition-all relative">
-                {isTrendLoading && (
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-[1px] rounded-xl">
-                    <Loader className="h-6 w-6 text-[#4A8AF4]" />
-                  </div>
-                )}
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={chartData}
-                    margin={{ top: 5, right: 14, left: -20, bottom: 0 }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="3 3"
-                      vertical={false}
-                      stroke="#f3f4f6"
-                    />
-                    <XAxis
-                      dataKey="date"
-                      axisLine={{ stroke: "#f3f4f6" }}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
-                      dy={8}
-                      padding={{
-                        left: chartTimeframe === "30D" && isDesktopView ? 0 : 4,
-                        right: chartTimeframe === "30D" && isDesktopView ? 18 : 8,
-                      }}
-                      interval={
-                        chartTimeframe === "30D" && isDesktopView
-                          ? 0
-                          : "preserveStartEnd"
-                      }
-                      minTickGap={
-                        chartTimeframe === "30D" && isDesktopView ? 0 : 12
-                      }
-                    />
-                    <YAxis
-                      axisLine={false}
-                      tickLine={false}
-                      tick={{ fill: "#9CA3AF", fontSize: 10, fontWeight: 500 }}
-                      tickFormatter={(val) => {
-                        const absVal = Math.abs(val);
-                        const sign = val < 0 ? "-" : "";
-                        if (absVal >= 1000000) return `${sign}${(absVal / 1000000).toFixed(1)}M`;
-                        if (absVal >= 1000) return `${sign}${(absVal / 1000).toFixed(0)}k`;
-                        return val;
-                      }}
-                    />
-                    <Tooltip
-                      content={
-                        <CustomTooltip currency={preferences.currency} />
-                      }
-                    />
-                    <Line
-                      type="monotone"
-                      name="Bank Balance"
-                      dataKey="bank"
-                      stroke="#10b981"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#10b981" }}
-                    />
-                    <Line
-                      type="monotone"
-                      name="Card Balance"
-                      dataKey="card"
-                      stroke="#8b5cf6"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#8b5cf6" }}
-                    />
-                    <Line
-                      type="monotone"
-                      name="Cash in Hand"
-                      dataKey="cash"
-                      stroke="#6b7280"
-                      strokeWidth={2}
-                      dot={false}
-                      activeDot={{ r: 4, strokeWidth: 0, fill: "#6b7280" }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        </div>
-        {/* Minimal Horizontal Divider */}
-        <hr className="mx-5 mt-3 mb-1 border-t border-gray-200/70" />
         {/* Custom List Header */}
-        <div className="px-5 pb-3 pt-1 flex flex-wrap items-center justify-between gap-2 print:hidden relative z-10 w-full">
-          {/* LEFT SIDE: Add & Refresh */}
+        <div className="px-5 pb-3 pt-3 flex flex-wrap items-center justify-between gap-2 print:hidden relative z-10 w-full">
+          {/* LEFT SIDE: Add */}
           <div className="flex items-center gap-1.5 w-full sm:w-auto">
             <button
               ref={addAccountButtonRef}
@@ -1811,20 +1614,6 @@ const Accounts = () => {
               <Plus size={14} strokeWidth={2.5} className="text-[#4A8AF4]/80 group-hover:text-[#4A8AF4] transition-colors" />
               <span className="text-[#3B6FC8] group-hover:text-[#2F5FC6] transition-colors">Add Account</span>
             </button>
-
-            <button
-              ref={refreshButtonRef}
-              type="button"
-              onClick={handleRefresh}
-              onKeyDown={handleRefreshKeyDown}
-              className="w-[32px] h-[32px] shrink-0 flex items-center justify-center rounded-md border border-gray-200 bg-white text-gray-500 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none focus-visible:bg-[#F0F9FF] focus-visible:border-[#BAE6FD] focus-visible:text-[#4A8AF4] shadow-[0_1px_2px_rgba(0,0,0,0.05)] transition-all"
-            >
-              {loading ? (
-                <Loader className="h-3.5 w-3.5 text-[#4A8AF4]" />
-              ) : (
-                <RefreshCcw size={14} strokeWidth={2} />
-              )}
-            </button>
           </div>
 
           {/* RIGHT SIDE: Group & Search */}
@@ -1837,6 +1626,7 @@ const Accounts = () => {
                 focusNextAccountsControl("group");
               }}
               placeholder="Group"
+              label=""
               options={[
                 { label: "Type", value: "type" },
                 { label: "Subtype", value: "subtype" },
@@ -1866,7 +1656,7 @@ const Accounts = () => {
             return (
               <div className="w-full px-5 pb-8 relative" aria-busy={loading}>
                 <div
-                  style={{ height: 'calc(100vh - 220px)', minHeight: '300px', width: "100%" }}
+                  style={{ height: 'calc(100vh - 75px)', minHeight: '400px', width: "100%" }}
                   className="ag-theme-quartz border border-gray-200 rounded-lg overflow-hidden"
                 >
                   <AgGridReact
@@ -1891,6 +1681,11 @@ const Accounts = () => {
                     paginationPageSize={15}
                     paginationPageSizeSelector={[10, 15, 20, 50, 100]}
                     suppressCellFocus={true}
+                    onCellDoubleClicked={(params) => {
+                      if (params.data && !params.data.isGroupHeader) {
+                        setDrawerState({ open: true, account: params.data });
+                      }
+                    }}
                   />
                 </div>
                 {showOverlayLoader && (

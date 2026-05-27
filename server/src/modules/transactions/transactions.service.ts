@@ -1,7 +1,7 @@
 
 import { db } from '../../db';
 import { transactions, transactionEntries, accounts, auditLogs, transactionTypes, categories, subCategories, currencies, financialYears, branches, organizations, users, parties, importedStatements } from '../../db/schema';
-import { eq, and, or, desc, lte, gte, inArray, sql, like } from 'drizzle-orm';
+import { eq, and, or, desc, lte, gte, inArray, sql, like, isNull } from 'drizzle-orm';
 import { AuditService } from '../audit/audit.service';
 import { ExchangeRateService } from '../../shared/exchange-rate.service';
 import { CurrencyMasterService } from '../../shared/currency-master.service';
@@ -1169,7 +1169,9 @@ export class TransactionService {
             financialYearId,
             branchId,
             undefined, // filename
-            fileHash   // pass fileHash for recording
+            fileHash,  // pass fileHash for recording
+            targetAccountId, // accountId
+            'OPENAI'   // parserType
         );
 
         return {
@@ -1188,7 +1190,9 @@ export class TransactionService {
         defaultFinancialYearId?: number,
         defaultBranchId?: number,
         filename?: string,
-        fileHash?: string
+        fileHash?: string,
+        accountId?: number,
+        parserType?: string
     ) {
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
         if (!org || !isActiveStatus(org.status)) throw new Error('Organization is inactive or not found');
@@ -1410,49 +1414,98 @@ export class TransactionService {
             };
         }
 
-        // --- DUPLICATE CHECKING ---
+        // --- DUPLICATE CHECKING (bankTransactionKey-based) ---
         let skippedRows = 0;
         let newValidTransactions = validTransactions;
 
         if (validTransactions.length > 0) {
-            const dates = validTransactions.map(t => new Date(t.txnDate).getTime());
-            const minDateObj = new Date(Math.min(...dates));
-            const maxDateObj = new Date(Math.max(...dates));
-            const minDate = minDateObj.toISOString().split('T')[0];
-            const maxDate = maxDateObj.toISOString().split('T')[0];
+            const cryptoModule = await import('crypto');
 
-            const generateHash = (txnDate: string, amount: string | number, notes: string, categoryId: number | null, contactId: number | string | null) => {
+            // Generate bankTransactionKey for each row using ONLY immutable bank data
+            // (date + amount + narration). Category/contact are user-editable and must NOT be in the key.
+            const generateBankKey = (txnDate: string, amount: string | number, notes: string) => {
                 const cleanNotes = (notes || '').toLowerCase().replace(/\s+/g, '').trim();
                 const cleanAmount = Number(amount).toFixed(2);
-                return `${txnDate}_${cleanAmount}_${cleanNotes}_${categoryId || ''}_${contactId || ''}`;
+                const raw = `${txnDate}_${cleanAmount}_${cleanNotes}`;
+                return cryptoModule.createHash('sha256').update(raw).digest('hex');
             };
 
-            const existingTxns = await db.select({
+            // Attach bankTransactionKey to each validated transaction
+            for (const txn of validTransactions) {
+                txn.bankTransactionKey = generateBankKey(txn.txnDate, txn.amountLocal, txn.notes);
+            }
+
+            // Count how many times each key appears in THIS import batch
+            const importKeyCounts = new Map<string, number>();
+            for (const txn of validTransactions) {
+                importKeyCounts.set(txn.bankTransactionKey, (importKeyCounts.get(txn.bankTransactionKey) || 0) + 1);
+            }
+
+            // Query existing bankTransactionKeys from DB for this org
+            const uniqueKeys = [...importKeyCounts.keys()];
+            const existingKeyCounts = new Map<string, number>();
+
+            // Query in batches to avoid huge IN clauses
+            const BATCH_SIZE = 200;
+            for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
+                const batch = uniqueKeys.slice(i, i + BATCH_SIZE);
+                const rows = await db.select({
+                    key: transactions.bankTransactionKey,
+                }).from(transactions).where(and(
+                    eq(transactions.orgId, orgId),
+                    inArray(transactions.bankTransactionKey, batch),
+                    isNotDeleted(transactions)
+                ));
+                for (const row of rows) {
+                    if (row.key) {
+                        existingKeyCounts.set(row.key, (existingKeyCounts.get(row.key) || 0) + 1);
+                    }
+                }
+            }
+
+            // Also do a legacy fallback check for old transactions without bankTransactionKey
+            // (imported before this fix). Compare date + amountBase + notes.
+            const dates = validTransactions.map(t => new Date(t.txnDate).getTime());
+            const minDate = new Date(Math.min(...dates)).toISOString().split('T')[0];
+            const maxDate = new Date(Math.max(...dates)).toISOString().split('T')[0];
+
+            const legacyTxns = await db.select({
                 txnDate: transactions.txnDate,
-                amountBase: transactions.amountBase,
+                amountLocal: transactions.amountLocal,
                 notes: transactions.notes,
-                categoryId: transactions.categoryId,
-                contactId: transactions.contactId
+                bankTransactionKey: transactions.bankTransactionKey,
             }).from(transactions).where(and(
                 eq(transactions.orgId, orgId),
                 gte(transactions.txnDate, minDate as any),
                 lte(transactions.txnDate, maxDate as any),
-                isNotDeleted(transactions)
+                isNotDeleted(transactions),
+                isNull(transactions.bankTransactionKey) // Only old rows without keys
             ));
 
-            const existingHashes = new Set(existingTxns.map(t => generateHash(t.txnDate as string, t.amountBase, t.notes || '', t.categoryId, t.contactId)));
+            // Build legacy key counts
+            for (const t of legacyTxns) {
+                const legacyKey = generateBankKey(t.txnDate as string, t.amountLocal, t.notes || '');
+                existingKeyCounts.set(legacyKey, (existingKeyCounts.get(legacyKey) || 0) + 1);
+            }
 
+            // Filter: for each import row, only keep if import has MORE occurrences than DB
+            // This handles genuinely identical transactions (same date/amount/narration)
+            const usedKeyCounts = new Map<string, number>();
             newValidTransactions = validTransactions.filter(txn => {
-                const hash = generateHash(txn.txnDate, txn.amountLocal, txn.notes, txn.categoryId, txn.contactId || txn.contact || null);
-                if (existingHashes.has(hash)) {
+                const key = txn.bankTransactionKey;
+                const existingCount = existingKeyCounts.get(key) || 0;
+                const usedSoFar = usedKeyCounts.get(key) || 0;
+
+                if (usedSoFar < existingCount) {
+                    // This occurrence is already in the DB — skip it
+                    usedKeyCounts.set(key, usedSoFar + 1);
                     skippedRows++;
                     return false;
                 }
-                existingHashes.add(hash);
+                // This is a new occurrence — keep it
+                usedKeyCounts.set(key, usedSoFar + 1);
                 return true;
             });
-            
-            skippedRows = validTransactions.length - newValidTransactions.length;
         }
         // --- END DUPLICATE CHECKING ---
 
@@ -1467,16 +1520,29 @@ export class TransactionService {
                 const fyToUse = defaultFinancialYearId || fys[0]?.id;
                 const branchToUse = defaultBranchId || newValidTransactions[0]?.branchId;
                 if (fyToUse && branchToUse) {
+                    // Generate a statement fingerprint from the row content if no fileHash
+                    let fingerprint = fileHash || null;
+                    if (!fingerprint && newValidTransactions.length > 0) {
+                        const fpContent = newValidTransactions.map(t => `${t.txnDate}_${Number(t.amountLocal).toFixed(2)}`).join('|');
+                        const crypto = await import('crypto');
+                        fingerprint = crypto.createHash('sha256').update(fpContent).digest('hex');
+                    }
+
                     const stmtResult = await db.insert(importedStatements).values({
                         orgId,
                         branchId: branchToUse,
                         financialYearId: fyToUse,
                         filename: filename || `import_${new Date().toISOString().slice(0, 10)}`,
+                        targetAccountId: accountId || null,
                         importedBy: user.id,
                         transactionCount: newValidTransactions.length,
                         status: 1,
                         fileHash: fileHash || null,
-                        parserType: fileHash ? 'OPENAI' : null,
+                        statementFingerprint: fingerprint,
+                        parserType: parserType || null,
+                        validationStatus: errors.length > 0 ? 'partial' : 'valid',
+                        duplicateCount: skippedRows,
+                        invalidCount: errors.length,
                     });
                     importedStatementId = Number(stmtResult[0].insertId);
                 }

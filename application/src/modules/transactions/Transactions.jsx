@@ -1,4 +1,5 @@
 import CompactCurrency from '../../components/common/CompactCurrency';
+import AttachmentViewer from '../../components/common/AttachmentViewer';
 
 import React, { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -57,13 +58,13 @@ const createInitialDeleteDialog = () => ({
 const TXN_TABLE_COLUMN_STORAGE_KEY = 'transactions:tableColumns:v2';
 const TXN_COLUMN_DROPDOWN_VISIBLE_OPTION_COUNT = 4;
 const TXN_TABLE_COLUMNS = [
-    { key: 'id', label: 'Id', defaultVisible: false },
-    { key: 'party', label: 'Party', defaultVisible: true },
+    { key: 'id', label: 'Id', defaultVisible: true, locked: true },
+    { key: 'party', label: 'Party', defaultVisible: false },
     { key: 'date', label: 'Date', defaultVisible: true },
-    { key: 'type', label: 'Type', defaultVisible: false },
+    { key: 'type', label: 'Type', defaultVisible: true },
     { key: 'branch', label: 'Branch', defaultVisible: false },
     { key: 'account', label: 'Account', defaultVisible: true },
-    { key: 'category', label: 'Category', defaultVisible: false },
+    { key: 'category', label: 'Category', defaultVisible: true },
     { key: 'notes', label: 'Notes', defaultVisible: false },
     { key: 'amount', label: 'Amount', defaultVisible: true },
     { key: 'createdBy', label: 'Created By', defaultVisible: false }
@@ -138,10 +139,25 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, 
         return () => clearTimeout(timer);
     }, [isOpen, visibleColumns]);
 
-    const filteredColumns = columns.filter(col => col.label.toLowerCase().includes(searchQuery.toLowerCase()));
+    const toggleableColumns = columns.filter(col => !col.locked);
+    const allSelected = toggleableColumns.every(col => localVisibleColumns[col.key]);
 
     const toggleColumn = (key) => {
+        const col = columns.find(c => c.key === key);
+        if (col?.locked) return;
         setLocalVisibleColumns(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const toggleAll = () => {
+        const next = {};
+        columns.forEach(col => {
+            if (col.locked) {
+                next[col.key] = true;
+            } else {
+                next[col.key] = !allSelected;
+            }
+        });
+        setLocalVisibleColumns(prev => ({ ...prev, ...next }));
     };
 
     const handleClose = () => {
@@ -173,42 +189,37 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, 
             </button>
             {isOpen && createPortal(
                 <div className={`fixed inset-0 z-[9999] bg-black/30 flex justify-center items-start pb-4 px-4 transition-opacity duration-200 ${isMounted ? 'opacity-100' : 'opacity-0'}`}>
-                    <div className={`bg-white rounded-lg shadow-2xl w-full max-w-[360px] flex flex-col overflow-hidden max-h-[350px] transition-all duration-200 transform ${isMounted ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
+                    <div className={`bg-white rounded-lg shadow-2xl w-full max-w-[360px] flex flex-col overflow-hidden max-h-[380px] transition-all duration-200 transform ${isMounted ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'}`}>
                         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/80">
                             <div className="flex items-center gap-2">
                                 <Settings2 size={16} className="text-gray-500" />
                                 <h2 className="text-[14px] font-semibold text-gray-800">Customize Columns</h2>
                             </div>
-                            <div className="flex items-center gap-3">
-                                <span className="text-[11px] font-semibold text-gray-500 bg-white border border-gray-200 px-2 py-0.5 rounded-full shadow-sm">
-                                    {Object.values(localVisibleColumns).filter(Boolean).length} of {columns.length} Selected
-                                </span>
-                                <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-200 rounded-md">
-                                    <X size={16} />
-                                </button>
-                            </div>
-                        </div>
-                        
-                        <div className="px-4 py-2 border-b border-gray-100">
-                            <div className="relative">
-                                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                                <input 
-                                    type="text" 
-                                    placeholder="Search columns..."
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full pl-8 pr-3 py-1.5 text-[12px] bg-white border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-[#4A8AF4]/20 focus:border-[#4A8AF4] transition-all placeholder:text-gray-400 shadow-sm"
-                                    autoFocus
-                                />
-                            </div>
+                            <button onClick={handleClose} className="text-gray-400 hover:text-gray-600 transition-colors p-1 hover:bg-gray-200 rounded-md">
+                                <X size={16} />
+                            </button>
                         </div>
 
                         <div className="flex-1 overflow-y-auto px-2 py-2 bg-slate-50/30">
-                            {filteredColumns.map((col) => (
+                            {/* Select All / Deselect All — inline with columns */}
+                            <button
+                                onClick={toggleAll}
+                                className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-100/80 rounded-md transition-colors text-left group border border-transparent hover:border-gray-200 mb-0.5"
+                            >
+                                <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all shrink-0 ${allSelected ? 'bg-[#4A8AF4] border-[#4A8AF4] text-white shadow-sm' : 'border-gray-300 bg-white group-hover:border-[#4A8AF4]'}`}>
+                                    {allSelected && <Check size={12} strokeWidth={3} />}
+                                </div>
+                                <span className={`text-[13px] ${allSelected ? 'font-semibold text-[#4A8AF4]' : 'font-medium text-gray-600'}`}>
+                                    Select All
+                                </span>
+                            </button>
+                            {columns.map((col) => {
+                                const isLocked = col.locked;
+                                return (
                                 <button
                                     key={col.key}
-                                    onClick={() => toggleColumn(col.key)}
-                                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-gray-100/80 rounded-md transition-colors text-left group border border-transparent hover:border-gray-200"
+                                    onClick={() => !isLocked && toggleColumn(col.key)}
+                                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-left group border border-transparent ${isLocked ? 'cursor-default opacity-70' : 'hover:bg-gray-100/80 hover:border-gray-200'}`}
                                 >
                                     <div className={`w-4 h-4 rounded-[4px] border flex items-center justify-center transition-all shrink-0 ${localVisibleColumns[col.key] ? 'bg-[#4A8AF4] border-[#4A8AF4] text-white shadow-sm' : 'border-gray-300 bg-white group-hover:border-[#4A8AF4]'}`}>
                                         {localVisibleColumns[col.key] && <Check size={12} strokeWidth={3} />}
@@ -217,13 +228,8 @@ const ColumnVisibilityDropdown = ({ columns, visibleColumns, setVisibleColumns, 
                                         {col.label}
                                     </span>
                                 </button>
-                            ))}
-                            {filteredColumns.length === 0 && (
-                                <div className="py-8 text-center flex flex-col items-center justify-center gap-2">
-                                    <Search size={20} className="text-gray-300" />
-                                    <span className="text-xs text-gray-500 font-medium">No columns match your search</span>
-                                </div>
-                            )}
+                                );
+                            })}
                         </div>
 
                         <div className="px-4 py-2.5 border-t border-gray-100 bg-gray-50 flex items-center justify-between">
@@ -1016,12 +1022,13 @@ const Transactions = () => {
     // Filter Logic State
     const [appliedFilters, setAppliedFilters] = useState(() => {
         const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
+        const urlAccountId = params.get('accountId');
         return {
             type: 'all',
             dateRange: null,
             currency: preferences?.currency || 'INR',
             party: 'all',
-            accountId: params.get('accountId') || 'all'
+            accountId: urlAccountId ? [urlAccountId] : []
         };
     });
 
@@ -1033,7 +1040,8 @@ const Transactions = () => {
     // Listen for URL param changes (like navigating from Accounts page)
     useEffect(() => {
         const params = new URLSearchParams(location.search);
-        const accountId = params.get('accountId') || 'all';
+        const urlAccountId = params.get('accountId');
+        const accountId = urlAccountId ? [urlAccountId] : [];
         setAppliedFilters(prev => ({ ...prev, accountId, ...(params.get('disableDateFilter') === 'true' ? { dateRange: null } : {}) }));
     }, [location.search]);
 
@@ -1297,8 +1305,8 @@ const Transactions = () => {
         }
 
         // Account Filter
-        if (appliedFilters.accountId !== 'all') {
-            const targetId = String(appliedFilters.accountId);
+        if (Array.isArray(appliedFilters.accountId) && appliedFilters.accountId.length > 0) {
+            const targetIds = appliedFilters.accountId.map(String);
             result = result.filter(txn => {
                 const accountsAssociated = [];
                 if (txn.accountId) accountsAssociated.push(String(txn.accountId));
@@ -1310,7 +1318,7 @@ const Transactions = () => {
                     txn.entries.forEach(e => accountsAssociated.push(String(e.accountId)));
                 }
 
-                return accountsAssociated.includes(targetId);
+                return accountsAssociated.some(id => targetIds.includes(id));
             });
         }
 
@@ -1473,6 +1481,24 @@ const Transactions = () => {
         const arr = Array.from(uniqueSet).sort((a, b) => a.localeCompare(b));
         return arr.map(p => ({ label: p, value: p }));
     }, [transactions]);
+
+    const [availableAccounts, setAvailableAccounts] = useState([]);
+
+    useEffect(() => {
+        let cancelled = false;
+        apiService.accounts.getAll({ branchId: 'all' })
+            .then(response => {
+                if (cancelled) return;
+                const list = Array.isArray(response) ? response : (response?.data || []);
+                const options = list
+                    .filter(a => a.id && a.name)
+                    .map(a => ({ label: a.name, value: String(a.id) }))
+                    .sort((a, b) => a.label.localeCompare(b.label));
+                setAvailableAccounts(options);
+            })
+            .catch(() => {});
+        return () => { cancelled = true; };
+    }, []);
 
     const buildExportPayload = (format) => {
         const normalizedBranchIds = Array.isArray(selectedBranchIds)
@@ -1922,6 +1948,21 @@ const Transactions = () => {
 
                             <BranchSelector flatSelectAll hideSettings />
 
+                            <FilterDropdown
+                                value={appliedFilters.accountId}
+                                onChange={(val) => setAppliedFilters(prev => ({ ...prev, accountId: val }))}
+                                placeholder="Account"
+                                options={availableAccounts}
+                                isMultiSelect
+                                showSelectAll
+                                flatSelectAll
+                                keepButtonNeutral
+                                neutralCountBadge
+                                selectAllLabel="All Accounts"
+                                allDisplayLabel="All Accounts"
+                                buttonClassName="w-[130px] text-slate-800 h-[32px]"
+                            />
+
                             <CurrencySelector
                                 value={appliedFilters.currency}
                                 onChange={(val) => {
@@ -1965,16 +2006,6 @@ const Transactions = () => {
                                 allDisplayLabel="All Types"
                                 buttonClassName="w-[110px] h-[32px]"
                             />
-
-
-                            <button
-                                type="button"
-                                onClick={() => setIsInsightsExpanded(!isInsightsExpanded)}
-                                className="group flex items-center justify-center gap-1.5 px-3 rounded-md ml-1 outline-none transition-all h-[32px] border font-medium text-[12px] bg-white border-gray-200 text-gray-600 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                            >
-                                <Activity size={14} className="text-gray-400 group-hover:text-[#4A8AF4] transition-colors" />
-                                <span>{isInsightsExpanded ? "Hide Chart" : "Show Chart"}</span>
-                            </button>
                         </div>
 
                         {/* RIGHT SIDE: Utilities & Search */}
@@ -2208,13 +2239,14 @@ const Transactions = () => {
                                     columnDefs={colDefs}
                                     defaultColDef={defaultColDef}
                                     rowSelection="multiple"
+                                    suppressRowClickSelection={true}
                                     rowHeight={36}
                                     headerHeight={44}
                                     animateRows={true}
                                     pagination={true}
                                     paginationPageSize={50}
                                     paginationPageSizeSelector={[25, 50, 100, 200]}
-                                    onRowClicked={(event) => {
+                                    onCellDoubleClicked={(event) => {
                                         const target = event.event?.target;
                                         if (target && target.closest && target.closest('.attachment-btn')) {
                                             return;
@@ -2224,7 +2256,6 @@ const Transactions = () => {
                                         }
                                     }}
                                     context={{
-                                        handleEdit,
                                         handleDelete,
                                         canEditTxn,
                                         setFullScreenAttachment,
@@ -2355,10 +2386,6 @@ const Transactions = () => {
                 isOpen={drawerState.open}
                 onClose={() => setDrawerState({ open: false, transaction: null })}
                 transactionToEdit={drawerState.transaction}
-                onDelete={(txn) => {
-                    setDrawerState({ open: false, transaction: null });
-                    handleDelete(null, txn);
-                }}
                 onSuccess={() => {
                     setDrawerState({ open: false, transaction: null });
                     notifyTransactionDataChanged();
@@ -2368,50 +2395,11 @@ const Transactions = () => {
 
             {/* Full Screen Attachment Viewer */}
             {fullScreenAttachment.isOpen && fullScreenAttachment.path && createPortal(
-                <div
-                    className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 animate-in fade-in duration-200"
-                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                >
-                    <div
-                        className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-4xl max-h-[90vh] overflow-hidden"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between px-5 py-3 border-b border-slate-100 bg-white">
-                            <h3 className="text-[13px] font-bold text-slate-800 tracking-tight">Attachment</h3>
-                            <div className="flex items-center gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        if (!fullScreenAttachment.path) return;
-                                        void downloadAttachmentFile(fullScreenAttachment.path);
-                                    }}
-                                    className="px-3 py-1.5 bg-white hover:bg-slate-50 border border-slate-200 rounded-md text-slate-500 hover:text-slate-900 transition-colors flex items-center gap-1.5 shadow-sm"
-                                >
-                                    <Download size={14} strokeWidth={2.5} />
-                                    <span className="text-[11px] font-extrabold uppercase tracking-widest">Download</span>
-                                </button>
-                                <button
-                                    onClick={() => setFullScreenAttachment({ isOpen: false, path: null })}
-                                    className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                                >
-                                    <X size={16} strokeWidth={2.5} />
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-auto bg-slate-50/50 p-6 flex items-center justify-center">
-                            {(() => {
-                                const p = fullScreenAttachment.path;
-                                const fullUrl = buildAttachmentUrl(p);
-                                const isImage = p.match(/\.(jpg|jpeg|png|gif|webp)$/i);
-                                if (isImage) {
-                                    return <img src={fullUrl} alt="Attachment" className="max-w-full max-h-[75vh] object-contain rounded-lg border border-slate-200 shadow-sm bg-white" />;
-                                } else {
-                                    return <iframe src={fullUrl} className="w-full h-[75vh] bg-white rounded-lg border border-slate-200 shadow-sm" />;
-                                }
-                            })()}
-                        </div>
-                    </div>
-                </div>,
+                <AttachmentViewer
+                    path={fullScreenAttachment.path}
+                    isOpen={fullScreenAttachment.isOpen}
+                    onClose={() => setFullScreenAttachment({ isOpen: false, path: null })}
+                />,
                 document.body
             )}
         </div>

@@ -471,7 +471,7 @@ export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { b
             payload = body;
         }
 
-        const { rows, accountId, branchId, financialYearId, filename } = payload;
+        const { rows, accountId, branchId, financialYearId, filename, parserType } = payload;
         
         if (!rows || !Array.isArray(rows)) {
             set.status = 400;
@@ -495,7 +495,10 @@ export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { b
             user,
             financialYearId ? Number(financialYearId) : undefined,
             branchId ? Number(branchId) : undefined,
-            filename
+            filename,
+            undefined, // fileHash
+            accountId ? Number(accountId) : undefined,
+            parserType || undefined
         );
 
         if (result.success || result.insertedRows > 0) {

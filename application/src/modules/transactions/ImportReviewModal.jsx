@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, CheckCircle, AlertCircle, Save, Trash2, FileText, List, Info } from 'lucide-react';
+import { X, CheckCircle, AlertCircle, Save, Trash2, FileText, List, Info, ChevronLeft, ChevronRight, ZoomIn, ZoomOut } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { Loader } from '../../components/common/Loader';
 import CustomSelect from '../../components/common/CustomSelect';
@@ -8,9 +8,24 @@ import apiService from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { useOrganization } from '../../context/OrganizationContext';
-import CreateAccount from '../accounts/components/CreateAccount';
 import GstRateDropdown from './components/GstRateDropdown';
-import { Landmark } from 'lucide-react';
+import CreateAccount from '../accounts/components/CreateAccount';
+import CustomDatePicker from '../../components/common/CustomDatePicker';
+import { Document, Page, pdfjs } from 'react-pdf';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
+
+// Configure pdf.js worker using local file
+import pdfjsWorker from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+pdfjs.GlobalWorkerOptions.workerSrc = pdfjsWorker;
+
+const PDF_DOCUMENT_OPTIONS = {
+    cMapUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `//unpkg.com/pdfjs-dist@${pdfjs.version}/standard_fonts/`,
+    isEvalSupported: false,
+    useWorkerFetch: false,
+};
 
 const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isProcessing }) => {
     const { selectedBranch } = useBranch();
@@ -25,8 +40,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const [selectedAccount, setSelectedAccount] = useState('');
     const [transactions, setTransactions] = useState([]);
     const [focusedTransactionId, setFocusedTransactionId] = useState(null);
-    const [activeRightTab, setActiveRightTab] = useState('edit'); // 'edit' | 'pdf' | 'add-account'
+    const [activeRightTab, setActiveRightTab] = useState('edit'); // 'edit' | 'pdf'
     const [isRightPanelOpen, setIsRightPanelOpen] = useState(false);
+    const [showAddAccountDrawer, setShowAddAccountDrawer] = useState(false);
+    const [accountDetectionDone, setAccountDetectionDone] = useState(false);
 
     const targetAccountObj = React.useMemo(() => {
         return selectedAccount ? accounts.find(a => String(a.id) === String(selectedAccount)) : null;
@@ -36,6 +53,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const [error, setError] = useState('');
     const [result, setResult] = useState(null);
     const [pdfUrl, setPdfUrl] = useState(null);
+    const [pdfNumPages, setPdfNumPages] = useState(null);
+    const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
+    const [pdfScale, setPdfScale] = useState(1.0);
+    const [pdfPageReady, setPdfPageReady] = useState(false);
 
     // Animation States
     const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
@@ -97,6 +118,12 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             setIsRightPanelOpen(false);
             setFocusedTransactionId(null);
             setTransactions([]);
+            setPdfNumPages(null);
+            setPdfCurrentPage(1);
+            setPdfScale(1.0);
+            setPdfPageReady(false);
+            setShowAddAccountDrawer(false);
+            setAccountDetectionDone(false);
         }
     }, [isOpen]);
 
@@ -171,17 +198,22 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
 
     // Auto-detect global account if parsedData contains accountNumber
     useEffect(() => {
-        if (parsedData?.accountNumber && accounts.length > 0 && !selectedAccount) {
+        if (parsedData?.accountNumber && accounts.length > 0 && !selectedAccount && !accountDetectionDone) {
             const num = parsedData.accountNumber;
             const matchedAccount = accounts.find(a => 
                 a.accountNumber && (a.accountNumber.includes(num) || num.includes(a.accountNumber))
             );
             if (matchedAccount) {
                 setSelectedAccount(String(matchedAccount.id));
+                setAccountDetectionDone(true);
                 console.log('Auto-detected target account:', matchedAccount.name);
+            } else {
+                // Account not found — show CreateAccount drawer
+                setShowAddAccountDrawer(true);
+                setAccountDetectionDone(true);
             }
         }
-    }, [parsedData, accounts, selectedAccount]);
+    }, [parsedData, accounts, selectedAccount, accountDetectionDone]);
 
     // Fetch Dependencies
     const fetchDependencies = React.useCallback(async () => {
@@ -323,7 +355,8 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     accountId: selectedAccount,
                     branchId: finalBranchId,
                     financialYearId: selectedYear?.id,
-                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import')
+                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import'),
+                    parserType: parsedData?.parser || null
                 }));
                 
                 transactions.forEach((t, i) => {
@@ -341,7 +374,8 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     accountId: selectedAccount,
                     branchId: finalBranchId,
                     financialYearId: selectedYear?.id,
-                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import')
+                    filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import'),
+                    parserType: parsedData?.parser || null
                 };
                 response = await apiService.transactions.importJson(payload);
             }
@@ -440,6 +474,22 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                 "fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-[120] bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden h-[85vh] w-[90vw] max-w-5xl",
                 isClosingDrawer ? "animate-slide-out-top" : "animate-slide-in-top"
             )}>
+                {/* Account Setup Overlay */}
+                {showAddAccountDrawer && (
+                    <div className="absolute inset-0 z-[125] bg-white/80 backdrop-blur-[2px] flex flex-col items-center justify-center rounded-xl transition-all">
+                        <div className="w-16 h-16 rounded-full bg-amber-50 border-2 border-amber-200 flex items-center justify-center mb-5">
+                            <AlertCircle size={28} className="text-amber-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-1">Account Setup Required</h3>
+                        <p className="text-sm font-medium text-slate-500 text-center max-w-xs mb-5">
+                            Please complete the account setup on the right to continue.
+                        </p>
+                        <div className="flex items-center gap-2 text-[11px] font-bold text-slate-400">
+                            <span className="w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                            Waiting for account setup...
+                        </div>
+                    </div>
+                )}
                 {/* Global Header */}
                 <div className="flex items-center justify-between px-6 py-3 border-b border-slate-200 bg-white gap-4 flex-none">
                     <div className="flex items-center gap-3">
@@ -450,29 +500,31 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                             <h2 className="text-base font-bold text-slate-800">Review Statement</h2>
                             <p className="text-[11px] font-medium text-slate-500">
                                 {file?.name || 'Parsed Statement'} • {isProcessing ? 'Processing...' : `${transactions.length} records`}
+                                {targetAccountObj && (
+                                    <span className="ml-2 text-[#4A8AF4]">• {targetAccountObj.name}</span>
+                                )}
                             </p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-4 shrink-0">
-                        <div className="w-56 text-left">
-                            <label className="block text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Global Target Account <span className="text-rose-500">*</span></label>
-                            <CustomSelect
-                                value={selectedAccount}
-                                onChange={(e) => setSelectedAccount(e.target.value)}
-                                isSearchable={true}
-                                matchTriggerWidth={true}
-                                placeholder="Select an account..."
-                                className="w-full px-3 h-[32px] bg-slate-50 border border-slate-200 rounded-lg text-[12px] font-semibold text-slate-800 shadow-sm outline-none transition-all flex items-center justify-between hover:bg-slate-100"
-                                dropdownClassName="z-[150]"
+                    <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex items-center gap-1 mr-2 border-r border-slate-200 pr-3">
+                            <button 
+                                onClick={() => { setActiveRightTab('edit'); setIsRightPanelOpen(true); }} 
+                                className={`p-1.5 cursor-pointer rounded-md flex items-center justify-center transition-colors ${isRightPanelOpen && activeRightTab==='edit' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                title="Edit Transaction"
                             >
-                                <option value="">Select an account...</option>
-                                {filteredAccounts.map(acc => (
-                                    <option key={acc.id} value={acc.id}>{acc.name} - {acc.accountNumber || 'No Num'}</option>
-                                ))}
-                            </CustomSelect>
+                                <List size={16} />
+                            </button>
+                            <button 
+                                onClick={() => { setActiveRightTab('pdf'); setIsRightPanelOpen(true); }} 
+                                className={`p-1.5 cursor-pointer rounded-md flex items-center justify-center transition-colors ${isRightPanelOpen && activeRightTab==='pdf' ? 'bg-[#4A8AF4] text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
+                                title="View Original Statement"
+                            >
+                                <FileText size={16} />
+                            </button>
                         </div>
-                        <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors self-start mt-3.5">
+                        <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors">
                             <X size={18} />
                         </button>
                     </div>
@@ -539,24 +591,21 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-24">Type</th>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Description</th>
                                                     <th className="px-3 py-2 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase tracking-wider w-32 text-right">Amount</th>
-                                                    <th className="px-3 py-2 border-b border-slate-200 w-12"></th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-slate-100">
                                                 {transactions.length === 0 ? (
                                                     <tr>
-                                                        <td colSpan="6" className="px-4 py-12 text-center text-slate-500 text-sm font-medium">No transactions found to review.</td>
+                                                        <td colSpan="4" className="px-4 py-12 text-center text-slate-500 text-sm font-medium">No transactions found to review.</td>
                                                     </tr>
                                                 ) : (
                                                     transactions.map((txn) => (
                                                         <tr 
                                                             key={txn._id} 
-                                                            onClick={(e) => {
-                                                                if (e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-                                                                    setFocusedTransactionId(txn._id);
-                                                                    setActiveRightTab('edit');
-                                                                    setIsRightPanelOpen(true);
-                                                                }
+                                                            onClick={() => {
+                                                                setFocusedTransactionId(txn._id);
+                                                                setActiveRightTab('edit');
+                                                                setIsRightPanelOpen(true);
                                                             }}
                                                             className={`cursor-pointer transition-colors ${focusedTransactionId === txn._id ? 'bg-[#4A8AF4]/5 shadow-[inset_3px_0_0_0_#4A8AF4]' : 'hover:bg-slate-50'}`}
                                                         >
@@ -568,15 +617,6 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             </td>
                                                             <td className="px-3 py-2 text-xs font-medium text-slate-800 break-words whitespace-normal">{txn.description}</td>
                                                             <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                                                            <td className="px-3 py-2 text-center">
-                                                                <button 
-                                                                    onClick={() => handleRemove(txn._id)}
-                                                                    className="p-1 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-md transition-colors"
-                                                                    title="Remove row"
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                </button>
-                                                            </td>
                                                         </tr>
                                                     ))
                                                 )}
@@ -586,34 +626,8 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                 </div>
                             </div>
 
-                            {/* Right Panel: Tabs & Form */}
+                            {/* Right Panel: Content */}
                             <div className={`${!isRightPanelOpen ? 'w-0 border-none overflow-hidden' : (activeRightTab === 'pdf' ? 'w-[50%] border-l' : 'w-[30%] border-l')} flex flex-col bg-slate-50 border-slate-200 transition-all duration-300 ease-in-out`}>
-                                <div className="flex p-2 bg-white border-b border-slate-200 items-center justify-end">
-                                    <div className="flex items-center gap-1">
-                                        <button 
-                                            onClick={() => setActiveRightTab('edit')} 
-                                            className={`p-1.5 cursor-pointer rounded-md flex items-center justify-center transition-colors ${activeRightTab==='edit' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                                            title="Edit Transaction"
-                                        >
-                                            <List size={16} />
-                                        </button>
-                                        <button 
-                                            onClick={() => setActiveRightTab('add-account')} 
-                                            className={`p-1.5 cursor-pointer rounded-md flex items-center justify-center transition-colors ${activeRightTab==='add-account' ? 'bg-slate-100 text-slate-800 shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'}`}
-                                            title={targetAccountObj ? 'Edit Account' : 'Add Account'}
-                                        >
-                                            <Landmark size={16} />
-                                        </button>
-                                        <button 
-                                            onClick={() => setActiveRightTab('pdf')} 
-                                            className={`p-1.5 cursor-pointer rounded-md flex items-center justify-center transition-colors ${activeRightTab==='pdf' ? 'bg-[#4A8AF4] text-white shadow-sm' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'}`}
-                                            title="View Original Statement"
-                                        >
-                                            <FileText size={16} />
-                                        </button>
-                                    </div>
-                                </div>
-                                
                                 <div className="flex-1 overflow-hidden relative">
                                     {activeRightTab === 'edit' ? (
                                         <div className="absolute inset-0 overflow-y-auto p-5 pt-4">
@@ -664,11 +678,9 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                     {/* Date */}
                                                     <div className="space-y-1 min-w-0 col-span-1">
                                                         <label className="text-[11px] font-bold text-slate-600 block">Date <span className="text-rose-500">*</span></label>
-                                                        <input 
-                                                            type="date" 
+                                                        <CustomDatePicker
                                                             value={focusedTxn.date} 
                                                             onChange={(e) => handleFieldChange(focusedTxn._id, 'date', e.target.value)} 
-                                                            className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-md text-[13px] font-semibold text-slate-800 shadow-sm outline-none focus:border-[#4A8AF4] focus:ring-2 focus:ring-[#4A8AF4]/10 transition-all"
                                                         />
                                                     </div>
 
@@ -899,44 +911,80 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                             )}
                                         </div>
                                     ) : activeRightTab === 'pdf' ? (
-                                        <div className="absolute inset-0 bg-slate-50">
+                                        <div className="absolute inset-0 bg-slate-50 flex flex-col">
                                             {pdfUrl ? (
-                                                <iframe src={`${pdfUrl}#navpanes=0&view=FitH`} className="w-full h-full border-none" title="PDF Preview" />
+                                                <>
+                                                    {/* PDF Controls */}
+                                                    <div className="flex items-center justify-between px-3 py-2 bg-white border-b border-slate-200 shrink-0">
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => setPdfCurrentPage(p => Math.max(1, p - 1))}
+                                                                disabled={pdfCurrentPage <= 1}
+                                                                className="p-1 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                            >
+                                                                <ChevronLeft size={16} />
+                                                            </button>
+                                                            <span className="text-[11px] font-bold text-slate-600 min-w-[60px] text-center">
+                                                                {pdfCurrentPage} / {pdfNumPages || '—'}
+                                                            </span>
+                                                            <button
+                                                                onClick={() => setPdfCurrentPage(p => Math.min(pdfNumPages || p, p + 1))}
+                                                                disabled={pdfCurrentPage >= (pdfNumPages || 1)}
+                                                                className="p-1 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                                            >
+                                                                <ChevronRight size={16} />
+                                                            </button>
+                                                        </div>
+                                                        <div className="flex items-center gap-1">
+                                                            <button
+                                                                onClick={() => setPdfScale(s => Math.max(0.5, +(s - 0.2).toFixed(1)))}
+                                                                disabled={pdfScale <= 0.5}
+                                                                className="p-1 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                                                            >
+                                                                <ZoomOut size={14} />
+                                                            </button>
+                                                            <span className="text-[10px] font-bold text-slate-500 min-w-[36px] text-center">{Math.round(pdfScale * 100)}%</span>
+                                                            <button
+                                                                onClick={() => setPdfScale(s => Math.min(3, +(s + 0.2).toFixed(1)))}
+                                                                disabled={pdfScale >= 3}
+                                                                className="p-1 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 transition-colors"
+                                                            >
+                                                                <ZoomIn size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                    {/* PDF Render Area */}
+                                                    <div className="flex-1 overflow-auto flex justify-center py-4 px-2">
+                                                        <Document
+                                                            file={pdfUrl}
+                                                            onLoadSuccess={({ numPages }) => { setPdfNumPages(numPages); setPdfPageReady(false); }}
+                                                            onLoadError={() => setPdfNumPages(null)}
+                                                            loading={
+                                                                <div className="flex flex-col items-center justify-center py-20">
+                                                                    <div className="w-7 h-7 border-2 border-slate-200 border-t-blue-500 rounded-full animate-spin" />
+                                                                    <span className="text-[11px] font-medium text-slate-400 mt-3">Loading PDF...</span>
+                                                                </div>
+                                                            }
+                                                            error={<span className="text-[12px] text-rose-400 font-medium">Failed to load PDF</span>}
+                                                            options={PDF_DOCUMENT_OPTIONS}
+                                                        >
+                                                            <Page
+                                                                pageNumber={pdfCurrentPage}
+                                                                scale={pdfScale}
+                                                                className="shadow-lg rounded-lg overflow-hidden border border-slate-200"
+                                                                renderAnnotationLayer={false}
+                                                                renderTextLayer={false}
+                                                                onRenderSuccess={() => setPdfPageReady(true)}
+                                                                loading={null}
+                                                            />
+                                                        </Document>
+                                                    </div>
+                                                </>
                                             ) : (
                                                 <div className="flex h-full items-center justify-center text-slate-400 font-medium">
                                                     No PDF document is available for preview.
                                                 </div>
                                             )}
-                                        </div>
-                                    ) : activeRightTab === 'add-account' ? (
-                                        <div className="absolute inset-0 bg-white flex flex-col">
-                                            <CreateAccount 
-                                                isOpen={true} 
-                                                onClose={() => {
-                                                    setActiveRightTab('edit');
-                                                }}
-                                                isInline={true}
-                                                accountToEdit={targetAccountObj}
-                                                onSuccess={async (newAccount) => {
-                                                    await fetchDependencies();
-                                                    if (newAccount && newAccount.id) {
-                                                        setSelectedAccount(String(newAccount.id));
-                                                    }
-                                                    setActiveRightTab('edit');
-                                                }}
-                                                initialData={!targetAccountObj ? {
-                                                    accountType: "1", // ASSET
-                                                    subtype: "12", // BANK
-                                                    accountNumber: (parsedData?.accountNumber || '').replace(/\D/g, '') || '000000',
-                                                    bankName: parsedData?.bankName || 'My Bank',
-                                                    name: parsedData?.bankName ? `${parsedData.bankName} Account` : 'New Bank Account',
-                                                    accountHolderName: 'Main Company',
-                                                    ifsc: 'HDFC0000001',
-                                                    swiftCode: 'XXXXXXXXXXX',
-                                                    bankBranchName: 'Main Branch',
-                                                    isActive: true
-                                                } : undefined}
-                                            />
                                         </div>
                                     ) : null}
                                 </div>
@@ -945,39 +993,44 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     )}
                 </div>
 
-                {/* Footer */}
-                <div className="px-5 py-3 border-t border-slate-200 bg-white flex justify-between items-center flex-none">
+                {/* Footer — Summary + Actions in one row */}
+                <div className="px-5 py-3 border-t border-slate-200 bg-white flex items-center justify-between flex-none">
                     {!result ? (
                         <>
-                            {/* Left: Numbers */}
-                            <div className="flex items-center gap-6 text-[13px]">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-slate-500 font-medium">Credit:</span>
-                                    <span className="font-bold text-emerald-600">{formatCurrency(totalCredit)}</span>
+                            {/* Left: Summary */}
+                            <div className="flex items-center gap-4">
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Opening Bal.</span>
+                                    <span className="text-[13px] font-bold text-slate-700 tabular-nums">{formatCurrency(openingBalance)}</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-slate-500 font-medium">Debit:</span>
-                                    <span className="font-bold text-rose-600">{formatCurrency(totalDebit)}</span>
+                                <div className="w-px h-7 bg-slate-200" />
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-bold text-emerald-500 uppercase tracking-wider">Credit</span>
+                                    <span className="text-[13px] font-bold text-emerald-600 tabular-nums">{formatCurrency(totalCredit)}</span>
                                 </div>
-                                {activeAccountObj && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-slate-500 font-medium">Closing:</span>
-                                        <span className="font-bold text-slate-800">{formatCurrency(closingBalance)}</span>
-                                    </div>
-                                )}
+                                <div className="w-px h-7 bg-slate-200" />
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-bold text-rose-400 uppercase tracking-wider">Debit</span>
+                                    <span className="text-[13px] font-bold text-rose-600 tabular-nums">{formatCurrency(totalDebit)}</span>
+                                </div>
+                                <div className="w-px h-7 bg-slate-200" />
+                                <div className="flex flex-col">
+                                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Closing Bal.</span>
+                                    <span className={`text-[13px] font-black tabular-nums ${closingBalance >= 0 ? 'text-slate-800' : 'text-rose-600'}`}>{formatCurrency(closingBalance)}</span>
+                                </div>
                             </div>
-                            
+
                             {/* Center: Error */}
                             {error && (
-                                <div className="flex-1 flex justify-end mr-6 animate-in fade-in slide-in-from-bottom-2">
-                                    <div className="text-rose-600 text-[12px] font-semibold flex items-center gap-1.5">
+                                <div className="flex-1 flex justify-center px-4">
+                                    <div className="text-rose-600 text-[12px] font-semibold flex items-center gap-1.5 animate-in fade-in slide-in-from-bottom-2">
                                         <AlertCircle size={14} /> <span>{error}</span>
                                     </div>
                                 </div>
                             )}
 
                             {/* Right: Buttons */}
-                            <div className={`flex items-center gap-3 ${!error ? 'ml-auto' : ''}`}>
+                            <div className="flex items-center gap-3">
                                 <button 
                                     onClick={onClose}
                                     className="px-4 py-2 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors"
@@ -1008,6 +1061,35 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     )}
                 </div>
             </div>
+
+            {/* Add Account Drawer — shown when statement account is not found */}
+            <CreateAccount
+                isOpen={showAddAccountDrawer}
+                onClose={() => {
+                    // User declined adding the account — abort the entire import
+                    setShowAddAccountDrawer(false);
+                    onClose();
+                }}
+                onSuccess={async (newAccount) => {
+                    setShowAddAccountDrawer(false);
+                    await fetchDependencies();
+                    if (newAccount && newAccount.id) {
+                        setSelectedAccount(String(newAccount.id));
+                    }
+                }}
+                initialData={{
+                    accountType: "1",
+                    subtype: "12",
+                    accountNumber: (parsedData?.accountNumber || '').replace(/\D/g, '') || '',
+                    bankName: parsedData?.bankName || '',
+                    name: parsedData?.bankName ? `${parsedData.bankName} Account` : 'New Bank Account',
+                    accountHolderName: '',
+                    ifsc: '',
+                    swiftCode: '',
+                    bankBranchName: '',
+                    isActive: true,
+                }}
+            />
         </>,
         document.body
     );

@@ -323,17 +323,16 @@ const Sidebar = ({ isCollapsed, isOpen, onClose, className }) => {
 
     const menuItems = React.useMemo(() => [
         { icon: Home, label: 'Home', path: '/dashboard', permission: 'DASHBOARD_VIEW' },
-        { icon: Landmark, label: 'Accounts', path: '/accounts' },
         { 
-            icon: ArrowRightLeft, 
-            label: 'Transactions', 
-            path: '/transactions', 
-            permission: 'TXN_VIEW',
+            icon: Landmark, 
+            label: 'Ledger', 
+            path: '/accounts',
             subItems: [
                 { icon: Users, label: 'Parties', path: '/parties' },
                 { icon: ShoppingBag, label: 'Categories', path: '/category' },
             ]
         },
+        { icon: ArrowRightLeft, label: 'Transactions', path: '/transactions', permission: 'TXN_VIEW' },
         { icon: BarChart2, label: 'Reports', path: '/reports', permission: 'REPORT_VIEW' },
         { icon: History, label: 'Activity', path: '/audit-logs' },
     ], []);
