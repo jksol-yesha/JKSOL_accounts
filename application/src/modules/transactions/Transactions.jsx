@@ -2364,13 +2364,11 @@ const Transactions = () => {
                 }}
             />
 
-            {isImportHistoryOpen && (
-                <ImportHistoryPanel
-                    isOpen={isImportHistoryOpen}
-                    onClose={() => setIsImportHistoryOpen(false)}
-                    onRefresh={fetchTransactions}
-                />
-            )}
+            <ImportHistoryPanel
+                isOpen={isImportHistoryOpen}
+                onClose={() => setIsImportHistoryOpen(false)}
+                onRefresh={fetchTransactions}
+            />
 
             {/* Import PDF Modal - Commented out
             <ImportPDFModal
