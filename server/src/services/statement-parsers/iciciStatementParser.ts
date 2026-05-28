@@ -20,6 +20,7 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 
 // @ts-ignore
 import pdf from 'pdf-parse/lib/pdf-parse.js';
+import { parseICICIDetailedStatement } from './iciciDetailedParser';
 import type { ParsedStatementResult, ParsedStatementRow } from './types';
 
 // ─── Helpers ───
@@ -191,12 +192,41 @@ function extractICICITrailingFields(combinedText: string): TrailingAmountFields 
 
 // ─── Detection ───
 
-export function isICICIStatement(text: string): boolean {
-  return (
-    text.includes('Statement of Transactions in Saving Account') ||
-    text.includes('Statement of Transactions in Current Account') ||
+export type ICICIVariant = 'ICICI_RETAIL_STATEMENT' | 'ICICI_DETAILED_STATEMENT';
+
+function detectICICIVariant(text: string): ICICIVariant | null {
+  // Normalize newlines to spaces for reliable header detection
+  // (PDF extraction can split column headers across lines, e.g. "Transactio\nn ID")
+  const upper = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+
+  // Detailed format markers
+  // Note: PDF extraction can split words with whitespace (e.g. "TRANSACTIO N ID")
+  if (
+    upper.includes('DETAILED STATEMENT') &&
+    upper.includes('TRANSACTIONS LIST') &&
+    /TRANSACTIO\s*N\s*ID/.test(upper) &&
+    upper.includes('CR/DR')
+  ) {
+    return 'ICICI_DETAILED_STATEMENT';
+  }
+
+  // Retail format markers
+  if (
+    (upper.includes('STATEMENT OF TRANSACTIONS') &&
+     upper.includes('TRANSACTION REMARKS') &&
+     upper.includes('WITHDRAWAL') &&
+     upper.includes('DEPOSIT') &&
+     upper.includes('BALANCE')) ||
     (text.includes('ICICI Bank') && text.includes('S No.') && text.includes('Transaction Remarks'))
-  );
+  ) {
+    return 'ICICI_RETAIL_STATEMENT';
+  }
+
+  return null;
+}
+
+export function isICICIStatement(text: string): boolean {
+  return detectICICIVariant(text) !== null;
 }
 
 // ─── Main Parser ───
@@ -206,8 +236,37 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
   const fullText: string = data.text;
   const numPages = data.numpages || 1;
 
+  // Detect variant and dispatch
+  const variant = detectICICIVariant(fullText);
+
+  if (variant === 'ICICI_DETAILED_STATEMENT') {
+    const detailed = parseICICIDetailedStatement(fullText, numPages);
+    // Generate statement fingerprint
+    const { generateStatementFingerprint } = await import('./statementHashUtils');
+    detailed.statementFingerprint = generateStatementFingerprint({
+      bankName: detailed.bankName,
+      accountNumber: detailed.accountNumber,
+      statementFromDate: detailed.statementFromDate,
+      statementToDate: detailed.statementToDate,
+      openingBalance: detailed.openingBalance,
+      closingBalance: detailed.closingBalance,
+      totalDebit: detailed.totalDebit,
+      totalCredit: detailed.totalCredit,
+      debitCount: detailed.debitCount,
+      creditCount: detailed.creditCount,
+    });
+    return detailed;
+  }
+
+  // ─── Retail parser (existing logic) ───
+  return parseICICIRetailStatement(fullText, numPages);
+}
+
+async function parseICICIRetailStatement(fullText: string, numPages: number): Promise<ParsedStatementResult> {
+
   const result: ParsedStatementResult = {
     parser: 'ICICI_DETERMINISTIC',
+    parserVariant: 'ICICI_RETAIL_STATEMENT',
     bankName: 'ICICI',
     accountNumber: null,
     statementFromDate: null,

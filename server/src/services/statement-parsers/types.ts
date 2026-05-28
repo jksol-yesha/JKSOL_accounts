@@ -22,6 +22,7 @@ export type ParsedStatementRow = {
 
 export type ParsedStatementResult = {
   parser: 'HDFC_DETERMINISTIC' | 'AXIS_DETERMINISTIC' | 'ICICI_DETERMINISTIC' | 'SBI_DETERMINISTIC' | 'YESBANK_DETERMINISTIC' | string;
+  parserVariant?: string | null;       // Sub-format variant, e.g. ICICI_RETAIL_STATEMENT or ICICI_DETAILED_STATEMENT
   bankName: string;
   accountNumber: string | null;
   accountHolderName?: string | null;   // Customer/account holder name
