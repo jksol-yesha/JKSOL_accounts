@@ -1,7 +1,7 @@
 import React from 'react';
-import { cn } from '../../../utils/cn';
 import { usePreferences } from '../../../context/PreferenceContext';
 import { useOrganization } from '../../../context/OrganizationContext';
+import { cn } from '../../../utils/cn';
 
 const ReportTablePrint = ({ reportData, filters }) => {
     const { formatCurrency, formatDate, preferences } = usePreferences();
@@ -13,61 +13,131 @@ const ReportTablePrint = ({ reportData, filters }) => {
     const isProfitLoss = filters.reportType === 'P/L' || filters.reportType === 'Profit/Loss' || filters.reportType === 'Profit & Loss';
 
     const d = reportData.data || {};
+    const formatProfitLossStatementDate = (value) => {
+        if (!value) return '';
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+
+        return new Intl.DateTimeFormat('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        }).format(date).replace(/ /g, '-');
+    };
+
+    const formatProfitLossStatementAmount = (value, showZero = false) => {
+        const amount = Number(value || 0);
+        if (!showZero && amount === 0) return '';
+
+        return new Intl.NumberFormat('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    };
+
+    const getProfitLossItemLabel = (item) => (
+        String(item?.subCategory || item?.account || item?.name || '').trim()
+    );
+
+    const buildProfitLossStatementRows = (groups = [], balancingRow = null) => {
+        const rows = [];
+
+        groups
+            .filter((group) => String(group?.category || '').trim())
+            .forEach((group) => {
+                rows.push({
+                    kind: 'section',
+                    label: String(group.category).trim(),
+                    total: Number(group.total || 0)
+                });
+
+                (group.items || []).forEach((item) => {
+                    const label = getProfitLossItemLabel(item);
+                    if (!label) return;
+
+                    rows.push({
+                        kind: 'item',
+                        label,
+                        amount: Number(item.amount || 0)
+                    });
+                });
+            });
+
+        if (balancingRow?.amount > 0) {
+            rows.push({
+                kind: 'balance',
+                label: balancingRow.label,
+                total: Number(balancingRow.amount || 0)
+            });
+        }
+
+        return rows;
+    };
 
     // Format Branch Name for Header
     const branchDisplayName = filters.branch && filters.branch !== 'All Branches'
         ? `JKSOL-${filters.branch}`
         : (filters.branch || 'JKSOL-All Branches');
 
-    // Make sure d.incomes and d.expenses exist for mapping
-    const incomes = (d.incomes || []).filter(g => (g.items?.length > 0 || Number(g.total || 0) > 0));
-    const expenses = (d.expenses || []).filter(g => (g.items?.length > 0 || Number(g.total || 0) > 0));
+    const addressLines = String(selectedOrg?.address || '')
+        .split(/\r?\n|,/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+    const fallbackBranchLine = filters.branch && filters.branch !== 'All Branches'
+        ? [String(filters.branch).trim()]
+        : [];
+    const headerLines = addressLines.length > 0 ? addressLines : fallbackBranchLine;
 
     return (
-        <div className={`hidden print:block w-full bg-white text-black ${isProfitLoss ? 'p-12 max-w-[297mm]' : 'p-12 max-w-[297mm]'} mx-auto font-sans`}>
+        <div className={`hidden print:block w-full bg-white text-black ${isProfitLoss ? 'max-w-[210mm] px-10 pb-10 pt-20 font-sans' : 'p-12 max-w-[297mm] font-sans'} mx-auto`}>
             {/* ================= HEADER ================= */}
-            <div className="mb-6 text-center">
-                {selectedOrg?.name && (
-                    <h1 className="text-2xl font-bold text-slate-900 uppercase tracking-tight mb-1">
-                        {selectedOrg.name}
-                    </h1>
-                )}
-                {selectedOrg?.address && (
-                    <p className="text-[11px] text-slate-600 max-w-[300px] mx-auto leading-relaxed mb-3">
-                        {selectedOrg.address}
-                    </p>
-                )}
-                <div className="inline-block border-y border-slate-300 py-1 px-4">
-                    <h2 className="text-lg font-bold text-slate-800 uppercase tracking-[0.1em]">
-                        {isProfitLoss ? 'Profit & Loss A/c' : `${filters.reportType} Report`}
-                    </h2>
+            {!isProfitLoss && (
+                <div className="mb-6 text-center">
+                    {selectedOrg?.name && (
+                        <h1 className="text-2xl font-bold text-slate-900 uppercase tracking-tight mb-1">
+                            {selectedOrg.name}
+                        </h1>
+                    )}
+                    {selectedOrg?.address && (
+                        <p className="text-[11px] text-slate-600 max-w-[300px] mx-auto leading-relaxed mb-3">
+                            {selectedOrg.address}
+                        </p>
+                    )}
+                    <div className="inline-block border-y border-slate-300 py-1 px-4">
+                        <h2 className="text-lg font-bold text-slate-800 uppercase tracking-[0.1em]">
+                            {`${filters.reportType} Report`}
+                        </h2>
+                    </div>
+                    <div className="mt-2 text-[12px] font-bold text-slate-700">
+                        {branchDisplayName}
+                    </div>
                 </div>
-                <div className="mt-2 text-[12px] font-bold text-slate-700">
-                    {branchDisplayName}
-                </div>
-            </div>
+            )}
 
             {/* Divider (Optional if using border-y above) */}
-            {!selectedOrg?.name && <div className="w-full h-[1px] bg-black mb-8"></div>}
+            {!isProfitLoss && !selectedOrg?.name && <div className="w-full h-[1px] bg-black mb-8"></div>}
 
             {/* ================= META INFO ================= */}
-            <div className={`flex justify-start text-[10px] ${isProfitLoss ? 'mb-6' : 'mb-10'}`}>
-                <div className="text-left space-y-0.5">
-                    <div>
-                        <span className="font-bold text-gray-800">Report Type:</span> <span className="text-gray-600 ml-1">{filters.reportType}</span>
-                    </div>
-                    <div>
-                        <span className="font-bold text-gray-800">Date Range:</span> <span className="text-gray-600 ml-1">
-                            {formatDate(filters.startDate)} to {formatDate(filters.endDate)}
-                        </span>
-                    </div>
-                    <div>
-                        <span className="font-bold text-gray-800">Generated On:</span> <span className="text-gray-600 ml-1">
-                            {formatDate(new Date())}
-                        </span>
+            {!isProfitLoss && (
+                <div className="mb-10 flex justify-start text-[10px]">
+                    <div className="text-left space-y-0.5">
+                        <div>
+                            <span className="font-bold text-gray-800">Report Type:</span> <span className="text-gray-600 ml-1">{filters.reportType}</span>
+                        </div>
+                        <div>
+                            <span className="font-bold text-gray-800">Date Range:</span> <span className="text-gray-600 ml-1">
+                                {formatDate(filters.startDate)} to {formatDate(filters.endDate)}
+                            </span>
+                        </div>
+                        <div>
+                            <span className="font-bold text-gray-800">Generated On:</span> <span className="text-gray-600 ml-1">
+                                {formatDate(new Date())}
+                            </span>
+                        </div>
                     </div>
                 </div>
-            </div>
+            )}
 
             {/* ================= SUMMARY SECTION ================= */}
             {isSummary && summary && (
@@ -93,112 +163,190 @@ const ReportTablePrint = ({ reportData, filters }) => {
                 </div>
             )}
             {isProfitLoss && (
-                <div className="mt-10 mb-8 w-full pl-6">
+                <div className="mb-4 w-full">
                     {(() => {
-                        const totalLeft = Number(d.totalLeft || 0).toLocaleString();
-                        const totalRight = Number(d.totalRight || 0).toLocaleString();
-                        const netProfit = Number(d.netProfit || 0);
-                        const netLoss = Number(d.netLoss || 0);
-                        const dateRangeHeader = `${filters.startDate} to ${filters.endDate}`;
+                        const dateRangeHeader = `${formatProfitLossStatementDate(filters.startDate)} to ${formatProfitLossStatementDate(filters.endDate)}`;
+                        const leftRows = buildProfitLossStatementRows(
+                            d.expenses || [],
+                            d.netProfit > 0 ? { label: 'Nett Profit', amount: d.netProfit } : null
+                        );
+                        const rightRows = buildProfitLossStatementRows(
+                            d.incomes || [],
+                            d.netLoss > 0 ? { label: 'Nett Loss', amount: d.netLoss } : null
+                        );
+                        const rowCount = Math.max(leftRows.length, rightRows.length, 1);
+                        const pairedRows = Array.from({ length: rowCount }, (_, index) => ({
+                            left: leftRows[index] || null,
+                            right: rightRows[index] || null
+                        }));
+                        const blankCell = '\u00A0';
 
                         return (
-                            <div className="border border-gray-400 text-black font-serif">
-                                <table className="w-full border-collapse">
+                            <div className="text-black">
+                                <div className="mb-7 text-center">
+                                    <h1 className="text-[16px] font-semibold uppercase leading-[1.12] text-black">
+                                        {selectedOrg?.name || 'Organization Name'}
+                                    </h1>
+                                    {headerLines.map((line, index) => (
+                                        <div
+                                            key={`${line}-${index}`}
+                                            className={cn(
+                                                "text-[10.5px] leading-[1.16] text-black",
+                                                index === headerLines.length - 1 && "inline-block border-b border-black pb-px"
+                                            )}
+                                        >
+                                            {line}
+                                        </div>
+                                    ))}
+                                    <h2 className="mt-[7px] text-[15.5px] font-semibold leading-[1.12] text-black">
+                                        Profit &amp; Loss A/c
+                                    </h2>
+                                    <div className="mt-px text-[10.5px] leading-[1.12] text-black">
+                                        {dateRangeHeader}
+                                    </div>
+                                </div>
+
+                                <table className="w-full border-collapse table-fixed text-[10.5px] text-black">
+                                    <colgroup>
+                                        <col style={{ width: '26%' }} />
+                                        <col style={{ width: '11%' }} />
+                                        <col style={{ width: '13%' }} />
+                                        <col style={{ width: '26%' }} />
+                                        <col style={{ width: '11%' }} />
+                                        <col style={{ width: '13%' }} />
+                                    </colgroup>
                                     <thead>
-                                        {/* Row 2: Sub-Headers (Particulars, Date Range) */}
-                                        <tr className="bg-slate-50 border-b border-gray-400">
-                                            <th className="px-2 py-1 text-[10px] font-bold uppercase text-slate-600 border-r border-gray-300 text-left w-[32%]">Particulars</th>
-                                            <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase text-slate-600 border-r border-gray-400 text-center w-[18%]">{dateRangeHeader}</th>
-                                            <th className="px-2 py-1 text-[10px] font-bold uppercase text-slate-600 border-r border-gray-300 text-left w-[32%]">Particulars</th>
-                                            <th colSpan={2} className="px-2 py-1 text-[10px] font-bold uppercase text-slate-600 text-center w-[18%]">{dateRangeHeader}</th>
+                                        <tr className="border-y border-black/80">
+                                            <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black">
+                                                P a r t i c u l a r s
+                                            </th>
+                                            <th colSpan={2} className="border-r border-black/40 py-px text-center text-[10.5px] font-normal text-black">&nbsp;</th>
+                                            <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black">
+                                                P a r t i c u l a r s
+                                            </th>
+                                            <th colSpan={2} className="py-px text-center text-[10.5px] font-normal text-black">&nbsp;</th>
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            {/* LEFT SIDE: EXPENSES */}
-                                            <td colSpan={3} className="align-top border-r border-gray-400 p-0">
-                                                <div className="min-h-[450px] flex flex-col">
-                                                    <div className="flex-1">
-                                                        {expenses.map((group, idx) => (
-                                                            <div key={idx} className="mb-2">
-                                                                <div className="grid grid-cols-[1fr,70px,70px] w-full items-end">
-                                                                    <div className="px-2 py-1 text-[11px] font-bold text-slate-900">{group.category}</div>
-                                                                    <div></div>
-                                                                    <div className="px-2 py-1 text-[11px] font-bold text-right tabular-nums text-slate-900">
-                                                                        {formatCurrency(group.total, preferences.currency)}
-                                                                    </div>
-                                                                </div>
-                                                                {(group.items || []).map((item, iIdx) => (
-                                                                    <div key={iIdx} className="grid grid-cols-[1fr,70px,70px] w-full items-end">
-                                                                        <div className="px-5 py-0.5 text-[10px] text-slate-600 italic">{item.subCategory}</div>
-                                                                        <div className="px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600">
-                                                                            {formatCurrency(item.amount, preferences.currency)}
-                                                                        </div>
-                                                                        <div></div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    {netProfit > 0 && (
-                                                        <div className="grid grid-cols-[1fr,70px,70px] border-t border-emerald-100 mt-auto">
-                                                            <div className="px-2 py-1.5 text-[11px] font-bold italic text-slate-800">Nett Profit</div>
-                                                            <div></div>
-                                                            <div className="px-2 py-1.5 text-[11px] font-bold text-right tabular-nums text-slate-900">
-                                                                {formatCurrency(netProfit, preferences.currency)}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
+                                        <tr className="h-[6px]">
+                                            <td></td>
+                                            <td></td>
+                                            <td className="border-r border-black/40"></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                        </tr>
+                                        {pairedRows.map(({ left, right }, index) => {
+                                            const isLeftLastItem = left?.kind === 'item' && pairedRows[index + 1]?.left?.kind !== 'item';
+                                            const isRightLastItem = right?.kind === 'item' && pairedRows[index + 1]?.right?.kind !== 'item';
 
-                                            {/* RIGHT SIDE: INCOME */}
-                                            <td colSpan={3} className="align-top p-0">
-                                                <div className="min-h-[450px] flex flex-col">
-                                                    <div className="flex-1">
-                                                        {incomes.map((group, idx) => (
-                                                            <div key={idx} className="mb-2">
-                                                                <div className="grid grid-cols-[1fr,70px,70px] w-full items-end">
-                                                                    <div className="px-2 py-1 text-[11px] font-bold text-slate-900">{group.category}</div>
-                                                                    <div></div>
-                                                                    <div className="px-2 py-1 text-[11px] font-bold text-right tabular-nums text-slate-900">
-                                                                        {formatCurrency(group.total, preferences.currency)}
-                                                                    </div>
-                                                                </div>
-                                                                {(group.items || []).map((item, iIdx) => (
-                                                                    <div key={iIdx} className="grid grid-cols-[1fr,70px,70px] w-full items-end">
-                                                                        <div className="px-5 py-0.5 text-[10px] text-slate-600 italic">{item.subCategory}</div>
-                                                                        <div className="px-2 py-0.5 text-[10px] text-right tabular-nums text-slate-600">
-                                                                            {formatCurrency(item.amount, preferences.currency)}
-                                                                        </div>
-                                                                        <div></div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                    {netLoss > netProfit && netLoss > 0 && (
-                                                        <div className="grid grid-cols-[1fr,70px,70px] border-t border-rose-100 mt-auto">
-                                                            <div className="px-2 py-1.5 text-[11px] font-bold italic text-slate-800">Nett Loss</div>
-                                                            <div></div>
-                                                            <div className="px-2 py-1.5 text-[11px] font-bold text-right tabular-nums text-slate-900">
-                                                                {formatCurrency(netLoss, preferences.currency)}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
+                                            return (
+                                                <tr key={`print-pnl-row-${index}`} className="align-top">
+                                                    {/* LEFT SIDE */}
+                                                    <td className={cn(
+                                                        'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                        left?.kind === 'section' && 'pt-[4px]',
+                                                        left?.kind === 'balance' && 'pt-[4px]',
+                                                        left?.kind === 'section' && 'text-[11.5px] font-[550]',
+                                                        left?.kind === 'balance' && 'text-[11px]',
+                                                        left?.kind === 'item' && 'pl-[12px] italic'
+                                                    )}>
+                                                        {left?.label || blankCell}
+                                                    </td>
+                                                    <td className={cn(
+                                                        'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                        left?.kind === 'section' && 'pt-[4px]',
+                                                        left?.kind === 'balance' && 'pt-[4px]',
+                                                        left?.kind === 'item' && 'italic',
+                                                        !left && 'text-transparent'
+                                                    )}>
+                                                        {left?.kind === 'item' ? (
+                                                            <span className={cn(
+                                                                "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                                isLeftLastItem && "border-b border-black/55 pb-[1px]"
+                                                            )}>
+                                                                {formatProfitLossStatementAmount(left.amount)}
+                                                            </span>
+                                                        ) : blankCell}
+                                                    </td>
+                                                    <td className={cn(
+                                                        'border-r border-black/40 py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                        left?.kind === 'section' && 'pt-[4px]',
+                                                        left?.kind === 'balance' && 'pt-[4px]',
+                                                        left?.kind === 'section' && 'font-[550]',
+                                                        left?.kind === 'balance' && 'font-semibold',
+                                                        !left && 'text-transparent'
+                                                    )}>
+                                                        {left?.kind === 'section' || left?.kind === 'balance'
+                                                            ? formatProfitLossStatementAmount(left.total)
+                                                            : blankCell}
+                                                    </td>
+
+                                                    {/* RIGHT SIDE */}
+                                                    <td className={cn(
+                                                        'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                        right?.kind === 'section' && 'pt-[4px]',
+                                                        right?.kind === 'balance' && 'pt-[4px]',
+                                                        right?.kind === 'section' && 'text-[11.5px] font-[550]',
+                                                        right?.kind === 'balance' && 'text-[11px]',
+                                                        right?.kind === 'item' && 'pl-[12px] italic'
+                                                    )}>
+                                                        {right?.label || blankCell}
+                                                    </td>
+                                                    <td className={cn(
+                                                        'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                        right?.kind === 'section' && 'pt-[4px]',
+                                                        right?.kind === 'balance' && 'pt-[4px]',
+                                                        right?.kind === 'item' && 'italic',
+                                                        !right && 'text-transparent'
+                                                    )}>
+                                                        {right?.kind === 'item' ? (
+                                                            <span className={cn(
+                                                                "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                                isRightLastItem && "border-b border-black/55 pb-[1px]"
+                                                            )}>
+                                                                {formatProfitLossStatementAmount(right.amount)}
+                                                            </span>
+                                                        ) : blankCell}
+                                                    </td>
+                                                    <td className={cn(
+                                                        'py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                        right?.kind === 'section' && 'pt-[4px]',
+                                                        right?.kind === 'balance' && 'pt-[4px]',
+                                                        right?.kind === 'section' && 'font-[550]',
+                                                        right?.kind === 'balance' && 'font-semibold',
+                                                        right?.kind === 'balance' && right?.label === 'Nett Loss' && 'italic',
+                                                        !right && 'text-transparent'
+                                                    )}>
+                                                        {right?.kind === 'section' || right?.kind === 'balance'
+                                                            ? formatProfitLossStatementAmount(right.total)
+                                                            : blankCell}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        <tr className="h-[12px]">
+                                            <td></td>
+                                            <td></td>
+                                            <td className="border-r border-black/40"></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
                                         </tr>
                                     </tbody>
                                     <tfoot>
-                                        <tr className="border-y border-gray-300 bg-white font-bold tracking-tight">
-                                            <td colSpan={2} className="px-2 py-1.5 text-[11px] text-slate-900 text-left">Total</td>
-                                            <td className="px-2 py-1.5 text-[11px] text-right text-slate-900 border-r border-gray-400 tabular-nums">
-                                                {formatCurrency(d.totalLeft, preferences.currency)}
+                                        <tr className="border-y border-black/80">
+                                            <td colSpan={2} className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black">
+                                                T o t a l
                                             </td>
-                                            <td colSpan={2} className="px-2 py-1.5 text-[11px] text-slate-900 text-left">Total</td>
-                                            <td className="px-2 py-1.5 text-[11px] text-right text-slate-900 tabular-nums">
-                                                {formatCurrency(d.totalRight, preferences.currency)}
+                                            <td className="border-r border-black/40 py-px pr-2 text-right font-[550] tabular-nums text-black">
+                                                {formatProfitLossStatementAmount(d.totalLeft, true)}
+                                            </td>
+                                            <td colSpan={2} className="py-px pl-[8px] text-left text-[11px] font-[550] tracking-[0.02em] text-black">
+                                                T o t a l
+                                            </td>
+                                            <td className="py-px pr-2 text-right font-[550] tabular-nums text-black">
+                                                {formatProfitLossStatementAmount(d.totalRight, true)}
                                             </td>
                                         </tr>
                                     </tfoot>

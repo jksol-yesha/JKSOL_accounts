@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Search, Printer, ChevronRight, X, Download, FileSpreadsheet, FileText, Wallet, ArrowUpRight, ArrowDownLeft, Activity } from 'lucide-react';
+import { Search, Printer, Download, FileSpreadsheet, FileText, Wallet, ArrowUpRight, ArrowDownLeft, Activity } from 'lucide-react';
 import { AgGridReact } from "ag-grid-react";
 import { ModuleRegistry, AllCommunityModule, themeQuartz } from "ag-grid-community";
 import Card from '../../../components/common/Card';
@@ -21,236 +21,284 @@ const ReportTableScreen = ({
     totalPages,
     pageSize,
     totalItems,
-    onExportExcel,
     onExportPdf,
     filters,
     renderExtraFilters
 }) => {
 
-    const [expandedProfitRows, setExpandedProfitRows] = useState({});
     const [isExportDropdownOpen, setIsExportDropdownOpen] = useState(false);
     const [pagingPanel, setPagingPanel] = useState(null);
 
     const { formatCurrency, formatDate, preferences } = usePreferences();
+    const { selectedOrg } = useOrganization();
+
+    const formatProfitLossStatementDate = (value) => {
+        if (!value) return '';
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+
+        return new Intl.DateTimeFormat('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            year: '2-digit'
+        }).format(date).replace(/ /g, '-');
+    };
+
+    const formatProfitLossStatementAmount = (value, showZero = false) => {
+        const amount = Number(value || 0);
+        if (!showZero && amount === 0) return '';
+
+        return new Intl.NumberFormat('en-IN', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2
+        }).format(amount);
+    };
+
+    const getProfitLossItemLabel = (item) => (
+        String(item?.subCategory || item?.account || item?.name || '').trim()
+    );
+
+    const buildProfitLossStatementRows = (groups = [], balancingRow = null) => {
+        const rows = [];
+
+        groups
+            .filter((group) => String(group?.category || '').trim())
+            .forEach((group) => {
+                rows.push({
+                    kind: 'section',
+                    label: String(group.category).trim(),
+                    total: Number(group.total || 0)
+                });
+
+                (group.items || []).forEach((item) => {
+                    const label = getProfitLossItemLabel(item);
+                    if (!label) return;
+
+                    rows.push({
+                        kind: 'item',
+                        label,
+                        amount: Number(item.amount || 0)
+                    });
+                });
+            });
+
+        if (balancingRow?.amount > 0) {
+            rows.push({
+                kind: 'balance',
+                label: balancingRow.label,
+                total: Number(balancingRow.amount || 0)
+            });
+        }
+
+        return rows;
+    };
 
     if (!reportData) return null;
     if (reportData.type === 'profit-loss') {
         const d = reportData.data || {};
-        const { formatCurrency, preferences } = usePreferences();
-
-        const renderBucket = (groups, title, colorClass) => {
-            if (!groups || groups.length === 0) return null;
-            return (
-                <div className="mb-6 last:mb-0">
-                    <h5 className={cn("text-[11px] font-extrabold mb-2 uppercase tracking-wider", colorClass)}>{title}</h5>
-                    <table className="w-full text-left border-collapse">
-                        <tbody className="divide-y divide-gray-100/50">
-                            {groups.map((group, gIdx) => (
-                                <React.Fragment key={`${title}-${gIdx}`}>
-                                    <tr className="group hover:bg-gray-50/50 transition-colors">
-                                        <td className="py-2.5 text-[12px] font-bold text-slate-700">
-                                            <div className="flex items-center gap-2">
-                                                {group.items?.length > 0 && (
-                                                    <button
-                                                        onClick={() => toggleRow(`${title}-${group.category}`)}
-                                                        className="w-4 h-4 flex items-center justify-center rounded hover:bg-gray-100 transition-colors"
-                                                    >
-                                                        <ChevronRight
-                                                            size={12}
-                                                            className={cn("text-slate-400 transition-transform duration-200", expandedProfitRows[`${title}-${group.category}`] && "rotate-90")}
-                                                        />
-                                                    </button>
-                                                )}
-                                                <span className={group.items?.length === 0 ? "pl-6" : ""}>{group.category}</span>
-                                            </div>
-                                        </td>
-                                        <td className="py-2.5 text-[12px] font-extrabold text-right text-slate-900 tabular-nums">
-                                            {formatCurrency(group.total, preferences.currency)}
-                                        </td>
-                                    </tr>
-                                    {expandedProfitRows[`${title}-${group.category}`] && group.items?.map((item, iIdx) => (
-                                        <tr key={`${title}-${gIdx}-${iIdx}`} className="bg-slate-50/30">
-                                            <td className="py-2 pl-10 text-[11px] font-medium text-slate-500 italic">
-                                                {item.account}
-                                            </td>
-                                            <td className="py-2 text-[11px] font-bold text-right text-slate-600 tabular-nums pr-2">
-                                                {formatCurrency(item.amount, preferences.currency)}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </React.Fragment>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            );
-        };
-
-        const toggleRow = (key) => {
-            setExpandedProfitRows(prev => ({ ...prev, [key]: !prev[key] }));
-        };
-
-        const { selectedOrg } = useOrganization();
-        // Access period label from reportData top level
         const periodLabel = reportData.periodLabel || "Selected Period";
+        const branchLabel = filters?.branch && filters.branch !== 'All Branches'
+            ? String(filters.branch).trim()
+            : '';
+        const addressLines = String(selectedOrg?.address || '')
+            .split(/\r?\n|,/)
+            .map((line) => line.trim())
+            .filter(Boolean)
+            .slice(0, 3);
+        const headerLines = addressLines.length > 0 ? addressLines : (branchLabel ? [branchLabel] : []);
+        const dateRangeLabel = filters?.startDate && filters?.endDate
+            ? `${formatProfitLossStatementDate(filters.startDate)} to ${formatProfitLossStatementDate(filters.endDate)}`
+            : periodLabel;
+        const leftRows = buildProfitLossStatementRows(
+            d.expenses || [],
+            d.netProfit > 0 ? { label: 'Nett Profit', amount: d.netProfit } : null
+        );
+        const rightRows = buildProfitLossStatementRows(
+            d.incomes || [],
+            d.netLoss > 0 ? { label: 'Nett Loss', amount: d.netLoss } : null
+        );
+        const rowCount = Math.max(leftRows.length, rightRows.length, 1);
+        const pairedRows = Array.from({ length: rowCount }, (_, index) => ({
+            left: leftRows[index] || null,
+            right: rightRows[index] || null
+        }));
+        const statementFont = { fontFamily: 'Arial, Helvetica, sans-serif' };
+        const blankCell = '\u00A0';
 
         return (
-            <div className="bg-white min-h-[600px] flex flex-col font-sans text-black relative">
-
-
-                {/* Main Header Bar */}
-                <div className="bg-white flex items-center justify-between border-b border-gray-400 relative py-1.5 px-2">
-                    <div className="text-slate-800 text-[11px] font-bold">
-                        Profit & Loss A/c
-                    </div>
-                    <div className="absolute left-1/2 -translate-x-1/2 text-[12px] font-bold text-slate-800 uppercase tracking-tight">
-                        {(selectedOrg?.name || "Organization Name") + (filters?.branch && filters.branch !== 'All Branches' ? `-${filters.branch}` : "")}
-                    </div>
-                    <div className="pr-2 no-print ml-auto flex items-center justify-end gap-2">
-
-                        <button onClick={() => window.history.back()} className="text-slate-500 hover:text-slate-800 transition-colors p-1" title="Close Report">
-                            <X size={16} />
-                        </button>
-                    </div>
-                </div>
-
-                {/* Column Headers */}
-                <div className="grid grid-cols-2 border-b border-gray-300 bg-white">
-                    <div className="border-r border-gray-300 p-2 flex justify-between items-start">
-                        <span className="text-[11px] font-bold italic">Particulars</span>
-                        <div className="text-right">
-                            <div className="text-[10px] text-gray-700 font-bold">
-                                {filters?.startDate && filters?.endDate
-                                    ? `${formatDate(filters.startDate)} to ${formatDate(filters.endDate)}`
-                                    : periodLabel}
+            <div className="min-h-[600px] bg-white px-4 pb-8 pt-12 sm:px-8 sm:pb-10 sm:pt-16 w-full text-black">
+                <div className="mx-auto max-w-[880px]">
+                    <div className="text-center" style={statementFont}>
+                        <h1 className="text-[16px] font-semibold uppercase leading-[1.12] text-black sm:text-[17px]">
+                            {selectedOrg?.name || 'Organization Name'}
+                        </h1>
+                        {headerLines.map((line, index) => (
+                            <div
+                                key={`${line}-${index}`}
+                                className={cn(
+                                    "text-[10.5px] leading-[1.16] text-black sm:text-[11px]",
+                                    index === headerLines.length - 1 && "inline-block border-b border-black pb-px"
+                                )}
+                            >
+                                {line}
                             </div>
-                        </div>
-                    </div>
-                    <div className="p-2 flex justify-between items-start">
-                        <span className="text-[11px] font-bold italic">Particulars</span>
-                        <div className="text-right">
-                            <div className="text-[10px] text-gray-700 font-bold">
-                                {filters?.startDate && filters?.endDate
-                                    ? `${formatDate(filters.startDate)} to ${formatDate(filters.endDate)}`
-                                    : periodLabel}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                {/* Main Content Grid */}
-                <div className="grid grid-cols-2 flex-1 min-h-[500px]">
-                    {/* LEFT SIDE: EXPENSES */}
-                    <div className="border-r border-gray-300 flex flex-col pt-2">
-                        <div className="px-2 space-y-4">
-                            {/* All Expenses */}
-                            <div>
-                                <h5 className="text-[11px] font-bold mb-1 flex border-b border-gray-100 pb-0.5">
-                                    <span className="flex-1">Expenses</span>
-                                    <div className="w-[85px] text-right"></div>
-                                    <div className="w-[85px] text-right tabular-nums">{formatCurrency(d.totalExpense, preferences.currency)}</div>
-                                </h5>
-                                <div className="space-y-1 mt-1">
-                                    {(d.expenses || []).map((group, idx) => (
-                                        <div key={idx} className="pb-1">
-                                            <div className="flex text-[11px] py-0.5 group cursor-pointer" onClick={() => toggleRow(`expense-${group.category}`)}>
-                                                <div className="flex items-center gap-1 flex-1 min-w-0">
-                                                    {group.items?.length > 0 && (
-                                                        <ChevronRight
-                                                            size={10}
-                                                            className={cn("text-slate-400 transition-transform duration-200 flex-shrink-0", expandedProfitRows[`expense-${group.category}`] && "rotate-90")}
-                                                        />
-                                                    )}
-                                                    <span className={cn("font-bold", group.items?.length === 0 && "pl-3")}>{group.category}</span>
-                                                </div>
-                                                <div className="w-[85px] text-right pr-2"></div>
-                                                <div className="w-[85px] text-right tabular-nums font-bold">{formatCurrency(group.total, preferences.currency)}</div>
-                                            </div>
-                                            {expandedProfitRows[`expense-${group.category}`] && group.items?.map((item, iIdx) => (
-                                                <div key={iIdx} className="flex text-[11px] pl-5 py-0.5 font-medium text-slate-600 italic">
-                                                    <span className="flex-1 truncate pr-2">{item.subCategory}</span>
-                                                    <div className="w-[85px] text-right tabular-nums">{formatCurrency(item.amount, preferences.currency)}</div>
-                                                    <div className="w-[85px]"></div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Net Profit (if loss is on right) */}
-                            {d.netProfit > 0 && (
-                                <div className="pt-2 flex justify-between items-center bg-emerald-50/20 px-1 py-1 mt-auto border-t border-emerald-100">
-                                    <span className="text-[11px] font-bold italic">Nett Profit</span>
-                                    <span className="text-[11px] font-bold tabular-nums">{formatCurrency(d.netProfit, preferences.currency)}</span>
-                                </div>
-                            )}
+                        ))}
+                        <h2 className="mt-[7px] text-[15.5px] font-semibold leading-[1.12] text-black sm:text-[16px]">
+                            Profit &amp; Loss A/c
+                        </h2>
+                        <div className="mt-px text-[10.5px] leading-[1.12] text-black sm:text-[11px]">
+                            {dateRangeLabel}
                         </div>
                     </div>
 
-                    {/* RIGHT SIDE: INCOME */}
-                    <div className="flex flex-col pt-2">
-                        <div className="px-2 space-y-4">
-                            {/* All Incomes */}
-                            <div>
-                                <h5 className="text-[11px] font-bold mb-1 flex border-b border-gray-100 pb-0.5">
-                                    <span className="flex-1">Income</span>
-                                    <div className="w-[85px] text-right"></div>
-                                    <div className="w-[85px] text-right tabular-nums">{formatCurrency(d.totalIncome, preferences.currency)}</div>
-                                </h5>
-                                <div className="space-y-1 mt-1">
-                                    {(d.incomes || []).map((group, idx) => (
-                                        <div key={idx} className="pb-1">
-                                            <div className="flex text-[11px] py-0.5 group cursor-pointer" onClick={() => toggleRow(`income-${group.category}`)}>
-                                                <div className="flex items-center gap-1 flex-1 min-w-0">
-                                                    {group.items?.length > 0 && (
-                                                        <ChevronRight
-                                                            size={10}
-                                                            className={cn("text-slate-400 transition-transform duration-200 flex-shrink-0", expandedProfitRows[`income-${group.category}`] && "rotate-90")}
-                                                        />
-                                                    )}
-                                                    <span className={cn("font-bold", group.items?.length === 0 && "pl-3")}>{group.category}</span>
-                                                </div>
-                                                <div className="w-[85px] text-right pr-2"></div>
-                                                <div className="w-[85px] text-right tabular-nums font-bold">{formatCurrency(group.total, preferences.currency)}</div>
-                                            </div>
-                                            {expandedProfitRows[`income-${group.category}`] && group.items?.map((item, iIdx) => (
-                                                <div key={iIdx} className="flex text-[11px] pl-5 py-0.5 font-medium text-slate-600 italic">
-                                                    <span className="flex-1 truncate pr-2">{item.subCategory}</span>
-                                                    <div className="w-[85px] text-right tabular-nums">{formatCurrency(item.amount, preferences.currency)}</div>
-                                                    <div className="w-[85px]"></div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
+                        <div className="mt-5">
+                        <table className="w-full border-collapse table-fixed text-[10.5px] text-black sm:text-[11px]" style={statementFont}>
+                            <colgroup>
+                                <col style={{ width: '26%' }} />
+                                <col style={{ width: '11%' }} />
+                                <col style={{ width: '13%' }} />
+                                <col style={{ width: '26%' }} />
+                                <col style={{ width: '11%' }} />
+                                <col style={{ width: '13%' }} />
+                            </colgroup>
+                            <thead>
+                                <tr className="border-y border-black/80">
+                                    <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        P a r t i c u l a r s
+                                    </th>
+                                    <th colSpan={2} className="border-r border-black/40 py-px text-center text-[10.5px] font-normal text-black sm:text-[11px]">&nbsp;</th>
+                                    <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        P a r t i c u l a r s
+                                    </th>
+                                    <th colSpan={2} className="py-px text-center text-[10.5px] font-normal text-black sm:text-[11px]">&nbsp;</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr className="h-[6px]">
+                                    <td></td>
+                                    <td></td>
+                                    <td className="border-r border-black/40"></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                                {pairedRows.map(({ left, right }, index) => {
+                                    const isLeftLastItem = left?.kind === 'item' && pairedRows[index + 1]?.left?.kind !== 'item';
+                                    const isRightLastItem = right?.kind === 'item' && pairedRows[index + 1]?.right?.kind !== 'item';
 
-                            {/* Nett Loss (if profit is on left) */}
-                            {d.netLoss > 0 && (
-                                <div className="pt-2 flex justify-between items-center bg-rose-50/20 px-1 py-1 mt-auto border-t border-rose-100">
-                                    <span className="text-[11px] font-bold italic">Nett Loss</span>
-                                    <span className="text-[11px] font-bold tabular-nums">{formatCurrency(d.netLoss, preferences.currency)}</span>
-                                </div>
-                            )}
-                        </div>
+                                    return (
+                                        <tr key={`pnl-row-${index}`} className="align-top">
+                                            {/* LEFT SIDE */}
+                                            <td className={cn(
+                                                'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                left?.kind === 'section' && 'pt-[4px]',
+                                                left?.kind === 'balance' && 'pt-[4px]',
+                                                left?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
+                                                left?.kind === 'balance' && 'text-[11px]',
+                                                left?.kind === 'item' && 'pl-[12px] italic'
+                                            )}>
+                                                {left?.label || blankCell}
+                                            </td>
+                                            <td className={cn(
+                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                left?.kind === 'section' && 'pt-[4px]',
+                                                left?.kind === 'balance' && 'pt-[4px]',
+                                                left?.kind === 'item' && 'italic',
+                                                !left && 'text-transparent'
+                                            )}>
+                                                {left?.kind === 'item' ? (
+                                                    <span className={cn(
+                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                        isLeftLastItem && "border-b border-black/55 pb-[1px]"
+                                                    )}>
+                                                        {formatProfitLossStatementAmount(left.amount)}
+                                                    </span>
+                                                ) : blankCell}
+                                            </td>
+                                            <td className={cn(
+                                                'border-r border-black/40 py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                left?.kind === 'section' && 'pt-[4px]',
+                                                left?.kind === 'balance' && 'pt-[4px]',
+                                                left?.kind === 'section' && 'font-[550]',
+                                                left?.kind === 'balance' && 'font-semibold',
+                                                !left && 'text-transparent'
+                                            )}>
+                                                {left?.kind === 'section' || left?.kind === 'balance'
+                                                    ? formatProfitLossStatementAmount(left.total)
+                                                    : blankCell}
+                                            </td>
+
+                                            {/* RIGHT SIDE */}
+                                            <td className={cn(
+                                                'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                right?.kind === 'section' && 'pt-[4px]',
+                                                right?.kind === 'balance' && 'pt-[4px]',
+                                                right?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
+                                                right?.kind === 'balance' && 'text-[11px]',
+                                                right?.kind === 'item' && 'pl-[12px] italic'
+                                            )}>
+                                                {right?.label || blankCell}
+                                            </td>
+                                            <td className={cn(
+                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                right?.kind === 'section' && 'pt-[4px]',
+                                                right?.kind === 'balance' && 'pt-[4px]',
+                                                right?.kind === 'item' && 'italic',
+                                                !right && 'text-transparent'
+                                            )}>
+                                                {right?.kind === 'item' ? (
+                                                    <span className={cn(
+                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                        isRightLastItem && "border-b border-black/55 pb-[1px]"
+                                                    )}>
+                                                        {formatProfitLossStatementAmount(right.amount)}
+                                                    </span>
+                                                ) : blankCell}
+                                            </td>
+                                            <td className={cn(
+                                                'py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                right?.kind === 'section' && 'pt-[4px]',
+                                                right?.kind === 'balance' && 'pt-[4px]',
+                                                right?.kind === 'section' && 'font-[550]',
+                                                right?.kind === 'balance' && 'font-semibold',
+                                                right?.kind === 'balance' && right?.label === 'Nett Loss' && 'italic',
+                                                !right && 'text-transparent'
+                                            )}>
+                                                {right?.kind === 'section' || right?.kind === 'balance'
+                                                    ? formatProfitLossStatementAmount(right.total)
+                                                    : blankCell}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                                <tr className="h-[12px]">
+                                    <td></td>
+                                    <td></td>
+                                    <td className="border-r border-black/40"></td>
+                                    <td></td>
+                                    <td></td>
+                                    <td></td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr className="border-y border-black/80">
+                                    <td colSpan={2} className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        T o t a l
+                                    </td>
+                                    <td className="border-r border-black/40 py-px pr-2 text-right font-[550] tabular-nums text-black">
+                                        {formatProfitLossStatementAmount(d.totalLeft, true)}
+                                    </td>
+                                    <td colSpan={2} className="py-px pl-[8px] text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        T o t a l
+                                    </td>
+                                    <td className="py-px pr-2 text-right font-[550] tabular-nums text-black">
+                                        {formatProfitLossStatementAmount(d.totalRight, true)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
                     </div>
                 </div>
-
-                {/* Grand Total Formatter row to match Print layout */}
-                <div className="grid grid-cols-2 border-t border-gray-300 bg-gray-50/50 font-bold tracking-tight mt-auto">
-                    <div className="px-2 py-1.5 flex justify-between items-center text-slate-900 border-r border-gray-400">
-                        <span className="text-[11px] font-bold text-left tracking-tight">Total</span>
-                        <div className="text-[12px] tabular-nums">{formatCurrency(d.totalLeft, preferences.currency)}</div>
-                    </div>
-                    <div className="px-2 py-1.5 flex justify-between items-center text-slate-900">
-                        <span className="text-[11px] font-bold text-left tracking-tight">Total</span>
-                        <div className="text-[12px] tabular-nums">{formatCurrency(d.totalRight, preferences.currency)}</div>
-                    </div>
-                </div>
-
-                {/* Print/Export Controls */}
-                {/* Removed from bottom per request to match Detailed report top-toolbar style */}
             </div>
         );
     }

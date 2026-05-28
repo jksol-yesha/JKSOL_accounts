@@ -242,7 +242,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                         if (c.subCategories) {
                             c.subCategories.forEach(sc => {
                                 if (sc.status === 2 || sc.status === 'inactive') return;
-                                catsMap.set(`sub-${sc.id}-${c.id}`, { ...sc, id: `sub-${sc.id}-${c.id}`, name: `${c.name} - ${sc.name}` });
+                                catsMap.set(`sub-${sc.id}-${c.id}`, { ...sc, id: `sub-${sc.id}-${c.id}`, name: `${c.name} - ${sc.name}`, txnType: c.txnType });
                             });
                         }
                     });
@@ -743,7 +743,10 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                             dropdownClassName="z-[130]"
                                                         >
                                                             <option value="">Select Category...</option>
-                                                            {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                                                            {categories
+                                                                .filter(c => !focusedTxn.type || (c.txnType || '').toLowerCase() === focusedTxn.type.toLowerCase())
+                                                                .map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)
+                                                            }
                                                         </CustomSelect>
                                                     </div>
 

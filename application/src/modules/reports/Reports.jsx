@@ -2229,14 +2229,7 @@ const Reports = () => {
                 />
             </div>
             <div className="flex gap-2 relative no-print sm:ml-1 shrink-0">
-                <button
-                    onClick={handleExportExcel}
-                    className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                    title="Export as Excel"
-                >
-                    <FileSpreadsheet size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
-                    <span className="hidden sm:inline font-medium text-[12px]">Excel</span>
-                </button>
+
                 <button
                     onClick={handleExportPdf}
                     className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
@@ -2302,14 +2295,7 @@ const Reports = () => {
                                             </div>
                                         )}
                                         <div className="flex gap-2 relative no-print sm:ml-1">
-                                            <button
-                                                onClick={handleExportExcel}
-                                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                                title="Export as Excel"
-                                            >
-                                                <FileSpreadsheet size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
-                                                <span className="hidden sm:inline font-medium text-[12px]">Excel</span>
-                                            </button>
+
                                             <button
                                                 onClick={handleExportPdf}
                                                 className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
@@ -2333,14 +2319,7 @@ const Reports = () => {
                                             />
                                         </div>
                                         <div className="flex gap-2 relative no-print sm:ml-1">
-                                            <button
-                                                onClick={handleExportExcel}
-                                                className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                                title="Export as Excel"
-                                            >
-                                                <FileSpreadsheet size={14} className="text-gray-500 group-hover:text-[#4A8AF4] transition-colors" />
-                                                <span className="hidden sm:inline font-medium text-[12px]">Excel</span>
-                                            </button>
+
                                             <button
                                                 onClick={handleExportPdf}
                                                 className="group h-[32px] px-3 flex items-center gap-1.5 justify-center rounded-md border border-gray-200 bg-white text-gray-800 hover:text-[#4A8AF4] hover:bg-[#F0F9FF] hover:border-[#BAE6FD] focus:outline-none transition-all font-medium text-[12px] shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
@@ -2482,7 +2461,7 @@ const Reports = () => {
                                         totalPages={totalPages}
                                         pageSize={pageSize}
                                         totalItems={totalItems}
-                                        onExportExcel={handleExportExcel}
+
                                         onExportPdf={handleExportPdf}
                                         filters={displayFilters}
                                         renderExtraFilters={!isDesktopView ? extraFiltersNode : null}

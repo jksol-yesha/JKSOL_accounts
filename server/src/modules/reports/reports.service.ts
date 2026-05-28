@@ -477,7 +477,13 @@ export const ReportsService = {
         reportData: any,
         reportType: string,
         searchTerm?: string,
-        reportMeta?: { organizationName?: string, startDate?: string, endDate?: string }
+        reportMeta?: {
+            organizationName?: string,
+            organizationAddress?: string,
+            organizationBranchLine?: string,
+            startDate?: string,
+            endDate?: string
+        }
     ) => {
         const term = (searchTerm || '').trim().toLowerCase();
         const generatedDate = new Intl.DateTimeFormat('en-GB', {
@@ -603,86 +609,100 @@ export const ReportsService = {
 
         if (reportData?.type === 'profit-loss') {
             const d = reportData.data || {};
-            const currencyCode = String(reportData?.currency || 'USD').toUpperCase();
-            const formatCurrency = (val: number, showZero = false) => {
+            const formatStatementAmount = (val: number, showZero = false) => {
                 const amount = Number(val || 0);
                 if (!showZero && amount === 0) return '';
 
-                try {
-                    return new Intl.NumberFormat('en-IN', {
-                        style: 'currency',
-                        currency: currencyCode,
-                        currencyDisplay: 'narrowSymbol',
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                    }).format(amount);
-                } catch {
-                    return new Intl.NumberFormat('en-IN', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                    }).format(amount);
-                }
+                return new Intl.NumberFormat('en-IN', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }).format(amount);
             };
 
             type PnlRow = {
-                type: 'section' | 'category';
-                name: string;
+                kind: 'section' | 'item' | 'balance';
+                label: string;
                 total?: number;
                 amount?: number;
             };
 
-            const leftRows: PnlRow[] = [];
-            const rightRows: PnlRow[] = [];
+            const getItemLabel = (item: any) => String(item?.subCategory || item?.account || item?.name || '').trim();
 
-            // Dynamically add all expense categories
-            (d.expenses || []).forEach((group: any) => {
-                leftRows.push({ type: 'section', name: group.category, total: group.total });
-                (group.items || []).forEach((item: any) => {
-                    leftRows.push({ type: 'category', name: item.subCategory, amount: item.amount });
-                });
-            });
+            const buildStatementRows = (groups: any[] = [], balancingRow?: { label: string, amount: number } | null): PnlRow[] => {
+                const rows: PnlRow[] = [];
 
-            if (d.netProfit > 0) {
-                leftRows.push({ type: 'section', name: 'Nett Profit', total: d.netProfit });
-            }
+                groups
+                    .filter((group) => String(group?.category || '').trim())
+                    .forEach((group: any) => {
+                        rows.push({
+                            kind: 'section',
+                            label: String(group.category).trim(),
+                            total: Number(group.total || 0)
+                        });
 
-            // Dynamically add all income categories
-            (d.incomes || []).forEach((group: any) => {
-                rightRows.push({ type: 'section', name: group.category, total: group.total });
-                (group.items || []).forEach((item: any) => {
-                    rightRows.push({ type: 'category', name: item.subCategory, amount: item.amount });
-                });
-            });
+                        (group.items || []).forEach((item: any) => {
+                            const label = getItemLabel(item);
+                            if (!label) return;
 
-            if (d.netLoss > 0) {
-                rightRows.push({ type: 'section', name: 'Nett Loss', total: d.netLoss });
-            }
+                            rows.push({
+                                kind: 'item',
+                                label,
+                                amount: Number(item.amount || 0)
+                            });
+                        });
+                    });
 
-            const maxRows = Math.max(leftRows.length, rightRows.length);
+                if (balancingRow?.amount && balancingRow.amount > 0) {
+                    rows.push({
+                        kind: 'balance',
+                        label: balancingRow.label,
+                        total: Number(balancingRow.amount || 0)
+                    });
+                }
+
+                return rows;
+            };
+
+            const leftRows = buildStatementRows(
+                d.expenses || [],
+                d.netProfit > 0 ? { label: 'Nett Profit', amount: d.netProfit } : null
+            );
+            const rightRows = buildStatementRows(
+                d.incomes || [],
+                d.netLoss > 0 ? { label: 'Nett Loss', amount: d.netLoss } : null
+            );
+
+            const maxRows = Math.max(leftRows.length, rightRows.length, 1);
             const rowsHtml = [];
             for (let i = 0; i < maxRows; i++) {
-                const left = leftRows[i];
-                const right = rightRows[i];
+                const left = leftRows[i] || null;
+                const right = rightRows[i] || null;
+                const isLeftLastItem = left?.kind === 'item' && leftRows[i + 1]?.kind !== 'item';
+                const isRightLastItem = right?.kind === 'item' && rightRows[i + 1]?.kind !== 'item';
 
                 rowsHtml.push(`
                     <tr class="pnl-data-row">
-                        <td class="pnl-particulars ${left?.type === 'section' ? 'pnl-section pnl-section-start' : left?.type === 'category' ? 'pnl-category' : 'pnl-empty'}">
-                            ${left?.name ? escapeHtml(left.name) : ''}
+                        <td class="pnl-particulars ${left?.kind === 'section' ? 'pnl-section' : left?.kind === 'item' ? 'pnl-item' : left?.kind === 'balance' ? 'pnl-balance' : 'pnl-empty'}">
+                            ${left?.label ? escapeHtml(left.label) : '&nbsp;'}
                         </td>
-                        <td class="pnl-sub-amount text-right ${left?.type === 'section' ? 'pnl-section-start' : left?.type === 'category' ? 'pnl-category-amount' : 'pnl-empty'}">
-                            ${left?.type === 'category' ? formatCurrency(left.amount || 0) : ''}
+                        <td class="pnl-amount text-right ${left?.kind === 'item' ? 'pnl-item-amount' : 'pnl-empty'}">
+                            ${left?.kind === 'item'
+                                ? `<span class="pnl-item-value ${isLeftLastItem ? 'pnl-subtotal-line' : ''}">${escapeHtml(formatStatementAmount(left.amount || 0))}</span>`
+                                : '&nbsp;'}
                         </td>
-                        <td class="pnl-total-amount text-right pnl-side-divider ${left?.type === 'section' ? 'pnl-section-start pnl-section-total' : left?.type === 'category' ? 'pnl-category-total' : 'pnl-empty'}">
-                            ${left?.type === 'section' ? formatCurrency(left.total || 0) : ''}
+                        <td class="pnl-total text-right pnl-side-divider ${left?.kind === 'section' ? 'pnl-section-total' : left?.kind === 'balance' ? 'pnl-balance-total' : 'pnl-empty'}">
+                            ${left?.kind === 'section' || left?.kind === 'balance' ? escapeHtml(formatStatementAmount(left.total || 0)) : '&nbsp;'}
                         </td>
-                        <td class="pnl-particulars ${right?.type === 'section' ? 'pnl-section pnl-section-start' : right?.type === 'category' ? 'pnl-category' : 'pnl-empty'}">
-                            ${right?.name ? escapeHtml(right.name) : ''}
+                        <td class="pnl-particulars ${right?.kind === 'section' ? 'pnl-section pnl-right-section' : right?.kind === 'item' ? 'pnl-item pnl-right-item' : right?.kind === 'balance' ? 'pnl-balance pnl-right-section' : 'pnl-empty'}">
+                            ${right?.label ? escapeHtml(right.label) : '&nbsp;'}
                         </td>
-                        <td class="pnl-sub-amount text-right ${right?.type === 'section' ? 'pnl-section-start' : right?.type === 'category' ? 'pnl-category-amount' : 'pnl-empty'}">
-                            ${right?.type === 'category' ? formatCurrency(right.amount || 0) : ''}
+                        <td class="pnl-amount text-right ${right?.kind === 'item' ? 'pnl-item-amount' : 'pnl-empty'}">
+                            ${right?.kind === 'item'
+                                ? `<span class="pnl-item-value ${isRightLastItem ? 'pnl-subtotal-line' : ''}">${escapeHtml(formatStatementAmount(right.amount || 0))}</span>`
+                                : '&nbsp;'}
                         </td>
-                        <td class="pnl-total-amount text-right ${right?.type === 'section' ? 'pnl-section-start pnl-section-total' : right?.type === 'category' ? 'pnl-category-total' : 'pnl-empty'}">
-                            ${right?.type === 'section' ? formatCurrency(right.total || 0) : ''}
+                        <td class="pnl-total text-right ${right?.kind === 'section' ? 'pnl-section-total' : right?.kind === 'balance' ? 'pnl-balance-total' : 'pnl-empty'} ${right?.kind === 'balance' && right?.label === 'Nett Loss' ? 'pnl-loss-italic' : ''}">
+                            ${right?.kind === 'section' || right?.kind === 'balance' ? escapeHtml(formatStatementAmount(right.total || 0)) : '&nbsp;'}
                         </td>
                     </tr>
                 `);
@@ -692,46 +712,67 @@ export const ReportsService = {
                 if (!val) return '';
                 const date = new Date(val);
                 if (Number.isNaN(date.getTime())) return '';
-                const day = date.getDate();
-                const month = date.toLocaleString('en-GB', { month: 'short' });
-                const year = date.getFullYear().toString().slice(-2);
-                return `${day}-${month}-${year}`;
+                return new Intl.DateTimeFormat('en-GB', {
+                    day: 'numeric',
+                    month: 'short',
+                    year: '2-digit'
+                }).format(date).replace(/ /g, '-');
             };
 
             const headerRange = (reportMeta?.startDate && reportMeta?.endDate)
                 ? `${formatDateExact(reportMeta.startDate)} to ${formatDateExact(reportMeta.endDate)}`
                 : (selectedDateRange || '-');
 
+            const organizationName = String(reportMeta?.organizationName || '').trim();
+            const organizationLines = String(reportMeta?.organizationAddress || '')
+                .split(/\r?\n|,/)
+                .map((line) => line.trim())
+                .filter(Boolean)
+                .slice(0, 3);
+            const fallbackBranchLine = String(reportMeta?.organizationBranchLine || '').trim();
+            const headerLines = organizationLines.length > 0
+                ? organizationLines
+                : (fallbackBranchLine ? [fallbackBranchLine] : []);
+
             content = `
                 <div class="pnl-container">
                     <div class="pnl-header">
-                        <div class="org-name">${escapeHtml(reportMeta?.organizationName || '')}</div>
-                        <div class="pnl-title">Profit &amp; Loss Statement</div>
+                        <div class="pnl-org-name">${escapeHtml(organizationName || 'Organization Name')}</div>
+                        ${headerLines.map((line, index) => `<div class="pnl-org-line${index === headerLines.length - 1 ? ' pnl-org-line-last' : ''}">${escapeHtml(line)}</div>`).join('')}
+                        <div class="pnl-title">Profit &amp; Loss A/c</div>
                         <div class="pnl-period">${escapeHtml(headerRange)}</div>
                     </div>
                     <table class="pnl-table">
+                        <colgroup>
+                            <col style="width:26%;">
+                            <col style="width:11%;">
+                            <col style="width:13%;">
+                            <col style="width:26%;">
+                            <col style="width:11%;">
+                            <col style="width:13%;">
+                        </colgroup>
                         <thead>
                             <tr class="pnl-column-row">
-                                <th>Particulars</th>
-                                <th class="text-right">Amount</th>
-                                <th class="text-right pnl-side-divider">Total</th>
-                                <th>Particulars</th>
-                                <th class="text-right">Amount</th>
-                                <th class="text-right">Total</th>
+                                <th>P a r t i c u l a r s</th>
+                                <th colspan="2" class="text-center pnl-side-divider">&nbsp;</th>
+                                <th>P a r t i c u l a r s</th>
+                                <th colspan="2" class="text-center">&nbsp;</th>
                             </tr>
                         </thead>
                         <tbody>
+                            <tr style="height: 6px;"><td colspan="6" style="border: none;"></td></tr>
                             ${rowsHtml.join('')}
+                            <tr style="height: 12px;"><td colspan="6" style="border: none;"></td></tr>
                         </tbody>
                         <tfoot>
                             <tr class="pnl-total-row">
-                                <td class="pnl-total-label">Total</td>
-                                <td class="pnl-total-cell pnl-side-divider" colspan="2">
-                                    ${formatCurrency(d.totalLeft || 0, true)}
+                                <td colspan="2" class="pnl-total-label">Total</td>
+                                <td class="pnl-total-cell pnl-side-divider">
+                                    ${escapeHtml(formatStatementAmount(d.totalLeft || 0, true))}
                                 </td>
-                                <td class="pnl-total-label">Total</td>
-                                <td class="pnl-total-cell" colspan="2">
-                                    ${formatCurrency(d.totalRight || 0, true)}
+                                <td colspan="2" class="pnl-total-label">Total</td>
+                                <td class="pnl-total-cell">
+                                    ${escapeHtml(formatStatementAmount(d.totalRight || 0, true))}
                                 </td>
                             </tr>
                         </tfoot>
@@ -825,12 +866,12 @@ export const ReportsService = {
                 <meta charset="utf-8" />
                 <title>${escapeHtml(reportType || 'Report')}</title>
                 <style>
-                    @page { size: A4 landscape; margin: 0mm; }
+                    @page { size: ${isProfitLossReport ? 'A4 portrait' : 'A4 landscape'}; margin: 0mm; }
                     body { font-family: Arial, sans-serif; padding: 20mm; color: #111827; }
                     body.pnl-body {
-                        font-family: Inter, Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-                        padding: 20mm 15mm;
-                        color: #0f172a;
+                        font-family: Arial, Helvetica, sans-serif;
+                        padding: 26mm 18mm 16mm;
+                        color: #111111;
                         background: #ffffff;
                     }
                     .report-org-name { text-align: center; font-size: 24px; font-weight: 800; margin: 0 0 10px; color: #111827; }
@@ -882,126 +923,171 @@ export const ReportsService = {
                     tbody tr:last-child td { border-bottom: 1px solid #000; }
 
                     /* Profit & Loss Specific Styles */
-                    .pnl-container { padding: 0; max-width: 1080px; margin: 0 auto; }
+                    .pnl-container { padding: 0; max-width: 760px; margin: 0 auto; }
                     .pnl-header {
                         text-align: center;
                         margin: 0 auto 24px;
-                        color: #0f172a;
+                        color: #111111;
                     }
-                    .pnl-header .org-name {
-                        font-size: 26px;
-                        font-weight: 800;
-                        letter-spacing: 0.02em;
-                        margin-bottom: 8px;
-                        color: #0f172a;
+                    .pnl-org-name {
+                        font-size: 16px;
+                        font-weight: 600;
+                        letter-spacing: 0.005em;
+                        text-transform: uppercase;
+                        line-height: 1.12;
+                        margin-bottom: 2px;
                     }
-                    .pnl-header .pnl-title {
-                        font-size: 18px;
-                        font-weight: 700;
-                        margin-bottom: 4px;
-                        color: #111827;
+                    .pnl-org-line {
+                        font-size: 10.5px;
+                        line-height: 1.16;
+                        color: #111111;
                     }
-                    .pnl-header .pnl-period {
-                        font-size: 11px;
-                        font-weight: 500;
-                        color: #64748b;
+                    .pnl-org-line-last {
+                        display: inline-block;
+                        border-bottom: 1px solid #111111;
+                        padding-bottom: 1px;
+                    }
+                    .pnl-title {
+                        margin-top: 7px;
+                        font-size: 15.5px;
+                        font-weight: 600;
+                        line-height: 1.12;
+                    }
+                    .pnl-period {
+                        margin-top: 1px;
+                        font-size: 10.5px;
+                        line-height: 1.12;
+                        color: #111111;
                     }
 
                     .pnl-table {
                         border-collapse: collapse;
                         table-layout: fixed;
                         width: 100%;
-                        font-size: 11px;
-                        border-top: 1px solid #d9e1ea;
-                        border-bottom: 1px solid #d9e1ea;
+                        font-size: 10.5px;
+                        border: none;
                     }
                     .pnl-table th,
                     .pnl-table td {
                         border: none;
-                        padding: 7px 10px;
+                        padding: 0.5px 0;
                         vertical-align: top;
                     }
                     .pnl-table tbody tr { background: transparent !important; }
                     .pnl-table thead th {
                         background: transparent;
-                        color: #475569;
-                    }
-                    .pnl-side-row th {
-                        font-size: 10px;
-                        font-weight: 700;
-                        letter-spacing: 0.12em;
-                        text-transform: uppercase;
-                        padding-top: 0;
-                        padding-bottom: 10px;
-                        border-bottom: 1px solid #e2e8f0;
+                        color: #111111;
                     }
                     .pnl-column-row th {
-                        font-size: 10px;
-                        font-weight: 700;
-                        letter-spacing: 0.08em;
-                        text-transform: uppercase;
-                        padding-top: 8px;
-                        padding-bottom: 8px;
-                        border-bottom: 1px solid #e2e8f0;
+                        font-size: 11px;
+                        font-weight: 550;
+                        letter-spacing: 0.02em;
+                        text-transform: none;
+                        padding-top: 1px;
+                        padding-bottom: 1px;
+                        border-top: 1px solid #2f2f2f;
+                        border-bottom: 1px solid #2f2f2f;
                     }
-                    .pnl-side-heading { text-align: left; }
-                    .pnl-particulars { width: 30%; }
-                    .pnl-sub-amount {
-                        width: 10%;
-                        font-size: 10.75px;
-                        color: #334155;
-                    }
-                    .pnl-total-amount {
+                    .pnl-column-row th:first-child { padding-left: 8px !important; }
+                    .pnl-column-row th:nth-child(3) { padding-left: 8px !important; }
+                    .pnl-particulars { width: 30%; padding-left: 8px !important; }
+                    .pnl-amount {
                         width: 10%;
                         font-size: 11px;
-                        color: #0f172a;
-                    }
-                    .pnl-side-divider { border-right: 1px solid #e2e8f0 !important; }
-                    .pnl-data-row td { border-bottom: 1px solid #f1f5f9; }
-                    .pnl-section-start { border-top: 1px solid #e5e7eb !important; padding-top: 13px !important; }
-                    .pnl-section {
-                        font-weight: 700;
-                        font-size: 12px;
-                        color: #0f172a;
+                        text-align: right;
                         white-space: nowrap;
+                        word-break: normal;
+                        padding-right: 8px !important;
                     }
-                    .pnl-section-total {
-                        font-weight: 700;
-                        font-size: 12px;
-                    }
-                    .pnl-category {
-                        padding-left: 18px !important;
+                    .pnl-total {
+                        width: 10%;
                         font-size: 11px;
-                        font-weight: 500;
-                        color: #334155;
+                        text-align: right;
+                        white-space: nowrap;
+                        word-break: normal;
+                        padding-right: 8px !important;
                     }
-                    .pnl-category-amount {
-                        font-size: 10.75px;
-                        color: #334155;
+                    .pnl-side-divider { border-right: 1px solid #4b4b4b !important; }
+                    .pnl-data-row td { background: transparent; }
+                    .pnl-section {
+                        font-weight: 550;
+                        font-size: 11.5px;
+                        color: #111111;
+                        padding-top: 4px !important;
                     }
-                    .pnl-category-total,
+                    .pnl-item {
+                        padding-left: 12px !important;
+                        font-size: 10.5px;
+                        color: #111111;
+                        font-style: italic;
+                    }
+                    .pnl-right-section {
+                        padding-left: 8px !important;
+                        padding-right: 12px !important;
+                    }
+                    .pnl-right-item {
+                        padding-left: 12px !important;
+                    }
+                    .pnl-item-amount {
+                        font-size: 10.5px;
+                        color: #111111;
+                        font-style: italic;
+                    }
+                    .pnl-item-value {
+                        position: relative;
+                        display: inline-block;
+                        min-width: 104px;
+                        left: -36px;
+                        text-align: right;
+                    }
+                    .pnl-subtotal-line {
+                        border-bottom: 1px solid rgba(0, 0, 0, 0.55);
+                        padding-bottom: 1px;
+                    }
                     .pnl-empty {
                         color: transparent;
                     }
+                    .pnl-balance {
+                        padding-top: 4px !important;
+                        font-size: 11px;
+                    }
+                    .pnl-section-total {
+                        font-weight: 550;
+                        padding-top: 4px !important;
+                    }
+                    .pnl-balance-total {
+                        font-weight: 600;
+                        padding-top: 4px !important;
+                    }
+                    .pnl-loss-italic {
+                        font-style: italic;
+                    }
                     .pnl-total-row td {
-                        padding-top: 10px;
-                        padding-bottom: 10px;
-                        border-top: 1.5px solid #cbd5e1;
-                        border-bottom: 2px solid #94a3b8;
+                        padding-top: 1px;
+                        padding-bottom: 1px;
+                        border-top: 1px solid #2f2f2f;
+                        border-bottom: 1px solid #2f2f2f;
                         background: transparent;
                     }
                     .pnl-total-label {
-                        font-size: 10px;
-                        font-weight: 800;
-                        letter-spacing: 0.16em;
-                        text-transform: uppercase;
-                        color: #0f172a;
+                        font-size: 11px;
+                        font-weight: 550;
+                        letter-spacing: 0.02em;
+                        text-transform: none;
+                        color: #111111;
+                        text-align: left;
+                    }
+                    .pnl-total-row td:first-child, .pnl-total-row td:nth-child(3) {
+                        padding-left: 8px !important;
                     }
                     .pnl-total-cell {
-                        font-size: 12px;
-                        font-weight: 800;
+                        font-size: 10.5px;
+                        font-weight: 550;
                         text-align: right;
-                        color: #0f172a;
+                        color: #111111;
+                        white-space: nowrap;
+                        word-break: normal;
+                        padding-right: 8px !important;
                     }
 
                     .text-right { text-align: right !important; }

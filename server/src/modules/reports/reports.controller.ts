@@ -68,7 +68,7 @@ const parseStringListOrSingle = (val: any): string | string[] | undefined => {
     return normalized.length === 1 ? normalized[0] : normalized;
 };
 
-const buildReportHeaderName = async (
+const buildReportHeaderMeta = async (
     orgId: number,
     branchId: number | number[] | 'all'
 ) => {
@@ -79,11 +79,24 @@ const buildReportHeaderName = async (
         .limit(1);
 
     const organizationName = orgRow?.name || '';
-    if (!organizationName || branchId === 'all') return organizationName;
+    const organizationAddress = ''; // Address column does not exist in schema
+    if (!organizationName || branchId === 'all') {
+        return {
+            organizationName,
+            organizationAddress,
+            organizationBranchLine: ''
+        };
+    }
 
     let branchRows: Array<{ name: string }> = [];
     if (Array.isArray(branchId)) {
-        if (branchId.length === 0) return organizationName;
+        if (branchId.length === 0) {
+            return {
+                organizationName,
+                organizationAddress,
+                organizationBranchLine: ''
+            };
+        }
         branchRows = await db
             .select({ name: branches.name })
             .from(branches)
@@ -100,9 +113,11 @@ const buildReportHeaderName = async (
         .map((row) => String(row?.name || '').trim())
         .filter(Boolean);
 
-    if (branchNames.length === 0) return organizationName;
-
-    return `${organizationName} - ${branchNames.join(', ')}`;
+    return {
+        organizationName,
+        organizationAddress,
+        organizationBranchLine: branchNames.join(', ')
+    };
 };
 
 export const generateReport = async ({ body, set, headers, user, orgId, branchId: contextBranchId }: ElysiaContext & { body: any }) => {
@@ -280,9 +295,17 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
         }
 
         if (format === 'pdf') {
-            const headerOrganizationName = await buildReportHeaderName(orgId, branchId);
+            const headerMeta = await buildReportHeaderMeta(orgId, branchId);
+            const isProfitLossReport = reportType === 'Profit/Loss' || reportType === 'Profit & Loss';
+            const printableOrganizationName = isProfitLossReport
+                ? headerMeta.organizationName
+                : (headerMeta.organizationBranchLine
+                    ? `${headerMeta.organizationName} - ${headerMeta.organizationBranchLine}`
+                    : headerMeta.organizationName);
             const html = ReportsService.buildPrintableHtml(data, reportType, body.searchTerm, {
-                organizationName: headerOrganizationName,
+                organizationName: printableOrganizationName,
+                organizationAddress: headerMeta.organizationAddress,
+                organizationBranchLine: headerMeta.organizationBranchLine,
                 startDate,
                 endDate
             });
