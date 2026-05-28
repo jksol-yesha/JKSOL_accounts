@@ -43,6 +43,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useYear } from '../../context/YearContext';
 import { generateDatePresets } from '../../utils/constants';
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
+import { useToast } from '../../context/ToastContext';
 
 const ALL_TYPES_VALUE = 'All Types';
 const ALL_CATEGORIES_VALUE = 'All Categories';
@@ -1431,6 +1432,7 @@ const Reports = () => {
     const { selectedOrg, loading: orgLoading } = useOrganization();
     const { user } = useAuth();
     const { selectedYear, financialYears } = useYear();
+    const { showToast } = useToast();
 
     const { reportId } = useParams();
 
@@ -1835,7 +1837,7 @@ const Reports = () => {
             } else {
                 const message = response?.message || "Failed to generate report";
                 console.error("Report generation returned failure:", message, response);
-                alert(message);
+                showToast(message, 'error');
             }
         } catch (error) {
             const message =
@@ -1843,7 +1845,7 @@ const Reports = () => {
                 error?.message ||
                 "Failed to generate report";
             console.error("Report generation failed:", error);
-            alert(message);
+            showToast(message, 'error');
         }
     };
 
@@ -1921,7 +1923,7 @@ const Reports = () => {
         } catch (error) {
             const message = error?.response?.data?.message || error?.message || 'Failed to export report';
             console.error('Report Excel export failed:', error);
-            alert(message);
+            showToast(message, 'error');
         }
     };
 
@@ -1974,7 +1976,7 @@ const Reports = () => {
             }
 
             console.error('Report PDF export failed:', error);
-            alert(message);
+            showToast(message, 'error');
         }
     };
 

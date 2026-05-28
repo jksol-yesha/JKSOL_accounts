@@ -7,11 +7,13 @@ import { useAuth } from '../../context/AuthContext';
 import CustomSelect from '../common/CustomSelect';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 import { Loader } from '../common/Loader';
+import { useToast } from '../../context/ToastContext';
 
 const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBackToManage = null }) => {
     const { organizations, createOrganization, refreshOrganizations, selectedOrg, switchOrganization } = useOrganization();
     const { user } = useAuth();
     const { currencyOptions } = useCurrencyOptions();
+    const { showToast } = useToast();
 
     // View State
     const [isCreating, setIsCreating] = useState(false);
@@ -291,7 +293,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
             refreshOrganizations();
         } catch (error) {
             console.error(`Failed to ${action} org:`, error);
-            alert(`Failed to ${action} organization.`);
+            showToast(`Failed to ${action} organization.`, 'error');
         }
     };
 
@@ -311,7 +313,7 @@ const CreateOrganizationModal = ({ isOpen, onClose, initialMode = 'list', onBack
             }
         } catch (error) {
             console.error('Failed to delete org:', error);
-            alert(error.response?.data?.message || 'Failed to delete organization.');
+            showToast(error.response?.data?.message || 'Failed to delete organization.', 'error');
         }
     };
 

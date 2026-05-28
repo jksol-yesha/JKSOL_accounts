@@ -65,6 +65,29 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
     result.statementToDate = parseAxisDate(headerMatch[3]!);
   }
 
+  // ── Extract account metadata ──
+  // Account Holder: First meaningful line — e.g. "KHUNT JITENDRA CHANDUBHAI"
+  const holderMatch = fullText.match(/^([A-Z][A-Z\s]+?)(?:\n|\r)/m);
+  if (holderMatch) {
+    const candidate = holderMatch[1]!.trim();
+    // Accept if it looks like a name (at least 2 words, no special keywords)
+    if (candidate.split(/\s+/).length >= 2 && !/(?:OPENING|CLOSING|STATEMENT|TRANSACTION|DATE)/i.test(candidate)) {
+      result.accountHolderName = candidate;
+    }
+  }
+
+  // IFSC: "IFSC Code :UTIB0000848"
+  const ifscMatch = fullText.match(/IFSC\s*(?:Code)?\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
+
+  // MICR: "MICR Code :395211005"
+  const micrMatch = fullText.match(/MICR\s*(?:Code)?\s*:?\s*(\d{9})/i);
+  if (micrMatch) result.micr = micrMatch[1]!;
+
+  // Customer ID: "Customer ID :897090725"
+  const custMatch = fullText.match(/Customer\s*ID\s*:?\s*(\d+)/i);
+  if (custMatch) result.customerId = custMatch[1]!;
+
   // Extract Opening Balance
   const obMatch = fullText.match(/OPENING BALANCE\s+([\d,]+\.\d{2})/i);
   if (obMatch) result.openingBalance = normalizeAmount(obMatch[1]);
@@ -208,6 +231,25 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
   // Set counts
   result.debitCount = result.rows.filter(r => r.debitAmount !== null).length;
   result.creditCount = result.rows.filter(r => r.creditAmount !== null).length;
+
+  // Calculate total debit/credit
+  result.totalDebit = result.rows.reduce((sum, r) => sum + (r.debitAmount ? parseFloat(r.debitAmount) : 0), 0).toFixed(2);
+  result.totalCredit = result.rows.reduce((sum, r) => sum + (r.creditAmount ? parseFloat(r.creditAmount) : 0), 0).toFixed(2);
+
+  // Generate statement fingerprint
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   validateAxisStatement(result);
 

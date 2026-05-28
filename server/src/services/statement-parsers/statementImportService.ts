@@ -206,7 +206,7 @@ export async function processHDFCImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -366,7 +366,7 @@ export async function processAxisImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -529,7 +529,7 @@ export async function processICICIImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -694,7 +694,7 @@ export async function processSBIImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -854,7 +854,7 @@ export async function processYESBankImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,

@@ -9,6 +9,7 @@ import apiService, { buildAttachmentUrl, downloadAttachmentFile } from '../../..
 import { cn } from '../../../utils/cn';
 import AttachmentViewer from '../../../components/common/AttachmentViewer';
 import { notifyTransactionDataChanged } from '../transactionDataSync';
+import { useToast } from '../../../context/ToastContext';
 
 const isPartyInactive = (party) => {
     if (!party) return false;
@@ -62,6 +63,7 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
     const [fullScreenAttachment, setFullScreenAttachment] = useState({ isOpen: false, path: null });
     const { selectedBranch, branches } = useBranch();
     const { selectedYear } = useYear();
+    const { showToast } = useToast();
     const activeBranches = branches.filter(branch => !isBranchInactive(branch));
     const activeBranchIds = activeBranches.map(branch => Number(branch.id));
     const hasExplicitSelectedBranch = selectedBranch?.id && selectedBranch.id !== 'all' && selectedBranch.id !== 'multi';
@@ -438,7 +440,7 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
         try {
             const targetIds = initialData ? [initialData.branchId || targetBranchIds[0]] : targetBranchIds;
             if (targetIds.length === 0) {
-                alert("Please select at least one target branch.");
+                showToast("Please select at least one target branch.", "error");
                 setLoading(false);
                 return;
             }
@@ -457,26 +459,26 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
             // Validation
             if (Number(txnTypeId) === 4) { // Transfer
                 if (!finalFromId || !finalToId) {
-                    alert("Please select both From and To accounts.");
+                    showToast("Please select both From and To accounts.", "error");
                     setLoading(false); return;
                 }
                 if (finalFromId === finalToId) {
-                    alert("From and To accounts cannot be the same.");
+                    showToast("From and To accounts cannot be the same.", "error");
                     setLoading(false); return;
                 }
             } else if (Number(txnTypeId) === 2) { // Expense
                 if (!finalAccountId || !finalCategoryId) {
-                    alert("Please select both Expense Category and Payment Account.");
+                    showToast("Please select both Expense Category and Payment Account.", "error");
                     setLoading(false); return;
                 }
             } else if (Number(txnTypeId) === 3 || txnTypes.find(t => t.id === Number(txnTypeId))?.name?.toLowerCase() === 'investment') { // Investment
                 if (!finalAccountId || !finalToId) { // From Account -> accountId, Investment Account -> toAccountId
-                    alert("Please select both Payment Account and Investment Account.");
+                    showToast("Please select both Payment Account and Investment Account.", "error");
                     setLoading(false); return;
                 }
             } else if (Number(txnTypeId) === 1) { // Income
                 if (!finalAccountId || !finalCategoryId) {
-                    alert("Please select both Income Category and Deposit Account.");
+                    showToast("Please select both Income Category and Deposit Account.", "error");
                     setLoading(false); return;
                 }
             }
@@ -542,7 +544,7 @@ const CreateTransactionModal = ({ isOpen, onClose, onSuccess, initialData }) => 
             onClose();
         } catch (error) {
             console.error("Failed to save transaction:", error);
-            alert("Failed to save transaction: " + (error.response?.data?.message || error.message));
+            showToast(error.response?.data?.message || error.message || "Failed to save transaction", "error");
         } finally {
             setLoading(false);
         }

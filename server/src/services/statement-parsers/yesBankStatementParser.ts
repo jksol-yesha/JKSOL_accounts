@@ -236,14 +236,62 @@ function extractMetadata(fullText: string): {
   accountNumber: string | null;
   fromDate: string | null;
   toDate: string | null;
+  accountHolderName: string | null;
+  ifsc: string | null;
+  micr: string | null;
+  bankBranchName: string | null;
+  customerId: string | null;
 } {
   const accountMatch = fullText.match(/Statement\s+of\s+account:\s*(\d+)/i);
   const periodMatch = fullText.match(/Period:\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})\s*-\s*(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/i);
+
+  // Customer/Account Holder Name:
+  // YES Bank format: "Primary Account Holder Name: RINKALBEN ROSHAN KHUNT"
+  // or name appears on the third non-empty line after the header
+  const holderMatch = fullText.match(/Primary\s+(?:Account\s+)?Holder(?:\s+Name)?:\s*([A-Z][A-Z\s]+?)(?:\s*A\/C|\s*$)/im);
+  // Fallback: name appears right after "Period:" line
+  let accountHolderName: string | null = null;
+  if (holderMatch) {
+    accountHolderName = cleanText(holderMatch[1]!).replace(/\s+/g, ' ').trim();
+  } else {
+    // Try to get from the line right after period
+    const afterPeriod = fullText.match(/Period:[^\n]+\n\s*([A-Z][A-Z\s]+)\n/);
+    if (afterPeriod) {
+      const candidate = cleanText(afterPeriod[1]!).trim();
+      // Only accept if it looks like a name (2+ words, no numbers)
+      if (candidate.split(/\s+/).length >= 2 && !/\d/.test(candidate)) {
+        accountHolderName = candidate;
+      }
+    }
+  }
+
+  // IFSC Code: "IFSC Code: YESB0000400"
+  const ifscMatch = fullText.match(/IFSC\s*Code\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  const ifsc = ifscMatch ? ifscMatch[1]!.toUpperCase() : null;
+
+  // MICR Code: "MICR Code: 395532004"
+  const micrMatch = fullText.match(/MICR\s*Code\s*:?\s*(\d{9})/i);
+  const micr = micrMatch ? micrMatch[1]! : null;
+
+  // Branch Name: "Name: YES BANK LTD - VARACCHA ROAD"
+  // or "Your Branch details:\nName: ..."
+  const branchMatch = fullText.match(/Your\s+Branch\s+details:\s*\n?\s*Name:\s*(.+?)(?:\n|Address)/i)
+    || fullText.match(/(?:Branch\s+)?Name:\s*(YES\s+BANK[^\n]+)/i);
+  const bankBranchName = branchMatch ? cleanText(branchMatch[1]!).trim() : null;
+
+  // Customer ID: "Cust ID: 10557261"
+  const custIdMatch = fullText.match(/Cust(?:omer)?\s*ID\s*:?\s*(\d+)/i);
+  const customerId = custIdMatch ? custIdMatch[1]! : null;
 
   return {
     accountNumber: accountMatch ? accountMatch[1]! : null,
     fromDate: periodMatch ? parseYesDate(periodMatch[1]!) : null,
     toDate: periodMatch ? parseYesDate(periodMatch[2]!) : null,
+    accountHolderName,
+    ifsc,
+    micr,
+    bankBranchName,
+    customerId,
   };
 }
 
@@ -312,7 +360,7 @@ export async function parseYesBankStatement(buffer: Buffer): Promise<ParsedState
   }
 
   const result: ParsedStatementResult = {
-    parser: 'YES_BANK_DETERMINISTIC_TEXT',
+    parser: 'YESBANK_DETERMINISTIC',
     bankName: 'YES BANK',
     accountNumber: null,
     statementFromDate: null,
@@ -335,6 +383,11 @@ export async function parseYesBankStatement(buffer: Buffer): Promise<ParsedState
   result.accountNumber = metadata.accountNumber;
   result.statementFromDate = metadata.fromDate;
   result.statementToDate = metadata.toDate;
+  result.accountHolderName = metadata.accountHolderName;
+  result.ifsc = metadata.ifsc;
+  result.micr = metadata.micr;
+  result.bankBranchName = metadata.bankBranchName;
+  result.customerId = metadata.customerId;
 
   const summary = parseSummary(fullText);
   result.openingBalance = summary.openingBalance;
@@ -480,6 +533,21 @@ export async function parseYesBankStatement(buffer: Buffer): Promise<ParsedState
   for (const row of result.rows) {
     delete (row as any)._tempAmount;
   }
+
+  // Generate statement fingerprint for dedup
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   return result;
 }

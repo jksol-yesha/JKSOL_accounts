@@ -21,9 +21,11 @@ import LoadingOverlay from '../../components/common/LoadingOverlay';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
 import PageHeader from '../../components/layout/PageHeader';
 import apiService from '../../services/api'; // Using API instead of storage
+import { useToast } from '../../context/ToastContext';
 
 const Organizations = () => {
     const navigate = useNavigate();
+    const { showToast } = useToast();
     const [organizations, setOrganizations] = useState([]);
     const [pageSize, setPageSize] = useState(20);
     const [activeDropdown, setActiveDropdown] = useState(null);
@@ -83,7 +85,7 @@ const Organizations = () => {
             fetchOrganizations(); // Refresh list
         } catch (error) {
             console.error("Failed to delete organization:", error);
-            alert("Failed to delete organization");
+            showToast("Failed to delete organization", "error");
         }
     };
 

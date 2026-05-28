@@ -6,6 +6,7 @@ import { PDFParserService } from '../../shared/pdf-parser.service';
 import { isHDFCStatement, parseHDFCStatement } from '../../services/statement-parsers/hdfcStatementParser';
 import { isAxisStatement, parseAxisStatement } from '../../services/statement-parsers/axisStatementParser';
 import { isICICIStatement, parseICICIStatement } from '../../services/statement-parsers/iciciStatementParser';
+import { isSBIStatement, parseSBIStatement } from '../../services/statement-parsers/sbiStatementParser';
 import { isYesBankStatement, parseYesBankStatement } from '../../services/statement-parsers/yesBankStatementParser';
 import { generateFileHash } from '../../services/statement-parsers/statementHashUtils';
 
@@ -164,11 +165,14 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
             }
 
             const buffer = Buffer.from(await file.arrayBuffer());
-            
-            // Check if this is an HDFC statement for deterministic parsing
+
+            // ─── LAYER 1: FILE HASH ───
+            // Calculate SHA-256 of raw PDF bytes BEFORE any parsing or OpenAI calls
+            const fileHash = generateFileHash(buffer);
+
+            // Extract text for bank detection
             const text = await PDFParserService.extractText(buffer);
-            
-            
+
             // If PDF has essentially no extractable text, it's likely a scanned/image PDF
             if (!text || text.trim().length < 50) {
                 set.status = 400;
@@ -179,163 +183,125 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
                         accountNumber: null,
                         bankName: null,
                         parser: 'NONE',
+                        fileHash,
                         transactions: []
                     }
                 };
             }
+
+            // ─── Helper: build standardized response from deterministic parser result ───
+            const buildDeterministicResponse = (result: any, bankName: string, parser: string) => {
+                return {
+                    success: true,
+                    message: `Successfully parsed ${result.rows.length} transactions (${parser})`,
+                    data: {
+                        accountNumber: result.accountNumber || null,
+                        bankName,
+                        parser,
+                        parserType: parser,
+                        fileHash,
+                        // Account metadata for pre-filling CreateAccount form
+                        accountHolderName: result.accountHolderName || null,
+                        ifsc: result.ifsc || null,
+                        micr: result.micr || null,
+                        bankBranchName: result.bankBranchName || null,
+                        customerId: result.customerId || null,
+                        // Statement period & summary
+                        statementFromDate: result.statementFromDate || null,
+                        statementToDate: result.statementToDate || null,
+                        openingBalance: result.openingBalance || null,
+                        closingBalance: result.closingBalance || null,
+                        totalDebit: result.totalDebit || null,
+                        totalCredit: result.totalCredit || null,
+                        debitCount: result.debitCount ?? null,
+                        creditCount: result.creditCount ?? null,
+                        statementFingerprint: result.statementFingerprint || null,
+                        validation: result.validation,
+                        transactions: result.rows.map((row: any, idx: number) => ({
+                            date: row.transactionDate,
+                            narration: row.narration,
+                            referenceNo: row.referenceNo || null,
+                            chequeNumber: row.chequeNumber || null,
+                            serialNo: row.serialNo ?? null,
+                            valueDate: row.valueDate || null,
+                            withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
+                            deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
+                            balance: parseFloat(row.closingBalance || '0'),
+                            bankTransactionKey: row.bankTransactionKey || null,
+                            sourceRowSignature: row.sourceRowSignature || null,
+                            sourcePage: row.sourcePage ?? null,
+                            sourceRow: row.sourceRow ?? idx + 1,
+                            rawText: row.rawText || '',
+                            hash: ''
+                        }))
+                    }
+                };
+            };
             
+            // ─── HDFC Deterministic ───
             if (isHDFCStatement(text)) {
-                // Use deterministic HDFC parser
-                const hdfcResult = await parseHDFCStatement(buffer);
-                
-                
-                if (hdfcResult.rows.length === 0) {
-                    // No rows parsed - could indicate format mismatch
-                }
-                
-                const mappedData = {
-                    accountNumber: hdfcResult.accountNumber || null,
-                    bankName: 'HDFC',
-                    parser: 'HDFC_DETERMINISTIC',
-                    statementFromDate: hdfcResult.statementFromDate,
-                    statementToDate: hdfcResult.statementToDate,
-                    openingBalance: hdfcResult.openingBalance,
-                    closingBalance: hdfcResult.closingBalance,
-                    validation: hdfcResult.validation,
-                    transactions: hdfcResult.rows.map((row: any) => ({
-                        date: row.transactionDate,
-                        narration: row.narration,
-                        referenceNo: row.referenceNo,
-                        valueDate: row.valueDate,
-                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
-                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
-                        balance: parseFloat(row.closingBalance),
-                        hash: ''
-                    }))
-                };
-
-                return {
-                    success: true,
-                    message: `Successfully parsed ${mappedData.transactions.length} transactions (HDFC Deterministic)`,
-                    data: mappedData
-                };
+                const result = await parseHDFCStatement(buffer);
+                return buildDeterministicResponse(result, 'HDFC', 'HDFC_DETERMINISTIC');
             }
 
-            // ─── Axis Bank Deterministic ───
+            // ─── Axis Deterministic ───
             if (isAxisStatement(text)) {
-                const axisResult = await parseAxisStatement(buffer);
-                
-                
-                const mappedData = {
-                    accountNumber: axisResult.accountNumber || null,
-                    bankName: 'AXIS',
-                    parser: 'AXIS_DETERMINISTIC',
-                    statementFromDate: axisResult.statementFromDate,
-                    statementToDate: axisResult.statementToDate,
-                    openingBalance: axisResult.openingBalance,
-                    closingBalance: axisResult.closingBalance,
-                    validation: axisResult.validation,
-                    transactions: axisResult.rows.map((row: any) => ({
-                        date: row.transactionDate,
-                        narration: row.narration,
-                        referenceNo: row.referenceNo,
-                        chequeNumber: row.chequeNumber,
-                        valueDate: row.valueDate,
-                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
-                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
-                        balance: parseFloat(row.closingBalance),
-                        hash: ''
-                    }))
-                };
-
-                return {
-                    success: true,
-                    message: `Successfully parsed ${mappedData.transactions.length} transactions (Axis Deterministic)`,
-                    data: mappedData
-                };
+                const result = await parseAxisStatement(buffer);
+                return buildDeterministicResponse(result, 'AXIS', 'AXIS_DETERMINISTIC');
             }
 
-            // ─── ICICI Bank Deterministic ───
+            // ─── ICICI Deterministic ───
             if (isICICIStatement(text)) {
-                const iciciResult = await parseICICIStatement(buffer);
-                
-                
-                const mappedData = {
-                    accountNumber: iciciResult.accountNumber || null,
-                    bankName: 'ICICI',
-                    parser: 'ICICI_DETERMINISTIC',
-                    statementFromDate: iciciResult.statementFromDate,
-                    statementToDate: iciciResult.statementToDate,
-                    openingBalance: iciciResult.openingBalance,
-                    closingBalance: iciciResult.closingBalance,
-                    validation: iciciResult.validation,
-                    transactions: iciciResult.rows.map((row: any) => ({
-                        date: row.transactionDate,
-                        narration: row.narration,
-                        referenceNo: row.referenceNo,
-                        chequeNumber: row.chequeNumber,
-                        serialNo: row.serialNo,
-                        valueDate: row.valueDate,
-                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
-                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
-                        balance: parseFloat(row.closingBalance),
-                        hash: ''
-                    }))
-                };
+                const result = await parseICICIStatement(buffer);
+                return buildDeterministicResponse(result, 'ICICI', 'ICICI_DETERMINISTIC');
+            }
 
-                return {
-                    success: true,
-                    message: `Successfully parsed ${mappedData.transactions.length} transactions (ICICI Deterministic)`,
-                    data: mappedData
-                };
+            // ─── SBI Deterministic ───
+            if (isSBIStatement(text)) {
+                const result = await parseSBIStatement(buffer);
+                return buildDeterministicResponse(result, 'SBI', 'SBI_DETERMINISTIC');
             }
 
             // ─── YES Bank Deterministic ───
             if (isYesBankStatement(text)) {
-                const yesResult = await parseYesBankStatement(buffer);
-
-                const mappedData = {
-                    accountNumber: yesResult.accountNumber || null,
-                    bankName: 'YES BANK',
-                    parser: 'YES_BANK_DETERMINISTIC_TEXT',
-                    statementFromDate: yesResult.statementFromDate,
-                    statementToDate: yesResult.statementToDate,
-                    openingBalance: yesResult.openingBalance,
-                    closingBalance: yesResult.closingBalance,
-                    validation: yesResult.validation,
-                    transactions: yesResult.rows.map((row: any) => ({
-                        date: row.transactionDate,
-                        narration: row.narration,
-                        referenceNo: row.referenceNo,
-                        chequeNumber: row.chequeNumber,
-                        valueDate: row.valueDate,
-                        withdrawal: row.debitAmount ? parseFloat(row.debitAmount) : 0,
-                        deposit: row.creditAmount ? parseFloat(row.creditAmount) : 0,
-                        balance: parseFloat(row.closingBalance),
-                        hash: ''
-                    }))
-                };
-
-                return {
-                    success: true,
-                    message: `Successfully parsed ${mappedData.transactions.length} transactions (YES Bank Deterministic)`,
-                    data: mappedData
-                };
+                const result = await parseYesBankStatement(buffer);
+                return buildDeterministicResponse(result, 'YES BANK', 'YESBANK_DETERMINISTIC');
             }
 
-            // Fallback: OpenAI parser for unsupported banks
+            // ─── OpenAI Fallback ───
             const parsedData = await PDFParserService.parseStatement(buffer);
 
             const mappedData = {
                 accountNumber: parsedData.accountNumber || null,
                 bankName: null,
                 parser: 'OPENAI',
-                transactions: parsedData.transactions.map((txn: any) => ({
+                parserType: 'OPENAI',
+                fileHash,
+                statementFromDate: null,
+                statementToDate: null,
+                openingBalance: null,
+                closingBalance: null,
+                totalDebit: null,
+                totalCredit: null,
+                debitCount: null,
+                creditCount: null,
+                statementFingerprint: null,
+                validation: null,
+                transactions: parsedData.transactions.map((txn: any, idx: number) => ({
                     date: txn.date,
                     narration: txn.description,
+                    referenceNo: null,
+                    chequeNumber: null,
+                    serialNo: null,
+                    valueDate: null,
                     withdrawal: txn.debit || 0,
                     deposit: txn.credit || 0,
                     balance: txn.balance || 0,
+                    bankTransactionKey: null,
+                    sourceRowSignature: null,
+                    sourcePage: null,
+                    sourceRow: idx + 1,
+                    rawText: '',
                     hash: ''
                 }))
             };

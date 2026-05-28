@@ -125,6 +125,33 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
     result.statementToDate = parseHDFCDate(periodMatch[2]!);
   }
 
+  // ── Extract account metadata ──
+  // IFSC: "RTGS/NEFT IFSC :  HDFC0004693" or "IFSC:HDFC0004693"
+  const ifscMatch = fullText.match(/IFSC\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
+
+  // MICR: "MICR : 395240029"
+  const micrMatch = fullText.match(/MICR\s*:?\s*(\d{9})/i);
+  if (micrMatch) result.micr = micrMatch[1]!;
+
+  // Account Holder: "M/S.    SWAINFO SOLUTIONS" or line after a known header
+  const holderMatch = fullText.match(/(?:M\/S\.?\s*)([\w\s]+?)(?:\n|$)/i)
+    || fullText.match(/(?:Account\s*(?:Holder|Name)\s*:?\s*)([\w\s]+?)(?:\n|$)/i);
+  if (holderMatch) {
+    const candidate = holderMatch[1]!.trim();
+    if (candidate.length >= 3 && candidate.length <= 150) {
+      result.accountHolderName = candidate;
+    }
+  }
+
+  // Branch Name: "Account Branch  :  SARTHANA CHOKDI BRANCH"
+  const branchMatch = fullText.match(/Account\s*Branch\s*:?\s*(.+?)(?:\n|$)/i);
+  if (branchMatch) result.bankBranchName = branchMatch[1]!.trim();
+
+  // Customer ID: "Cust ID:  161272245"
+  const custMatch = fullText.match(/Cust(?:omer)?\s*ID\s*:?\s*(\d+)/i);
+  if (custMatch) result.customerId = custMatch[1]!;
+
   // ── Extract statement summary ──
   // Real format: "Opening BalanceDr CountCr CountDebitsCreditsClosing Bal"
   // Values:      "1,866,194.71321,600,043.00360,688.00626,839.71"
@@ -547,6 +574,21 @@ export async function parseHDFCStatement(buffer: Buffer): Promise<ParsedStatemen
   if (result.closingBalance === null && result.rows.length > 0) {
     result.closingBalance = result.rows[result.rows.length - 1]!.closingBalance;
   }
+
+  // ── Generate statement fingerprint for dedup ──
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   // ── Run validation ──
   validateStatement(result);

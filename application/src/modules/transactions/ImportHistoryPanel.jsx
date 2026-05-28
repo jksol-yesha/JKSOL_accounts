@@ -5,11 +5,13 @@ import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { Loader } from '../../components/common/Loader';
 import { usePreferences } from '../../context/PreferenceContext';
+import { useToast } from '../../context/ToastContext';
 
 const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
     const { selectedBranch } = useBranch();
     const { selectedYear } = useYear();
     const { formatDate } = usePreferences();
+    const { showToast } = useToast();
     
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -67,7 +69,7 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
             setRevertDialog({ open: false, id: null, filename: '', count: 0, loading: false });
         } catch (err) {
             console.error('Failed to revert import:', err);
-            alert(err.response?.data?.message || err.message || 'Failed to revert import');
+            showToast(err.response?.data?.message || err.message || 'Failed to revert import', 'error');
             setRevertDialog(prev => ({ ...prev, loading: false }));
         }
     };
@@ -200,11 +202,39 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="flex items-center justify-between pt-2 border-t border-gray-100/60">
-                                            <span className="text-xs font-medium text-gray-500">Transactions</span>
-                                            <span className={`text-xs font-bold ${item.status === 1 ? 'text-gray-900' : 'text-gray-400'}`}>
-                                                {item.transactionCount}
-                                            </span>
+                                        <div className="flex flex-col gap-1.5 pt-2 border-t border-gray-100/60">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-medium text-gray-500">Transactions</span>
+                                                <span className={`text-xs font-bold ${item.status === 1 ? 'text-gray-900' : 'text-gray-400'}`}>
+                                                    {item.transactionCount}
+                                                </span>
+                                            </div>
+                                            {(item.duplicateCount > 0 || item.invalidCount > 0) && (
+                                                <div className="flex items-center justify-between">
+                                                    {item.duplicateCount > 0 && (
+                                                        <span className="text-[10px] font-semibold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                                                            {item.duplicateCount} duplicates skipped
+                                                        </span>
+                                                    )}
+                                                    {item.invalidCount > 0 && (
+                                                        <span className="text-[10px] font-semibold text-red-600 bg-red-50 px-1.5 py-0.5 rounded">
+                                                            {item.invalidCount} invalid
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {item.parserType && (
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-gray-500">Parser</span>
+                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                                                        item.parserType === 'OPENAI' 
+                                                            ? 'bg-purple-50 text-purple-600' 
+                                                            : 'bg-emerald-50 text-emerald-600'
+                                                    }`}>
+                                                        {item.parserType}
+                                                    </span>
+                                                </div>
+                                            )}
                                         </div>
                                     )}
                                 </div>

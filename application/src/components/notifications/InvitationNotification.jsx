@@ -3,10 +3,12 @@ import { X, Building2, Check, XCircle } from 'lucide-react';
 import apiService from '../../services/api';
 import { useOrganization } from '../../context/OrganizationContext';
 import { Loader } from '../../components/common/Loader';
+import { useToast } from '../../context/ToastContext';
 
 const InvitationNotification = ({ invitation, onClose }) => {
     const [isProcessing, setIsProcessing] = useState(false);
     const { refreshOrganizations } = useOrganization();
+    const { showToast } = useToast();
 
     const handleAccept = async () => {
         setIsProcessing(true);
@@ -24,10 +26,10 @@ const InvitationNotification = ({ invitation, onClose }) => {
             onClose();
 
             // Show success message
-            alert(`Joined ${invitation.orgName} successfully!`);
+            showToast(`Joined ${invitation.orgName} successfully!`, 'success');
         } catch (error) {
             console.error('Error accepting invitation:', error);
-            alert(error.response?.data?.message || 'Failed to accept invitation');
+            showToast(error.response?.data?.message || 'Failed to accept invitation', 'error');
             setIsProcessing(false);
         }
     };
@@ -46,7 +48,7 @@ const InvitationNotification = ({ invitation, onClose }) => {
             onClose();
         } catch (error) {
             console.error('Error declining invitation:', error);
-            alert(error.response?.data?.message || 'Failed to decline invitation');
+            showToast(error.response?.data?.message || 'Failed to decline invitation', 'error');
             setIsProcessing(false);
         }
     };

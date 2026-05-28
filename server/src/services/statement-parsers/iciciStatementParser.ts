@@ -241,6 +241,32 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
     result.statementToDate = parseICICIHeaderDate(headerMatch[3]!.trim());
   }
 
+  // ── Extract account metadata ──
+  // Branch: "BRANCH, TRINITY BUSINESS PARKG -2, L P" or "BRANCH,  SARTHANA CHOKDI"
+  const branchMatch = fullText.match(/^BRANCH,\s*(.+?)(?:\n|$)/im);
+  if (branchMatch) {
+    const branchName = branchMatch[1]!.replace(/\s+/g, ' ').trim();
+    if (branchName.length >= 3) result.bankBranchName = branchName;
+  }
+
+  // Account Holder: The name typically appears a few lines after branch address
+  // Pattern: appears as standalone line with uppercase name after address block
+  const nameBlock = fullText.match(/BRANCH[^\n]+\n[^\n]+\n\s*\d{6}\s*\n\s*([A-Z][A-Z\s]+?)\s*\n/m);
+  if (nameBlock) {
+    const candidate = nameBlock[1]!.trim();
+    if (candidate.split(/\s+/).length >= 2 && candidate.length <= 150) {
+      result.accountHolderName = candidate;
+    }
+  }
+
+  // IFSC (if present): "IFSC: ICIC0001234"
+  const ifscMatch = fullText.match(/IFSC\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
+
+  // Customer ID (if present)
+  const custMatch = fullText.match(/Customer\s*(?:Id|ID)\s*:?\s*(\d+)/i);
+  if (custMatch) result.customerId = custMatch[1]!;
+
   // ─── Parse transaction rows ───
 
   // ICICI rows in extracted text start with a line matching:
@@ -392,6 +418,21 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
   result.totalCredit = creditRows
     .reduce((sum, r) => sum + parseFloat(r.creditAmount!), 0)
     .toFixed(2);
+
+  // ── Generate statement fingerprint for dedup ──
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   // ─── Validate ───
   validateICICIStatement(result);

@@ -763,13 +763,7 @@ const CreateAccount = ({
           Number(currentFormData.accountType) === ACCOUNT_TYPES.ASSET &&
           Number(currentFormData.subtype) === ACCOUNT_SUBTYPES.BANK &&
           !fieldIsForex &&
-          !String(value || "").trim()
-        )
-          error = "SWIFT/BIC code is required for Indian bank accounts";
-        else if (
-          Number(currentFormData.accountType) === ACCOUNT_TYPES.ASSET &&
-          Number(currentFormData.subtype) === ACCOUNT_SUBTYPES.BANK &&
-          !fieldIsForex &&
+          String(value || "").trim() &&
           !/^[A-Z0-9]{8,11}$/.test(
             String(value || "")
               .trim()
@@ -1011,8 +1005,9 @@ const CreateAccount = ({
       return true;
     } catch (error) {
       console.error("Save failed:", error);
-      alert(
-        "Failed to save: " + (error.response?.data?.message || error.message),
+      showToast(
+        error.response?.data?.message || error.message || "Failed to save account",
+        "error",
       );
       return false;
     }
@@ -1510,7 +1505,7 @@ const CreateAccount = ({
 
                   <div className="space-y-1 col-span-1">
                     <label className="text-[11px] font-bold text-slate-600 block">
-                      {isForex ? "NIC Code" : "SWIFT/BIC Code"} {!isForex && <span className="text-rose-500">*</span>}
+                      {isForex ? "NIC Code" : "SWIFT/BIC Code"}
                     </label>
                     <input
                       type="text"

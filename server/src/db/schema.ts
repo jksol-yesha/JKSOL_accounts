@@ -244,6 +244,7 @@ export const transactions = mysqlTable("transactions", {
 
   // Deterministic row identity for bank statement deduplication
   bankTransactionKey: varchar("bank_transaction_key", { length: 64 }), // SHA-256 hex, nullable for old rows
+  sourceRowSignature: varchar("source_row_signature", { length: 64 }), // SHA-256 fallback dedup without referenceNo
 
   createdBy: bigint("created_by", { mode: "number", unsigned: true }).notNull().references(() => users.id),
   createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -257,6 +258,7 @@ export const transactions = mysqlTable("transactions", {
     idxTxOrgStatusDate: index("idx_tx_org_status_date").on(table.orgId, table.status, table.txnDate),
     idxTxContactId: index("idx_tx_contact_id").on(table.contactId),
     idxTxBankTxnKey: index("idx_tx_bank_txn_key").on(table.orgId, table.bankTransactionKey),
+    idxTxSourceRowSig: index("idx_tx_source_row_sig").on(table.orgId, table.sourceRowSignature),
   }
 });
 
