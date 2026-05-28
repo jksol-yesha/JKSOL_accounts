@@ -1929,6 +1929,36 @@ const Reports = () => {
 
     const handleExportPdf = async () => {
         try {
+            // Probe the server with a JSON request to detect client-print fallback
+            const probeResponse = await apiService.reports.export(buildExportPayload('pdf'));
+            const probeData = probeResponse?.data || probeResponse;
+
+            // Server could not render PDF (no Chrome) — use client-side print fallback
+            if (probeData?.fallback === 'client-print' || probeResponse?.fallback === 'client-print') {
+                const htmlContent = probeData?.data?.html || probeData?.html;
+                if (!htmlContent) throw new Error('Server returned empty HTML for PDF fallback');
+
+                const printWindow = window.open('', '_blank', 'width=900,height=700');
+                if (!printWindow) {
+                    showToast('Pop-up blocked. Please allow pop-ups for this site and try again.', 'error');
+                    return;
+                }
+                printWindow.document.open();
+                printWindow.document.write(htmlContent);
+                printWindow.document.close();
+
+                // Trigger print once content renders
+                const triggerPrint = () => {
+                    try { printWindow.print(); } catch { /* closed or already printing */ }
+                };
+                printWindow.onload = () => setTimeout(triggerPrint, 300);
+                setTimeout(triggerPrint, 1200); // Fallback timer
+                return;
+            }
+
+            // Server has Chrome — response is a PDF binary.
+            // The probe request came back as JSON (Elysia wraps Response objects),
+            // so we need a fresh request with blob responseType to get raw bytes.
             const response = await apiService.reports.export(buildExportPayload('pdf'), {
                 responseType: 'blob'
             });
