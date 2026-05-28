@@ -1929,14 +1929,37 @@ const Reports = () => {
 
     const handleExportPdf = async () => {
         try {
-            // Probe the server to check if it can render PDF server-side
-            const probeResponse = await apiService.reports.export(buildExportPayload('pdf'));
-            const probeData = probeResponse?.data || probeResponse;
+            const response = await apiService.reports.export(buildExportPayload('pdf'));
+            const exportData = response?.data || response;
 
-            // Server could not render PDF (no Chrome) — generate PDF client-side
-            if (probeData?.fallback === 'client-print' || probeResponse?.fallback === 'client-print') {
-                const htmlContent = probeData?.data?.html || probeData?.html;
-                const serverFileName = probeData?.data?.fileName || probeData?.fileName;
+            // Path A: Server has Chrome — PDF returned as base64 in JSON (same format as CSV export)
+            const base64Content = exportData?.fileContent || exportData?.data?.fileContent;
+            if (base64Content) {
+                const fileName = exportData?.fileName || exportData?.data?.fileName || `Report-${new Date().toISOString().split('T')[0]}.pdf`;
+                const mimeType = exportData?.mimeType || exportData?.data?.mimeType || 'application/pdf';
+
+                const binaryString = window.atob(base64Content);
+                const fileBytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    fileBytes[i] = binaryString.charCodeAt(i);
+                }
+
+                const blob = new Blob([fileBytes], { type: mimeType });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = fileName;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+                return;
+            }
+
+            // Path B: Server has no Chrome — HTML returned for client-side PDF generation
+            if (exportData?.fallback === 'client-print' || response?.fallback === 'client-print') {
+                const htmlContent = exportData?.data?.html || exportData?.html;
+                const serverFileName = exportData?.data?.fileName || exportData?.fileName;
                 if (!htmlContent) throw new Error('Server returned empty HTML for PDF fallback');
 
                 const fileName = serverFileName || `Report-${new Date().toISOString().split('T')[0]}.pdf`;
@@ -1945,7 +1968,7 @@ const Reports = () => {
                 // Dynamically import html2pdf.js (only loaded when needed)
                 const html2pdf = (await import('html2pdf.js')).default;
 
-                // Use a hidden iframe to render the full HTML document with all styles intact
+                // Render HTML in a hidden iframe to preserve all styles
                 const iframe = document.createElement('iframe');
                 iframe.style.cssText = 'position:fixed;left:0;top:0;width:1100px;height:900px;border:none;opacity:0;pointer-events:none;z-index:-1;';
                 document.body.appendChild(iframe);
@@ -1955,46 +1978,31 @@ const Reports = () => {
                 iframeDoc.write(htmlContent);
                 iframeDoc.close();
 
-                // Wait for the iframe content to fully render
                 await new Promise(resolve => {
                     iframe.onload = resolve;
-                    setTimeout(resolve, 800); // fallback if onload doesn't fire
+                    setTimeout(resolve, 800);
                 });
 
-                // Capture the rendered content from the iframe
-                const sourceBody = iframeDoc.body;
-
-                // Clone the iframe body into the main document (html2canvas requires same-document elements)
+                // Clone into main document (html2canvas needs same-document elements)
                 const renderContainer = document.createElement('div');
                 renderContainer.style.cssText = 'position:absolute;left:0;top:0;width:1100px;background:#fff;z-index:-9999;overflow:visible;';
-                
-                // Copy all styles from the iframe into the render container
-                const iframeStyles = iframeDoc.querySelectorAll('style');
-                iframeStyles.forEach(style => {
-                    const clonedStyle = document.createElement('style');
-                    clonedStyle.textContent = style.textContent;
-                    renderContainer.appendChild(clonedStyle);
+
+                iframeDoc.querySelectorAll('style').forEach(style => {
+                    const cloned = document.createElement('style');
+                    cloned.textContent = style.textContent;
+                    renderContainer.appendChild(cloned);
                 });
-                
-                // Copy body content
-                renderContainer.innerHTML += sourceBody.innerHTML;
+
+                renderContainer.innerHTML += iframeDoc.body.innerHTML;
                 document.body.appendChild(renderContainer);
 
-                // Small delay for styles to apply
                 await new Promise(resolve => setTimeout(resolve, 200));
 
                 await html2pdf().from(renderContainer).set({
                     margin: [8, 6, 8, 6],
                     filename: fileName,
                     image: { type: 'jpeg', quality: 0.95 },
-                    html2canvas: { 
-                        scale: 2,
-                        useCORS: true,
-                        letterRendering: true,
-                        scrollX: 0,
-                        scrollY: 0,
-                        windowWidth: 1100
-                    },
+                    html2canvas: { scale: 2, useCORS: true, letterRendering: true, scrollX: 0, scrollY: 0, windowWidth: 1100 },
                     jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
                     pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
                 }).save();
@@ -2004,53 +2012,9 @@ const Reports = () => {
                 return;
             }
 
-            // Server has Chrome — fetch the PDF binary directly
-            const response = await apiService.reports.export(buildExportPayload('pdf'), {
-                responseType: 'blob'
-            });
-
-            const dispositionHeader = response.headers?.['content-disposition'] || '';
-            const utf8NameMatch = dispositionHeader.match(/filename\*=UTF-8''([^;]+)/i);
-            const plainNameMatch = dispositionHeader.match(/filename="?([^"]+)"?/i);
-            const rawFileName = utf8NameMatch?.[1] || plainNameMatch?.[1] || `Report-${new Date().toISOString().split('T')[0]}.pdf`;
-            let fileName = rawFileName;
-
-            try {
-                fileName = decodeURIComponent(rawFileName);
-            } catch {
-                fileName = rawFileName;
-            }
-
-            const pdfBlob = response.data instanceof Blob
-                ? response.data
-                : new Blob([response.data], { type: 'application/pdf' });
-            const downloadUrl = URL.createObjectURL(pdfBlob);
-            const downloadLink = document.createElement('a');
-
-            downloadLink.href = downloadUrl;
-            downloadLink.download = fileName;
-            downloadLink.rel = 'noopener';
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
-
-            window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+            throw new Error('Unexpected response format from PDF export');
         } catch (error) {
-            let message = error?.message || 'Failed to export report';
-            const errorBlob = error?.response?.data;
-
-            if (errorBlob instanceof Blob) {
-                try {
-                    const text = await errorBlob.text();
-                    const parsed = JSON.parse(text);
-                    message = parsed?.message || parsed?.error || text || message;
-                } catch {
-                    // Keep the fallback message if the blob is not JSON.
-                }
-            } else {
-                message = error?.response?.data?.message || message;
-            }
-
+            const message = error?.response?.data?.message || error?.message || 'Failed to export report';
             console.error('Report PDF export failed:', error);
             showToast(message, 'error');
         }
