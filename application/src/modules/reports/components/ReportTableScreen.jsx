@@ -163,121 +163,141 @@ const ReportTableScreen = ({
                             </colgroup>
                             <thead>
                                 <tr className="border-y border-black/80">
-                                    <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
-                                        P a r t i c u l a r s
+                                    <th colSpan={3} className="border-r border-black/40 py-px text-center text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        Expense
                                     </th>
-                                    <th colSpan={2} className="border-r border-black/40 py-px text-center text-[10.5px] font-normal text-black sm:text-[11px]">&nbsp;</th>
-                                    <th className="py-px pl-[8px] pr-3 text-left text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
-                                        P a r t i c u l a r s
+                                    <th colSpan={3} className="py-px text-center text-[11px] font-[550] tracking-[0.02em] text-black sm:text-[12px]">
+                                        Income
                                     </th>
-                                    <th colSpan={2} className="py-px text-center text-[10.5px] font-normal text-black sm:text-[11px]">&nbsp;</th>
                                 </tr>
                             </thead>
-                            <tbody>
-                                <tr className="h-[6px]">
-                                    <td></td>
-                                    <td></td>
-                                    <td className="border-r border-black/40"></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                </tr>
-                                {pairedRows.map(({ left, right }, index) => {
-                                    const isLeftLastItem = left?.kind === 'item' && pairedRows[index + 1]?.left?.kind !== 'item';
-                                    const isRightLastItem = right?.kind === 'item' && pairedRows[index + 1]?.right?.kind !== 'item';
-
-                                    return (
-                                        <tr key={`pnl-row-${index}`} className="align-top">
-                                            {/* LEFT SIDE */}
-                                            <td className={cn(
-                                                'py-px pl-[8px] pr-3 leading-[1.15]',
-                                                left?.kind === 'section' && 'pt-[4px]',
-                                                left?.kind === 'balance' && 'pt-[4px]',
-                                                left?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
-                                                left?.kind === 'balance' && 'text-[11px]',
-                                                left?.kind === 'item' && 'pl-[12px] italic'
-                                            )}>
-                                                {left?.label || blankCell}
-                                            </td>
-                                            <td className={cn(
-                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
-                                                left?.kind === 'section' && 'pt-[4px]',
-                                                left?.kind === 'balance' && 'pt-[4px]',
-                                                left?.kind === 'item' && 'italic',
-                                                !left && 'text-transparent'
-                                            )}>
-                                                {left?.kind === 'item' ? (
-                                                    <span className={cn(
-                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
-                                                        isLeftLastItem && "border-b border-black/55 pb-[1px]"
-                                                    )}>
-                                                        {formatProfitLossStatementAmount(left.amount)}
-                                                    </span>
-                                                ) : blankCell}
-                                            </td>
-                                            <td className={cn(
-                                                'border-r border-black/40 py-px pr-2 text-right tabular-nums leading-[1.15]',
-                                                left?.kind === 'section' && 'pt-[4px]',
-                                                left?.kind === 'balance' && 'pt-[4px]',
-                                                left?.kind === 'section' && 'font-[550]',
-                                                left?.kind === 'balance' && 'font-semibold',
-                                                !left && 'text-transparent'
-                                            )}>
-                                                {left?.kind === 'section' || left?.kind === 'balance'
-                                                    ? formatProfitLossStatementAmount(left.total)
-                                                    : blankCell}
-                                            </td>
-
-                                            {/* RIGHT SIDE */}
-                                            <td className={cn(
-                                                'py-px pl-[8px] pr-3 leading-[1.15]',
-                                                right?.kind === 'section' && 'pt-[4px]',
-                                                right?.kind === 'balance' && 'pt-[4px]',
-                                                right?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
-                                                right?.kind === 'balance' && 'text-[11px]',
-                                                right?.kind === 'item' && 'pl-[12px] italic'
-                                            )}>
-                                                {right?.label || blankCell}
-                                            </td>
-                                            <td className={cn(
-                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
-                                                right?.kind === 'section' && 'pt-[4px]',
-                                                right?.kind === 'balance' && 'pt-[4px]',
-                                                right?.kind === 'item' && 'italic',
-                                                !right && 'text-transparent'
-                                            )}>
-                                                {right?.kind === 'item' ? (
-                                                    <span className={cn(
-                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
-                                                        isRightLastItem && "border-b border-black/55 pb-[1px]"
-                                                    )}>
-                                                        {formatProfitLossStatementAmount(right.amount)}
-                                                    </span>
-                                                ) : blankCell}
-                                            </td>
-                                            <td className={cn(
-                                                'py-px pr-2 text-right tabular-nums leading-[1.15]',
-                                                right?.kind === 'section' && 'pt-[4px]',
-                                                right?.kind === 'balance' && 'pt-[4px]',
-                                                right?.kind === 'section' && 'font-[550]',
-                                                right?.kind === 'balance' && 'font-semibold',
-                                                right?.kind === 'balance' && right?.label === 'Nett Loss' && 'italic',
-                                                !right && 'text-transparent'
-                                            )}>
-                                                {right?.kind === 'section' || right?.kind === 'balance'
-                                                    ? formatProfitLossStatementAmount(right.total)
-                                                    : blankCell}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
-                                <tr className="h-[12px]">
-                                    <td></td>
-                                    <td></td>
-                                    <td className="border-r border-black/40"></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
+                            <tbody className="align-top">
+                                <tr>
+                                    <td colSpan={3} className="p-0 border-r border-black/40 align-top">
+                                        <table className="w-full border-collapse table-fixed">
+                                            <colgroup>
+                                                <col style={{ width: '52%' }} />
+                                                <col style={{ width: '22%' }} />
+                                                <col style={{ width: '26%' }} />
+                                            </colgroup>
+                                            <tbody>
+                                                <tr className="h-[6px]">
+                                                    <td></td><td></td><td></td>
+                                                </tr>
+                                                {leftRows.map((left, index) => {
+                                                    const isLeftLastItem = left?.kind === 'item' && leftRows[index + 1]?.kind !== 'item';
+                                                    return (
+                                                        <tr key={`left-row-${index}`} className="align-top">
+                                                            <td className={cn(
+                                                                'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                                left?.kind === 'section' && 'pt-[10px]',
+                                                                left?.kind === 'balance' && 'pt-[10px]',
+                                                                left?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
+                                                                left?.kind === 'balance' && 'text-[11px]',
+                                                                left?.kind === 'item' && 'pl-[12px] italic'
+                                                            )}>
+                                                                {left?.label || blankCell}
+                                                            </td>
+                                                            <td className={cn(
+                                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                                left?.kind === 'section' && 'pt-[10px]',
+                                                                left?.kind === 'balance' && 'pt-[10px]',
+                                                                left?.kind === 'item' && 'italic',
+                                                                !left && 'text-transparent'
+                                                            )}>
+                                                                {left?.kind === 'item' ? (
+                                                                    <span className={cn(
+                                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                                        isLeftLastItem && "border-b border-black/55 pb-[1px]"
+                                                                    )}>
+                                                                        {formatProfitLossStatementAmount(left.amount)}
+                                                                    </span>
+                                                                ) : blankCell}
+                                                            </td>
+                                                            <td className={cn(
+                                                                'py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                                left?.kind === 'section' && 'pt-[10px]',
+                                                                left?.kind === 'balance' && 'pt-[10px]',
+                                                                left?.kind === 'section' && 'font-[550]',
+                                                                left?.kind === 'balance' && 'font-semibold',
+                                                                !left && 'text-transparent'
+                                                            )}>
+                                                                {left?.kind === 'section' || left?.kind === 'balance'
+                                                                    ? formatProfitLossStatementAmount(left.total)
+                                                                    : blankCell}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                <tr className="h-[12px]">
+                                                    <td></td><td></td><td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                    <td colSpan={3} className="p-0 align-top">
+                                        <table className="w-full border-collapse table-fixed">
+                                            <colgroup>
+                                                <col style={{ width: '52%' }} />
+                                                <col style={{ width: '22%' }} />
+                                                <col style={{ width: '26%' }} />
+                                            </colgroup>
+                                            <tbody>
+                                                <tr className="h-[6px]">
+                                                    <td></td><td></td><td></td>
+                                                </tr>
+                                                {rightRows.map((right, index) => {
+                                                    const isRightLastItem = right?.kind === 'item' && rightRows[index + 1]?.kind !== 'item';
+                                                    return (
+                                                        <tr key={`right-row-${index}`} className="align-top">
+                                                            <td className={cn(
+                                                                'py-px pl-[8px] pr-3 leading-[1.15]',
+                                                                right?.kind === 'section' && 'pt-[10px]',
+                                                                right?.kind === 'balance' && 'pt-[10px]',
+                                                                right?.kind === 'section' && 'text-[11px] font-[550] sm:text-[11.5px]',
+                                                                right?.kind === 'balance' && 'text-[11px]',
+                                                                right?.kind === 'item' && 'pl-[12px] italic'
+                                                            )}>
+                                                                {right?.label || blankCell}
+                                                            </td>
+                                                            <td className={cn(
+                                                                'py-px text-right tabular-nums leading-[1.15] pr-2',
+                                                                right?.kind === 'section' && 'pt-[10px]',
+                                                                right?.kind === 'balance' && 'pt-[10px]',
+                                                                right?.kind === 'item' && 'italic',
+                                                                !right && 'text-transparent'
+                                                            )}>
+                                                                {right?.kind === 'item' ? (
+                                                                    <span className={cn(
+                                                                        "relative -left-[36px] inline-block min-w-[104px] text-right",
+                                                                        isRightLastItem && "border-b border-black/55 pb-[1px]"
+                                                                    )}>
+                                                                        {formatProfitLossStatementAmount(right.amount)}
+                                                                    </span>
+                                                                ) : blankCell}
+                                                            </td>
+                                                            <td className={cn(
+                                                                'py-px pr-2 text-right tabular-nums leading-[1.15]',
+                                                                right?.kind === 'section' && 'pt-[16px]',
+                                                                right?.kind === 'balance' && 'pt-[16px]',
+                                                                right?.kind === 'section' && 'font-[550]',
+                                                                right?.kind === 'balance' && 'font-semibold',
+                                                                right?.kind === 'balance' && right?.label === 'Nett Loss' && 'italic',
+                                                                !right && 'text-transparent'
+                                                            )}>
+                                                                {right?.kind === 'section' || right?.kind === 'balance'
+                                                                    ? formatProfitLossStatementAmount(right.total)
+                                                                    : blankCell}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                                <tr className="h-[12px]">
+                                                    <td></td><td></td><td></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
                                 </tr>
                             </tbody>
                             <tfoot>

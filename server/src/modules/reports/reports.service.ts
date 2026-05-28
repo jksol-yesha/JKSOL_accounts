@@ -753,9 +753,9 @@ export const ReportsService = {
                         </colgroup>
                         <thead>
                             <tr class="pnl-column-row">
-                                <th>P a r t i c u l a r s</th>
+                                <th class="text-center">E x p e n s e s</th>
                                 <th colspan="2" class="text-center pnl-side-divider">&nbsp;</th>
-                                <th>P a r t i c u l a r s</th>
+                                <th class="text-center">I n c o m e</th>
                                 <th colspan="2" class="text-center">&nbsp;</th>
                             </tr>
                         </thead>
@@ -981,6 +981,7 @@ export const ReportsService = {
                     .pnl-column-row th {
                         font-size: 11px;
                         font-weight: 550;
+                        text-align: center;
                         letter-spacing: 0.02em;
                         text-transform: none;
                         padding-top: 1px;
@@ -988,8 +989,8 @@ export const ReportsService = {
                         border-top: 1px solid #2f2f2f;
                         border-bottom: 1px solid #2f2f2f;
                     }
-                    .pnl-column-row th:first-child { padding-left: 8px !important; }
-                    .pnl-column-row th:nth-child(3) { padding-left: 8px !important; }
+                    .pnl-column-row th:first-child { padding: 0 !important; }
+                    .pnl-column-row th:nth-child(3) { padding: 0 !important; }
                     .pnl-particulars { width: 30%; padding-left: 8px !important; }
                     .pnl-amount {
                         width: 10%;
