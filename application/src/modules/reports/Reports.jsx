@@ -1940,42 +1940,67 @@ const Reports = () => {
                 if (!htmlContent) throw new Error('Server returned empty HTML for PDF fallback');
 
                 const fileName = serverFileName || `Report-${new Date().toISOString().split('T')[0]}.pdf`;
+                const isLandscape = htmlContent.includes('landscape');
 
                 // Dynamically import html2pdf.js (only loaded when needed)
                 const html2pdf = (await import('html2pdf.js')).default;
 
-                // Extract body content and styles from the full HTML document
-                const container = document.createElement('div');
-                const bodyMatch = htmlContent.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-                container.innerHTML = bodyMatch ? bodyMatch[1] : htmlContent;
+                // Use a hidden iframe to render the full HTML document with all styles intact
+                const iframe = document.createElement('iframe');
+                iframe.style.cssText = 'position:fixed;left:0;top:0;width:1100px;height:900px;border:none;opacity:0;pointer-events:none;z-index:-1;';
+                document.body.appendChild(iframe);
 
-                // Extract and inject styles so the rendering matches
-                const styleMatches = htmlContent.match(/<style[^>]*>([\s\S]*?)<\/style>/gi);
-                if (styleMatches) {
-                    styleMatches.forEach(raw => {
-                        const styleEl = document.createElement('style');
-                        styleEl.textContent = raw.replace(/<\/?style[^>]*>/gi, '');
-                        container.prepend(styleEl);
-                    });
-                }
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                iframeDoc.open();
+                iframeDoc.write(htmlContent);
+                iframeDoc.close();
 
-                // Mount offscreen for rendering
-                container.style.cssText = 'position:fixed;left:-9999px;top:0;width:1100px;background:#fff;';
-                document.body.appendChild(container);
+                // Wait for the iframe content to fully render
+                await new Promise(resolve => {
+                    iframe.onload = resolve;
+                    setTimeout(resolve, 800); // fallback if onload doesn't fire
+                });
 
-                // Determine orientation from the report's print CSS
-                const isLandscape = htmlContent.includes('landscape');
+                // Capture the rendered content from the iframe
+                const sourceBody = iframeDoc.body;
 
-                await html2pdf().from(container).set({
+                // Clone the iframe body into the main document (html2canvas requires same-document elements)
+                const renderContainer = document.createElement('div');
+                renderContainer.style.cssText = 'position:absolute;left:0;top:0;width:1100px;background:#fff;z-index:-9999;overflow:visible;';
+                
+                // Copy all styles from the iframe into the render container
+                const iframeStyles = iframeDoc.querySelectorAll('style');
+                iframeStyles.forEach(style => {
+                    const clonedStyle = document.createElement('style');
+                    clonedStyle.textContent = style.textContent;
+                    renderContainer.appendChild(clonedStyle);
+                });
+                
+                // Copy body content
+                renderContainer.innerHTML += sourceBody.innerHTML;
+                document.body.appendChild(renderContainer);
+
+                // Small delay for styles to apply
+                await new Promise(resolve => setTimeout(resolve, 200));
+
+                await html2pdf().from(renderContainer).set({
                     margin: [8, 6, 8, 6],
                     filename: fileName,
                     image: { type: 'jpeg', quality: 0.95 },
-                    html2canvas: { scale: 2, useCORS: true, letterRendering: true },
+                    html2canvas: { 
+                        scale: 2,
+                        useCORS: true,
+                        letterRendering: true,
+                        scrollX: 0,
+                        scrollY: 0,
+                        windowWidth: 1100
+                    },
                     jsPDF: { unit: 'mm', format: 'a4', orientation: isLandscape ? 'landscape' : 'portrait' },
                     pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
                 }).save();
 
-                document.body.removeChild(container);
+                document.body.removeChild(renderContainer);
+                document.body.removeChild(iframe);
                 return;
             }
 
