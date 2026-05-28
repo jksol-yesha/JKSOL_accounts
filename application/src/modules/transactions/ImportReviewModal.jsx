@@ -62,6 +62,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
     const [isClosingDrawer, setIsClosingDrawer] = useState(false);
     const closeAnimationTimerRef = React.useRef(null);
+    const accountCreatedViaDrawerRef = React.useRef(false);
 
     React.useEffect(() => {
         let openStateTimer = null;
@@ -124,6 +125,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             setPdfPageReady(false);
             setShowAddAccountDrawer(false);
             setAccountDetectionDone(false);
+            accountCreatedViaDrawerRef.current = false;
         }
     }, [isOpen]);
 
@@ -341,7 +343,15 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     sgstAmount: gst.sgstAmount,
                     igstAmount: gst.igstAmount,
                     gstTotal: gst.gstTotal,
-                    finalAmount: gst.finalAmount
+                    finalAmount: gst.finalAmount,
+                    // Dedup identifiers from deterministic parser
+                    bankTransactionKey: t.bankTransactionKey || null,
+                    sourceRowSignature: t.sourceRowSignature || null,
+                    referenceNo: t.referenceNo || null,
+                    closingBalance: t.balance || t.closingBalance || null,
+                    valueDate: t.valueDate || null,
+                    sourcePage: t.sourcePage || null,
+                    sourceRow: t.sourceRow || null,
                 };
             });
 
@@ -356,7 +366,11 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     branchId: finalBranchId,
                     financialYearId: selectedYear?.id,
                     filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import'),
-                    parserType: parsedData?.parser || null
+                    parserType: parsedData?.parserType || parsedData?.parser || null,
+                    fileHash: parsedData?.fileHash || null,
+                    statementFingerprint: parsedData?.statementFingerprint || null,
+                    bankName: parsedData?.bankName || null,
+                    accountNumber: parsedData?.accountNumber || null,
                 }));
                 
                 transactions.forEach((t, i) => {
@@ -375,7 +389,11 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     branchId: finalBranchId,
                     financialYearId: selectedYear?.id,
                     filename: file ? file.name : (parsedData?.filename || 'Bank Statement Import'),
-                    parserType: parsedData?.parser || null
+                    parserType: parsedData?.parserType || parsedData?.parser || null,
+                    fileHash: parsedData?.fileHash || null,
+                    statementFingerprint: parsedData?.statementFingerprint || null,
+                    bankName: parsedData?.bankName || null,
+                    accountNumber: parsedData?.accountNumber || null,
                 };
                 response = await apiService.transactions.importJson(payload);
             }
@@ -545,16 +563,29 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                         <div className="flex-1 flex items-center justify-center p-6">
                             <div className="max-w-md w-full">
                                 {result.success ? (
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
-                                        <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500 shadow-sm border border-emerald-100">
-                                            <CheckCircle size={32} />
+                                    result.fileAlreadyImported || result.statementAlreadyImported || (result.insertedRows === 0 && result.skippedRows > 0) ? (
+                                        <div className="bg-amber-50 border border-amber-200 rounded-xl p-8 text-center">
+                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-amber-500 shadow-sm border border-amber-100">
+                                                <AlertCircle size={32} />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-slate-800 mb-2">Already Imported</h3>
+                                            <p className="text-slate-600 font-medium">{result.message || `This statement was already imported. ${result.skippedRows || 0} duplicate rows were skipped.`}</p>
+                                            <button onClick={onClose} className="mt-6 px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors">
+                                                Close
+                                            </button>
                                         </div>
-                                        <h3 className="text-xl font-bold text-slate-800 mb-2">Import Successful</h3>
-                                        <p className="text-slate-600 font-medium">Successfully inserted {result.insertedRows} transactions into your ledger.</p>
-                                        <button onClick={onClose} className="mt-6 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors">
-                                            Close
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-8 text-center">
+                                            <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-emerald-500 shadow-sm border border-emerald-100">
+                                                <CheckCircle size={32} />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-slate-800 mb-2">Import Successful</h3>
+                                            <p className="text-slate-600 font-medium">Successfully inserted {result.insertedRows} transactions into your ledger.{result.skippedRows > 0 ? ` (${result.skippedRows} duplicates skipped)` : ''}</p>
+                                            <button onClick={onClose} className="mt-6 px-6 py-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors">
+                                                Close
+                                            </button>
+                                        </div>
+                                    )
                                 ) : (
                                     <div className="bg-rose-50 border border-rose-200 rounded-xl p-8 text-center">
                                         <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 text-rose-500 shadow-sm border border-rose-100">
@@ -1069,11 +1100,20 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             <CreateAccount
                 isOpen={showAddAccountDrawer}
                 onClose={() => {
-                    // User declined adding the account — abort the entire import
+                    // CreateAccount calls onClose() both when user manually dismisses
+                    // AND after a successful save (after onSuccess).
+                    // If onSuccess already ran and set the account, just close the drawer.
+                    // If no account was selected, user declined — abort the import.
                     setShowAddAccountDrawer(false);
-                    onClose();
+                    if (!accountCreatedViaDrawerRef.current) {
+                        onClose();
+                    }
+                    accountCreatedViaDrawerRef.current = false;
                 }}
                 onSuccess={async (newAccount) => {
+                    // Mark that account was created so the subsequent onClose
+                    // (called by CreateAccount internally) won't abort the import.
+                    accountCreatedViaDrawerRef.current = true;
                     setShowAddAccountDrawer(false);
                     await fetchDependencies();
                     if (newAccount && newAccount.id) {
@@ -1086,10 +1126,11 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                     accountNumber: (parsedData?.accountNumber || '').replace(/\D/g, '') || '',
                     bankName: parsedData?.bankName || '',
                     name: parsedData?.bankName ? `${parsedData.bankName} Account` : 'New Bank Account',
-                    accountHolderName: '',
-                    ifsc: '',
+                    accountHolderName: parsedData?.accountHolderName || '',
+                    ifsc: parsedData?.ifsc || '',
                     swiftCode: '',
-                    bankBranchName: '',
+                    bankBranchName: parsedData?.bankBranchName || '',
+                    openingBalance: parsedData?.openingBalance || '0.00',
                     isActive: true,
                 }}
             />

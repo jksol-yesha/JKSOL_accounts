@@ -5,6 +5,7 @@ import Card from '../../../components/common/Card';
 import CustomSelect from '../../../components/common/CustomSelect';
 import { cn } from '../../../utils/cn';
 import { useFormNavigation } from '../../../hooks/useFormNavigation';
+import { useToast } from '../../../context/ToastContext';
 
 export const NewCategoryCard = ({ onCategoryCreate }) => {
     const [catForm, setCatForm] = useState({ name: '', type: 'Expense' });
@@ -12,6 +13,7 @@ export const NewCategoryCard = ({ onCategoryCreate }) => {
     const [nameError, setNameError] = useState('');
     const catNameRef = useRef(null);
     const catTypeRef = useRef(null);
+    const { showToast } = useToast();
     const isCategorySubmitDisabled = isSuccess || !catForm.name.trim() || !catForm.type;
 
     const handleCatSubmit = async (e) => {
@@ -33,7 +35,7 @@ export const NewCategoryCard = ({ onCategoryCreate }) => {
                 catNameRef.current?.focus();
                 return;
             }
-            alert(message);
+            showToast(message, 'error');
         }
     };
 
@@ -139,6 +141,7 @@ export const NewSubCategoryCard = ({ categories, onSubCategoryCreate }) => {
     const subNameRef = useRef(null);
     const parentDropdownTriggerRef = useRef(null);
     const parentDropdownMenuRef = useRef(null);
+    const { showToast } = useToast();
 
     const formatParentCategoryLabel = (category) => {
         const typeLabel = category?.type || (category?.txnType ? `${category.txnType.charAt(0).toUpperCase()}${category.txnType.slice(1)}` : '');
@@ -250,7 +253,7 @@ export const NewSubCategoryCard = ({ categories, onSubCategoryCreate }) => {
                 subNameRef.current?.focus();
                 return;
             }
-            alert(message);
+            showToast(message, 'error');
         }
     };
 

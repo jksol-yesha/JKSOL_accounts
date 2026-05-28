@@ -309,16 +309,33 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
                 startDate,
                 endDate
             });
-            const pdfBuffer = await ReportsService.renderPdfBufferFromHtml(html, 'reports');
+
             const fileName = `reports-${new Date().toISOString().slice(0, 10)}.pdf`;
 
-            return new Response(pdfBuffer, {
-                headers: {
-                    'content-type': 'application/pdf',
-                    'content-disposition': `attachment; filename="${fileName}"`,
-                    'content-length': String(pdfBuffer.byteLength)
-                }
-            });
+            try {
+                const pdfBuffer = await ReportsService.renderPdfBufferFromHtml(html, 'reports');
+
+                // Return base64-encoded PDF in JSON (same pattern as CSV export)
+                return {
+                    success: true,
+                    data: {
+                        fileName,
+                        mimeType: 'application/pdf',
+                        fileContent: Buffer.from(pdfBuffer).toString('base64')
+                    }
+                };
+            } catch (pdfError: any) {
+                // Chrome/Chromium not available — fallback to returning HTML for client-side rendering
+                console.warn('Server PDF render unavailable, falling back to client-side:', pdfError.message);
+                return {
+                    success: true,
+                    fallback: 'client-print',
+                    data: {
+                        html,
+                        fileName
+                    }
+                };
+            }
         }
 
         const csvContent = ReportsService.buildExportCsv(data, reportType, body.searchTerm);

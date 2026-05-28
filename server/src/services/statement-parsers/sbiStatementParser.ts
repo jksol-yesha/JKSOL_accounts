@@ -151,6 +151,29 @@ export async function parseSBIStatement(buffer: Buffer): Promise<ParsedStatement
   // Currency
   const currencyMatch = fullText.match(/Currency\s*:?\s*(INR|USD|EUR|GBP)/i);
 
+  // ── Extract account metadata ──
+  // IFSC: "IFSC : SBIN0005411" or from the text "SBIN0XXXXXX"
+  if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
+
+  // Customer Name: "Customer Name : XXXX" or similar
+  const customerMatch = fullText.match(/Customer\s*Name\s*:?\s*(.+?)(?:\n|$)/i);
+  if (customerMatch) {
+    const candidate = customerMatch[1]!.trim();
+    if (candidate.length >= 3 && candidate.length <= 150) {
+      result.accountHolderName = candidate;
+    }
+  }
+
+  // Branch Name
+  const branchMatch = fullText.match(/Branch\s*(?:Name)?\s*:?\s*(.+?)(?:\n|$)/i);
+  if (branchMatch) {
+    const candidate = branchMatch[1]!.trim();
+    // Avoid matching header lines like "Branch | Account Number"
+    if (candidate.length >= 3 && !/account|number|txn/i.test(candidate)) {
+      result.bankBranchName = candidate;
+    }
+  }
+
   // ─── Parse transaction rows ───
 
   // SBI row pattern: starts with a date DD-MM-YY
@@ -337,6 +360,21 @@ export async function parseSBIStatement(buffer: Buffer): Promise<ParsedStatement
   result.totalCredit = creditRows
     .reduce((sum, r) => sum + parseFloat(r.creditAmount!), 0)
     .toFixed(2);
+
+  // ── Generate statement fingerprint for dedup ──
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   // ─── Validate ───
   validateSBIStatement(result);

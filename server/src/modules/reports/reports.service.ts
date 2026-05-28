@@ -42,6 +42,13 @@ const normKey = (value: string) => value.trim().replace(/\s+/g, ' ').toLowerCase
 
 const REPORT_PDF_BROWSER_CANDIDATES = [
     Bun.env.CHROME_BIN,
+    // Linux paths (production server)
+    '/usr/bin/chromium-browser',
+    '/usr/bin/chromium',
+    '/usr/bin/google-chrome',
+    '/usr/bin/google-chrome-stable',
+    '/snap/bin/chromium',
+    // macOS paths (local dev)
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary',
     '/Applications/Chromium.app/Contents/MacOS/Chromium'

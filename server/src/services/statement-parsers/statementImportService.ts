@@ -206,7 +206,7 @@ export async function processHDFCImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -366,7 +366,7 @@ export async function processAxisImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -529,7 +529,7 @@ export async function processICICIImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -558,27 +558,44 @@ export async function processICICIImport(params: {
   }
 
   // Generate bankTransactionKey for each row
-  // ICICI uses serialNo + chequeNumber instead of valueDate + referenceNo
+  // For detailed variant: use generateBankTransactionKey with transactionId as referenceNo
+  // For retail variant: use serialNo + chequeNumber (existing approach)
+  const isDetailed = parsed.parserVariant === 'ICICI_DETAILED_STATEMENT';
+
   const rowsWithKeys: (ImportRowResult & { parsedRow: typeof parsed.rows[0] })[] = parsed.rows.map(row => {
     const debitOrCredit = row.debitAmount ? 'DEBIT' : 'CREDIT';
     const amount = row.debitAmount || row.creditAmount || '0';
 
-    // ICICI-specific key: includes serialNo and chequeNumber
-    const keyInput = [
-      String(orgId),
-      String(accountId),
-      'ICICI',
-      effectiveAccountNumber,
-      String(row.serialNo ?? ''),
-      row.transactionDate,
-      debitOrCredit,
-      amount,
-      row.closingBalance,
-      row.chequeNumber || '',
-    ].join('|');
-
-    const crypto = require('crypto');
-    const key = crypto.createHash('sha256').update(keyInput).digest('hex');
+    let key: string;
+    if (isDetailed) {
+      key = generateBankTransactionKey({
+        organizationId: orgId,
+        accountId,
+        bankName: 'ICICI',
+        accountNumber: effectiveAccountNumber,
+        transactionDate: row.transactionDate,
+        valueDate: row.valueDate,
+        debitOrCredit: debitOrCredit as 'DEBIT' | 'CREDIT',
+        amount,
+        closingBalance: row.closingBalance,
+        referenceNo: row.referenceNo,
+      });
+    } else {
+      const crypto = require('crypto');
+      const keyInput = [
+        String(orgId),
+        String(accountId),
+        'ICICI',
+        effectiveAccountNumber,
+        String(row.serialNo ?? ''),
+        row.transactionDate,
+        debitOrCredit,
+        amount,
+        row.closingBalance,
+        row.chequeNumber || '',
+      ].join('|');
+      key = crypto.createHash('sha256').update(keyInput).digest('hex');
+    }
 
     return {
       transactionDate: row.transactionDate,
@@ -620,6 +637,8 @@ export async function processICICIImport(params: {
     rows: rowsWithKeys,
   };
 }
+
+
 
 /**
  * Process an SBI statement through the deterministic pipeline.
@@ -694,7 +713,7 @@ export async function processSBIImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,
@@ -854,7 +873,7 @@ export async function processYESBankImport(params: {
     });
 
     // Check if this statement period was already imported
-    const fingerprintExists = await checkStatementFingerprintExists(orgId, statementFingerprint);
+    const fingerprintExists = statementFingerprint ? await checkStatementFingerprintExists(orgId, statementFingerprint) : false;
     if (fingerprintExists) {
       return {
         success: true,

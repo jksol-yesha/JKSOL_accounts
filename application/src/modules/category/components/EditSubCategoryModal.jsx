@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
+import { useToast } from '../../../context/ToastContext';
 
 const EditSubCategoryModal = ({ isOpen, onClose, subCategory, onSave }) => {
     const [formData, setFormData] = useState({ name: '', status: 1 });
     const [nameError, setNameError] = useState('');
+    const { showToast } = useToast();
 
     useEffect(() => {
         if (subCategory) {
@@ -30,7 +32,7 @@ const EditSubCategoryModal = ({ isOpen, onClose, subCategory, onSave }) => {
                 setNameError(message);
                 return;
             }
-            alert(message);
+            showToast(message, 'error');
         }
     };
 

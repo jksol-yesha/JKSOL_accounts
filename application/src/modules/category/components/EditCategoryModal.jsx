@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save } from 'lucide-react';
 import CustomSelect from '../../../components/common/CustomSelect';
+import { useToast } from '../../../context/ToastContext';
 
 const EditCategoryModal = ({ isOpen, onClose, category, onSave }) => {
     const [formData, setFormData] = useState({ name: '', type: 'Expense', icon: '', status: 1 });
     const [nameError, setNameError] = useState('');
+    const { showToast } = useToast();
 
     useEffect(() => {
         if (category) {
@@ -45,7 +47,7 @@ const EditCategoryModal = ({ isOpen, onClose, category, onSave }) => {
                 setNameError(message);
                 return;
             }
-            alert(message);
+            showToast(message, 'error');
         }
     };
 

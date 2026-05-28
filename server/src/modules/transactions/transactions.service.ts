@@ -1192,7 +1192,8 @@ export class TransactionService {
         filename?: string,
         fileHash?: string,
         accountId?: number,
-        parserType?: string
+        parserType?: string,
+        statementFingerprint?: string
     ) {
         const [org] = await db.select().from(organizations).where(eq(organizations.id, orgId));
         if (!org || !isActiveStatus(org.status)) throw new Error('Organization is inactive or not found');
@@ -1400,7 +1401,15 @@ export class TransactionService {
                     currencyCode: row.currency || row.currencyCode || branchMap.get(branchId)!.currencyCode,
                     fxRate: row.fx_rate || row.fxRate || 1,
                     status: 1, // Posted
-                    createdBy: user.id
+                    createdBy: user.id,
+                    // Dedup identifiers from deterministic parser (flow through from frontend)
+                    bankTransactionKey: row.bankTransactionKey || null,
+                    sourceRowSignature: row.sourceRowSignature || null,
+                    referenceNo: row.referenceNo || null,
+                    closingBalance: row.closingBalance || null,
+                    valueDate: row.valueDate || null,
+                    sourcePage: row.sourcePage || null,
+                    sourceRow: row.sourceRow || null,
                 });
             }
         }
@@ -1414,25 +1423,30 @@ export class TransactionService {
             };
         }
 
-        // --- DUPLICATE CHECKING (bankTransactionKey-based) ---
+        // --- DUPLICATE CHECKING (bankTransactionKey / sourceRowSignature) ---
         let skippedRows = 0;
         let newValidTransactions = validTransactions;
 
         if (validTransactions.length > 0) {
             const cryptoModule = await import('crypto');
 
-            // Generate bankTransactionKey for each row using ONLY immutable bank data
-            // (date + amount + narration). Category/contact are user-editable and must NOT be in the key.
-            const generateBankKey = (txnDate: string, amount: string | number, notes: string) => {
+            // Generate a fallback dedup key from stable row data (only when parser didn't provide one)
+            const generateFallbackKey = (txnDate: string, amount: string | number, notes: string) => {
                 const cleanNotes = (notes || '').toLowerCase().replace(/\s+/g, '').trim();
                 const cleanAmount = Number(amount).toFixed(2);
                 const raw = `${txnDate}_${cleanAmount}_${cleanNotes}`;
                 return cryptoModule.createHash('sha256').update(raw).digest('hex');
             };
 
-            // Attach bankTransactionKey to each validated transaction
+            // Attach dedup keys to each validated transaction
+            // PRIORITY: use parser-provided bankTransactionKey > sourceRowSignature > fallback
             for (const txn of validTransactions) {
-                txn.bankTransactionKey = generateBankKey(txn.txnDate, txn.amountLocal, txn.notes);
+                if (!txn.bankTransactionKey) {
+                    // No parser-provided key — generate fallback from stable fields
+                    txn.bankTransactionKey = generateFallbackKey(txn.txnDate, txn.amountLocal, txn.notes);
+                }
+                // Preserve sourceRowSignature from parser if provided
+                // (it's already on txn from row mapping)
             }
 
             // Count how many times each key appears in THIS import batch
@@ -1449,22 +1463,44 @@ export class TransactionService {
             const BATCH_SIZE = 200;
             for (let i = 0; i < uniqueKeys.length; i += BATCH_SIZE) {
                 const batch = uniqueKeys.slice(i, i + BATCH_SIZE);
-                const rows = await db.select({
+                const dbRows = await db.select({
                     key: transactions.bankTransactionKey,
                 }).from(transactions).where(and(
                     eq(transactions.orgId, orgId),
                     inArray(transactions.bankTransactionKey, batch),
                     isNotDeleted(transactions)
                 ));
-                for (const row of rows) {
+                for (const row of dbRows) {
                     if (row.key) {
                         existingKeyCounts.set(row.key, (existingKeyCounts.get(row.key) || 0) + 1);
                     }
                 }
             }
 
-            // Also do a legacy fallback check for old transactions without bankTransactionKey
-            // (imported before this fix). Compare date + amountBase + notes.
+            // Also check sourceRowSignature for rows that have it
+            const sigKeys = validTransactions
+                .filter(t => t.sourceRowSignature)
+                .map(t => t.sourceRowSignature!);
+            if (sigKeys.length > 0) {
+                const uniqueSigs = [...new Set(sigKeys)];
+                for (let i = 0; i < uniqueSigs.length; i += BATCH_SIZE) {
+                    const batch = uniqueSigs.slice(i, i + BATCH_SIZE);
+                    const dbRows = await db.select({
+                        sig: transactions.sourceRowSignature,
+                    }).from(transactions).where(and(
+                        eq(transactions.orgId, orgId),
+                        inArray(transactions.sourceRowSignature, batch),
+                        isNotDeleted(transactions)
+                    ));
+                    for (const row of dbRows) {
+                        if (row.sig) {
+                            existingKeyCounts.set(row.sig, (existingKeyCounts.get(row.sig) || 0) + 1);
+                        }
+                    }
+                }
+            }
+
+            // Legacy fallback: check old transactions that have no bankTransactionKey or sourceRowSignature
             const dates = validTransactions.map(t => new Date(t.txnDate).getTime());
             const minDate = new Date(Math.min(...dates)).toISOString().split('T')[0];
             const maxDate = new Date(Math.max(...dates)).toISOString().split('T')[0];
@@ -1482,9 +1518,8 @@ export class TransactionService {
                 isNull(transactions.bankTransactionKey) // Only old rows without keys
             ));
 
-            // Build legacy key counts
             for (const t of legacyTxns) {
-                const legacyKey = generateBankKey(t.txnDate as string, t.amountLocal, t.notes || '');
+                const legacyKey = generateFallbackKey(t.txnDate as string, t.amountLocal, t.notes || '');
                 existingKeyCounts.set(legacyKey, (existingKeyCounts.get(legacyKey) || 0) + 1);
             }
 
@@ -1493,7 +1528,11 @@ export class TransactionService {
             const usedKeyCounts = new Map<string, number>();
             newValidTransactions = validTransactions.filter(txn => {
                 const key = txn.bankTransactionKey;
-                const existingCount = existingKeyCounts.get(key) || 0;
+                const sigKey = txn.sourceRowSignature;
+                const existingCount = Math.max(
+                    existingKeyCounts.get(key) || 0,
+                    sigKey ? (existingKeyCounts.get(sigKey) || 0) : 0
+                );
                 const usedSoFar = usedKeyCounts.get(key) || 0;
 
                 if (usedSoFar < existingCount) {
@@ -1516,14 +1555,14 @@ export class TransactionService {
             });
 
             let importedStatementId: number | undefined;
-            if ((filename || fileHash) && newValidTransactions.length > 0) {
+            if (filename || fileHash) {
                 const fyToUse = defaultFinancialYearId || fys[0]?.id;
-                const branchToUse = defaultBranchId || newValidTransactions[0]?.branchId;
+                const branchToUse = defaultBranchId || (newValidTransactions[0]?.branchId) || (validTransactions[0]?.branchId);
                 if (fyToUse && branchToUse) {
-                    // Generate a statement fingerprint from the row content if no fileHash
-                    let fingerprint = fileHash || null;
-                    if (!fingerprint && newValidTransactions.length > 0) {
-                        const fpContent = newValidTransactions.map(t => `${t.txnDate}_${Number(t.amountLocal).toFixed(2)}`).join('|');
+                    // Use provided statementFingerprint from parser, or generate fallback from row content
+                    let fingerprint = statementFingerprint || null;
+                    if (!fingerprint && validTransactions.length > 0) {
+                        const fpContent = validTransactions.map(t => `${t.txnDate}_${Number(t.amountLocal).toFixed(2)}`).join('|');
                         const crypto = await import('crypto');
                         fingerprint = crypto.createHash('sha256').update(fpContent).digest('hex');
                     }
@@ -1847,6 +1886,7 @@ export class TransactionService {
                 createdBy: data.createdBy,
                 importedStatementId: data.importedStatementId || null,
                 bankTransactionKey: data.bankTransactionKey || null,
+                sourceRowSignature: data.sourceRowSignature || null,
                 // GST fields
                 isTaxable: isTaxableFlag ? 1 : 0,
                 gstType: isTaxableFlag ? (data.gstType || null) : null,

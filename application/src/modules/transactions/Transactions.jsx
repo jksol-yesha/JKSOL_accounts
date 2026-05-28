@@ -1028,7 +1028,7 @@ const Transactions = () => {
             dateRange: null,
             currency: preferences?.currency || 'INR',
             party: 'all',
-            accountId: urlAccountId ? [urlAccountId] : []
+            accountId: urlAccountId ? [urlAccountId] : 'all'
         };
     });
 
@@ -1041,7 +1041,7 @@ const Transactions = () => {
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const urlAccountId = params.get('accountId');
-        const accountId = urlAccountId ? [urlAccountId] : [];
+        const accountId = urlAccountId ? [urlAccountId] : 'all';
         setAppliedFilters(prev => ({ ...prev, accountId, ...(params.get('disableDateFilter') === 'true' ? { dateRange: null } : {}) }));
     }, [location.search]);
 
@@ -1153,7 +1153,8 @@ const Transactions = () => {
             const payload = {
                 branchId: 'all',
                 financialYearId: selectedYear.id,
-                targetCurrency: appliedFilters.currency
+                targetCurrency: appliedFilters.currency,
+                limit: -1
             };
             
             const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
@@ -1681,7 +1682,7 @@ const Transactions = () => {
             downloadExportFile(fileBytes, fileName, mimeType);
         } catch (error) {
             console.error('Failed to export transactions to Excel:', error);
-            alert('Failed to export transactions');
+            showToast('Failed to export transactions', 'error');
         }
     };
 
@@ -1697,7 +1698,7 @@ const Transactions = () => {
             setTimeout(() => URL.revokeObjectURL(url), 10000);
         } catch (error) {
             console.error('Failed to export transactions to PDF:', error);
-            alert('Failed to export transactions');
+            showToast('Failed to export transactions', 'error');
         }
     };
 
@@ -1764,7 +1765,7 @@ const Transactions = () => {
         } catch (error) {
             console.error("Failed to delete transaction:", error);
             const msg = error.response?.data?.message || error.message || "Failed to delete transaction";
-            alert(msg);
+            showToast(msg, 'error');
             setDeleteDialog((current) => ({ ...current, loading: false }));
         }
     };
@@ -2031,7 +2032,7 @@ const Transactions = () => {
                                                 }
                                             } catch (error) {
                                                 console.error('Failed to parse statement', error);
-                                                alert(error.response?.data?.message || 'Failed to parse statement');
+                                                showToast(error.response?.data?.message || 'Failed to parse statement', 'error');
                                                 setIsImportReviewModalOpen(false);
                                             } finally {
                                                 setIsUploadingStatement(false);
@@ -2363,13 +2364,11 @@ const Transactions = () => {
                 }}
             />
 
-            {isImportHistoryOpen && (
-                <ImportHistoryPanel
-                    isOpen={isImportHistoryOpen}
-                    onClose={() => setIsImportHistoryOpen(false)}
-                    onRefresh={fetchTransactions}
-                />
-            )}
+            <ImportHistoryPanel
+                isOpen={isImportHistoryOpen}
+                onClose={() => setIsImportHistoryOpen(false)}
+                onRefresh={fetchTransactions}
+            />
 
             {/* Import PDF Modal - Commented out
             <ImportPDFModal

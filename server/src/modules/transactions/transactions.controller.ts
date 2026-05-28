@@ -471,11 +471,48 @@ export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { b
             payload = body;
         }
 
-        const { rows, accountId, branchId, financialYearId, filename, parserType } = payload;
+        const { rows, accountId, branchId, financialYearId, filename, parserType, fileHash,
+                statementFingerprint, bankName, accountNumber } = payload;
         
         if (!rows || !Array.isArray(rows)) {
             set.status = 400;
             return { success: false, message: 'Invalid data format. Expected array of rows.' };
+        }
+
+        // ─── LAYER 1: FILE HASH IDEMPOTENCY CHECK ───
+        // If fileHash is provided, check if this exact PDF was already imported.
+        // This MUST happen before any row processing or transaction creation.
+        if (fileHash) {
+            const { checkFileHashExists } = await import('../../services/statement-parsers/statementImportService');
+            const alreadyImported = await checkFileHashExists(orgId!, fileHash);
+            if (alreadyImported) {
+                return {
+                    success: true,
+                    insertedRows: 0,
+                    skippedRows: rows.length,
+                    totalRows: rows.length,
+                    fileAlreadyImported: true,
+                    message: 'This exact statement file was already imported. No transactions were created.'
+                };
+            }
+        } else if (filename && filename.endsWith('.pdf')) {
+            console.warn('[IMPORT] PDF import without fileHash — backward compatibility mode:', filename);
+        }
+
+        // ─── LAYER 2: STATEMENT FINGERPRINT CHECK ───
+        if (statementFingerprint) {
+            const { checkStatementFingerprintExists } = await import('../../services/statement-parsers/statementImportService');
+            const fingerprintExists = await checkStatementFingerprintExists(orgId!, statementFingerprint);
+            if (fingerprintExists) {
+                return {
+                    success: true,
+                    insertedRows: 0,
+                    skippedRows: rows.length,
+                    totalRows: rows.length,
+                    statementAlreadyImported: true,
+                    message: 'This bank statement period was already imported. No new transactions were created.'
+                };
+            }
         }
 
         // Handle attachments if present
@@ -496,9 +533,10 @@ export const importJson = async ({ body, set, user, orgId }: ElysiaContext & { b
             financialYearId ? Number(financialYearId) : undefined,
             branchId ? Number(branchId) : undefined,
             filename,
-            undefined, // fileHash
+            fileHash || undefined,
             accountId ? Number(accountId) : undefined,
-            parserType || undefined
+            parserType || undefined,
+            statementFingerprint || undefined
         );
 
         if (result.success || result.insertedRows > 0) {

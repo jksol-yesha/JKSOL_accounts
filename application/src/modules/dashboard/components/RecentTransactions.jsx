@@ -17,6 +17,7 @@ import { usePreferences } from '../../../context/PreferenceContext';
 import { useOrganization } from '../../../context/OrganizationContext';
 import { useAuth } from '../../../context/AuthContext';
 import { notifyTransactionDataChanged } from '../../transactions/transactionDataSync';
+import { useToast } from '../../../context/ToastContext';
 
 const recentTransactionsFetches = new Map();
 const DEFAULT_TRANSACTION_TYPE_ORDER = ['income', 'expense', 'transfer', 'investment'];
@@ -482,6 +483,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
     const { selectedYear, loading: yearLoading } = useYear();
     const { selectedOrg } = useOrganization();
     const { user } = useAuth();
+    const { showToast } = useToast();
     const { formatCompactCurrency: formatCurrency, formatCurrency: formatCurrencyExact, formatDate } = usePreferences();
     const [transactions, setTransactions] = React.useState([]);
     const [selectedTypeFilters, setSelectedTypeFilters] = React.useState([]);
@@ -891,7 +893,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
         } catch (error) {
             console.error('Failed to delete transaction:', error);
             const msg = error.response?.data?.message || error.message || 'Failed to delete transaction';
-            alert(msg);
+            showToast(msg, 'error');
             setDeleteDialog((current) => ({ ...current, loading: false }));
         }
     }, [cacheKey, deleteDialog.id]);

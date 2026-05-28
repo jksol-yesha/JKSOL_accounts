@@ -1,20 +1,72 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { X, History, FileText, Undo2, AlertCircle } from 'lucide-react';
 import apiService from '../../services/api';
 import { useBranch } from '../../context/BranchContext';
 import { useYear } from '../../context/YearContext';
 import { Loader } from '../../components/common/Loader';
 import { usePreferences } from '../../context/PreferenceContext';
+import { useToast } from '../../context/ToastContext';
+
+const CLOSE_ANIMATION_MS = 280;
 
 const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
     const { selectedBranch } = useBranch();
     const { selectedYear } = useYear();
     const { formatDate } = usePreferences();
+    const { showToast } = useToast();
     
     const [history, setHistory] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [revertDialog, setRevertDialog] = useState({ open: false, id: null, filename: '', count: 0, loading: false });
+
+    // Animation state (same pattern as CreateAccount)
+    const [shouldRender, setShouldRender] = useState(isOpen);
+    const [isClosing, setIsClosing] = useState(false);
+    const closeTimerRef = useRef(null);
+
+    useEffect(() => {
+        let openTimer = null;
+
+        if (isOpen) {
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+            openTimer = setTimeout(() => {
+                setShouldRender(true);
+                setIsClosing(false);
+            }, 0);
+            return () => { if (openTimer) clearTimeout(openTimer); };
+        }
+
+        if (!shouldRender) return;
+
+        openTimer = setTimeout(() => { setIsClosing(true); }, 0);
+
+        closeTimerRef.current = setTimeout(() => {
+            setShouldRender(false);
+            setIsClosing(false);
+            closeTimerRef.current = null;
+        }, CLOSE_ANIMATION_MS);
+
+        return () => {
+            if (openTimer) clearTimeout(openTimer);
+            if (closeTimerRef.current) {
+                clearTimeout(closeTimerRef.current);
+                closeTimerRef.current = null;
+            }
+        };
+    }, [isOpen, shouldRender]);
+
+    useEffect(() => {
+        return () => { if (closeTimerRef.current) clearTimeout(closeTimerRef.current); };
+    }, []);
+
+    const handleClose = useCallback(() => {
+        if (isClosing) return;
+        onClose();
+    }, [onClose, isClosing]);
 
     useEffect(() => {
         if (isOpen) {
@@ -67,29 +119,23 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
             setRevertDialog({ open: false, id: null, filename: '', count: 0, loading: false });
         } catch (err) {
             console.error('Failed to revert import:', err);
-            alert(err.response?.data?.message || err.message || 'Failed to revert import');
+            showToast(err.response?.data?.message || err.message || 'Failed to revert import', 'error');
             setRevertDialog(prev => ({ ...prev, loading: false }));
         }
     };
 
-    if (!isOpen) return null;
+    if (!shouldRender) return null;
 
     return (
         <div 
-            className="fixed inset-0 z-[100] flex justify-end bg-black/20 backdrop-blur-sm transition-opacity"
-            onClick={onClose}
+            className={`fixed inset-0 z-[100] flex justify-end bg-gray-900/40 backdrop-blur-sm ${isClosing ? 'animate-fade-out' : 'animate-fade-in'}`}
+            onClick={handleClose}
         >
             <div 
-                className="bg-white w-full max-w-md h-full shadow-2xl flex flex-col transform transition-transform duration-300 ease-in-out border-l border-gray-200"
-                style={{ animation: 'slideInRight 0.3s forwards' }}
+                className={`bg-white w-full max-w-md h-full shadow-2xl flex flex-col border-l border-gray-200 ${isClosing ? 'animate-slide-out-right' : 'animate-slide-in-right'}`}
                 onClick={(e) => e.stopPropagation()}
             >
-                <style>{`
-                    @keyframes slideInRight {
-                        from { transform: translateX(100%); }
-                        to { transform: translateX(0); }
-                    }
-                `}</style>
+
                 
                 <div className="flex flex-col px-5 py-2.5 border-b border-slate-100 bg-slate-50/50 shrink-0 shadow-sm relative z-10">
                     <div className="flex items-start justify-between">
@@ -103,7 +149,7 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
                             </div>
                         </div>
                         <button 
-                            onClick={onClose}
+                            onClick={handleClose}
                             className="p-1 -mr-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-200 transition-colors focus:outline-none"
                         >
                             <X size={14} strokeWidth={2.5} />
@@ -111,7 +157,7 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 overflow-y-auto px-4 py-3">
                     {loading ? (
                         <div className="flex justify-center py-10">
                             <Loader size="lg" />
@@ -131,80 +177,98 @@ const ImportHistoryPanel = ({ isOpen, onClose, onRefresh }) => {
                             <p className="text-xs max-w-[200px] mx-auto">Imported statements will appear here.</p>
                         </div>
                     ) : (
-                        <div className="space-y-3">
+                        <div className="space-y-1.5">
                             {history.map((item) => (
                                 <div 
                                     key={item.id} 
-                                    className={`border rounded-xl p-3 transition-all ${
-                                        item.status === 1 ? 'border-gray-200 bg-white shadow-sm hover:border-blue-300' : 'border-gray-100 bg-gray-50/50 opacity-75'
+                                    className={`border rounded-lg px-3 py-2 transition-all ${
+                                        item.status === 1 ? 'border-gray-200 bg-white hover:border-blue-300' : 'border-gray-100 bg-gray-50/50 opacity-60'
                                     }`}
                                 >
-                                    <div className="flex items-start justify-between mb-2">
-                                        <div className="flex items-start gap-3 flex-1 min-w-0">
-                                            <div className={`mt-0.5 w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                                item.status === 1 ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'
+                                    {/* Row 1: Filename + badges + revert */}
+                                    <div className="flex items-center gap-2">
+                                        <FileText size={13} className={`shrink-0 ${item.status === 1 ? 'text-blue-500' : 'text-gray-400'}`} />
+                                        <h4 className={`text-[12px] font-semibold truncate flex-1 ${item.status === 1 ? 'text-gray-900' : 'text-gray-500 line-through'}`}>
+                                            {item.filename}
+                                        </h4>
+                                        
+                                        {/* Transaction count badge */}
+                                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                            item.status === 1 ? 'bg-slate-100 text-slate-700' : 'bg-gray-100 text-gray-400'
+                                        }`}>
+                                            {item.transactionCount} txns
+                                        </span>
+                                        
+                                        {/* Parser badge */}
+                                        {item.parserType && (
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                                                item.parserType === 'OPENAI' 
+                                                    ? 'bg-purple-50 text-purple-600' 
+                                                    : 'bg-emerald-50 text-emerald-600'
                                             }`}>
-                                                <FileText size={16} />
-                                            </div>
-                                            <div className="flex-1 min-w-0 pr-2">
-                                                <h4 className={`text-sm font-semibold truncate ${item.status === 1 ? 'text-gray-900' : 'text-gray-500 line-through'}`}>
-                                                    {item.filename}
-                                                </h4>
-                                                <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
-                                                    <span>{formatDate(item.importedAt)}</span>
-                                                    <span>•</span>
-                                                    <span>{item.user?.name || 'Unknown'}</span>
-                                                </div>
-                                            </div>
-                                        </div>
+                                                {item.parserType.replace('_DETERMINISTIC', '')}
+                                            </span>
+                                        )}
+                                        
+                                        {item.status === 0 && (
+                                            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">
+                                                Reverted
+                                            </span>
+                                        )}
                                         
                                         {item.status === 1 && (
                                             <button 
                                                 onClick={() => handleRevertClick(item)}
-                                                className="shrink-0 p-1.5 text-rose-500 hover:bg-rose-50 rounded-md transition-colors tooltip-trigger"
+                                                className="shrink-0 p-1 text-rose-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors"
                                                 title="Undo Import"
                                             >
-                                                <Undo2 size={16} />
+                                                <Undo2 size={13} />
                                             </button>
-                                        )}
-                                        {item.status === 0 && (
-                                            <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                                                Reverted
-                                            </span>
                                         )}
                                     </div>
                                     
-                                    {revertDialog.id === item.id ? (
-                                        <div className="pt-3 border-t border-gray-100/60 flex flex-col gap-3 animate-fade-in">
-                                            <div className="flex items-start gap-2 bg-rose-50 p-2.5 rounded-lg border border-rose-100">
-                                                <AlertCircle size={14} className="text-rose-500 mt-0.5 shrink-0" />
-                                                <p className="text-[11px] text-rose-700 font-semibold leading-relaxed">
-                                                    Revert this import and permanently delete {item.transactionCount} transactions?
+                                    {/* Row 2: Meta info */}
+                                    <div className="flex items-center gap-1.5 ml-[21px] mt-0.5">
+                                        <span className="text-[10px] text-gray-400">{formatDate(item.importedAt)}</span>
+                                        <span className="text-[10px] text-gray-300">•</span>
+                                        <span className="text-[10px] text-gray-400">{item.user?.name || 'Unknown'}</span>
+                                        {item.duplicateCount > 0 && (
+                                            <>
+                                                <span className="text-[10px] text-gray-300">•</span>
+                                                <span className="text-[9px] font-semibold text-amber-600">{item.duplicateCount} dup</span>
+                                            </>
+                                        )}
+                                        {item.invalidCount > 0 && (
+                                            <>
+                                                <span className="text-[10px] text-gray-300">•</span>
+                                                <span className="text-[9px] font-semibold text-red-500">{item.invalidCount} invalid</span>
+                                            </>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Revert confirmation (inline) */}
+                                    {revertDialog.id === item.id && (
+                                        <div className="mt-2 pt-2 border-t border-gray-100 flex items-center gap-2">
+                                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                                <AlertCircle size={12} className="text-rose-500 shrink-0" />
+                                                <p className="text-[10px] text-rose-700 font-semibold truncate">
+                                                    Delete {item.transactionCount} transactions?
                                                 </p>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <button 
-                                                    disabled={revertDialog.loading}
-                                                    onClick={confirmRevert}
-                                                    className="flex-1 text-[11px] font-extrabold py-1.5 px-3 rounded-md bg-rose-600 text-white hover:bg-rose-700 shadow-sm shadow-rose-200 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
-                                                >
-                                                    {revertDialog.loading ? <Loader className="w-3 h-3 text-white" /> : 'Confirm Revert'}
-                                                </button>
-                                                <button 
-                                                    disabled={revertDialog.loading}
-                                                    onClick={() => setRevertDialog({ open: false, id: null, filename: '', count: 0, loading: false })}
-                                                    className="flex-1 text-[11px] font-extrabold py-1.5 px-3 rounded-md bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                                                >
-                                                    Cancel
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="flex items-center justify-between pt-2 border-t border-gray-100/60">
-                                            <span className="text-xs font-medium text-gray-500">Transactions</span>
-                                            <span className={`text-xs font-bold ${item.status === 1 ? 'text-gray-900' : 'text-gray-400'}`}>
-                                                {item.transactionCount}
-                                            </span>
+                                            <button 
+                                                disabled={revertDialog.loading}
+                                                onClick={confirmRevert}
+                                                className="text-[10px] font-bold py-1 px-2.5 rounded bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-50 transition-colors shrink-0"
+                                            >
+                                                {revertDialog.loading ? '...' : 'Revert'}
+                                            </button>
+                                            <button 
+                                                disabled={revertDialog.loading}
+                                                onClick={() => setRevertDialog({ open: false, id: null, filename: '', count: 0, loading: false })}
+                                                className="text-[10px] font-bold py-1 px-2.5 rounded bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50 transition-colors shrink-0"
+                                            >
+                                                Cancel
+                                            </button>
                                         </div>
                                     )}
                                 </div>

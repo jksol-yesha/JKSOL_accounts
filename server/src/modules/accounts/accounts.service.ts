@@ -354,8 +354,9 @@ export const createAccount = async (data: {
         throw new Error('IFSC is required for Indian bank accounts');
     }
 
-    if (isBankAccount && !isForexBranch && !normalizedSwiftOrNic) {
-        throw new Error('SWIFT/BIC code is required for Indian bank accounts');
+    // SWIFT/BIC is optional — only validate format if provided
+    if (isBankAccount && !isForexBranch && normalizedSwiftOrNic && !/^[A-Z0-9]{8,11}$/.test(normalizedSwiftOrNic)) {
+        throw new Error('SWIFT/BIC code must be 8-11 alphanumeric characters');
     }
 
 
@@ -591,8 +592,9 @@ export const updateAccount = async (id: number, data: {
         throw new Error('IFSC is required for Indian bank accounts');
     }
 
-    if (isBankAccount && !isForexBranch && !nextSwiftOrNic) {
-        throw new Error('SWIFT/BIC code is required for Indian bank accounts');
+    // SWIFT/BIC is optional — only validate format if provided
+    if (isBankAccount && !isForexBranch && nextSwiftOrNic && !/^[A-Z0-9]{8,11}$/.test(nextSwiftOrNic)) {
+        throw new Error('SWIFT/BIC code must be 8-11 alphanumeric characters');
     }
 
     await db.update(accounts).set(updateData).where(eq(accounts.id, id));

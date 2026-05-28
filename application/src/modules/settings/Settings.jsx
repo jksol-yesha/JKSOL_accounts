@@ -6,9 +6,11 @@ import CurrencySelector from '../../components/layout/CurrencySelector';
 import CustomSelect from '../../components/common/CustomSelect';
 import Profile from '../profile/Profile';
 import { useOrganization } from '../../context/OrganizationContext';
+import { useToast } from '../../context/ToastContext';
 
 const Settings = () => {
     const { selectedOrg, setSelectedOrg } = useOrganization();
+    const { showToast } = useToast();
     const [view, setView] = useState('profile');
     const [items, setItems] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -26,7 +28,7 @@ const Settings = () => {
         const file = e.target.files[0];
         if (file) {
             if (file.size > 2 * 1024 * 1024) {
-                alert("Logo must be less than 2MB");
+                showToast("Logo must be less than 2MB", "error");
                 return;
             }
             const reader = new FileReader();
@@ -211,7 +213,7 @@ const Settings = () => {
                 if (editingItem) {
                     if (selectedOrg) {
                         if (formData.role === 'member' && selectedBranchIds.length === 0) {
-                            alert("Members must be assigned to at least one branch.");
+                            showToast("Members must be assigned to at least one branch.", "error");
                             setIsLoading(false);
                             return;
                         }
@@ -226,12 +228,12 @@ const Settings = () => {
                             });
                         } catch (updateError) {
                             console.error("Update failed:", updateError);
-                            alert(updateError.response?.data?.message || "Failed to update user");
+                            showToast(updateError.response?.data?.message || "Failed to update user", "error");
                             setIsLoading(false);
                             return;
                         }
                     } else {
-                        alert("No organization selected to update the user in.");
+                        showToast("No organization selected to update the user in.", "error");
                         setIsLoading(false);
                         return;
                     }
@@ -239,7 +241,7 @@ const Settings = () => {
                     // Creating a new user or inviting
                     if (selectedOrg) {
                         if (formData.role === 'member' && selectedBranchIds.length === 0) {
-                            alert("Members must be assigned to at least one branch.");
+                            showToast("Members must be assigned to at least one branch.", "error");
                             setIsLoading(false);
                             return;
                         }
@@ -253,12 +255,12 @@ const Settings = () => {
                             });
                         } catch (inviteError) {
                             console.error("Invite failed:", inviteError);
-                            alert(inviteError.response?.data?.message || "Failed to invite user");
+                            showToast(inviteError.response?.data?.message || "Failed to invite user", "error");
                             setIsLoading(false);
                             return;
                         }
                     } else {
-                        alert("No organization selected to invite the user to.");
+                        showToast("No organization selected to invite the user to.", "error");
                         setIsLoading(false);
                         return;
                     }
@@ -268,14 +270,14 @@ const Settings = () => {
             fetchData();
         } catch (error) {
             console.error("Save failed:", error);
-            alert(error.response?.data?.message || "Failed to save");
+            showToast(error.response?.data?.message || "Failed to save", "error");
             setIsLoading(false);
         }
     };
 
     const handleQuickStatusToggle = async (item, isUser) => {
         if (isUser && !selectedOrg) {
-            alert("No organization selected.");
+            showToast("No organization selected.", "error");
             return;
         }
 
@@ -344,7 +346,7 @@ const Settings = () => {
                 obj.id === item.id ? { ...obj, status: item.status } : obj
             ));
             console.error("Status toggle failed:", error);
-            alert(error.response?.data?.message || "Failed to toggle status");
+            showToast(error.response?.data?.message || "Failed to toggle status", "error");
         }
     };
 

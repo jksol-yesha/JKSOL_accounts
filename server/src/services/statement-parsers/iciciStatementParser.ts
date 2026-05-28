@@ -20,6 +20,7 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 
 // @ts-ignore
 import pdf from 'pdf-parse/lib/pdf-parse.js';
+import { parseICICIDetailedStatement } from './iciciDetailedParser';
 import type { ParsedStatementResult, ParsedStatementRow } from './types';
 
 // ─── Helpers ───
@@ -191,12 +192,41 @@ function extractICICITrailingFields(combinedText: string): TrailingAmountFields 
 
 // ─── Detection ───
 
-export function isICICIStatement(text: string): boolean {
-  return (
-    text.includes('Statement of Transactions in Saving Account') ||
-    text.includes('Statement of Transactions in Current Account') ||
+export type ICICIVariant = 'ICICI_RETAIL_STATEMENT' | 'ICICI_DETAILED_STATEMENT';
+
+function detectICICIVariant(text: string): ICICIVariant | null {
+  // Normalize newlines to spaces for reliable header detection
+  // (PDF extraction can split column headers across lines, e.g. "Transactio\nn ID")
+  const upper = text.replace(/\n/g, ' ').replace(/\s+/g, ' ').toUpperCase();
+
+  // Detailed format markers
+  // Note: PDF extraction can split words with whitespace (e.g. "TRANSACTIO N ID")
+  if (
+    upper.includes('DETAILED STATEMENT') &&
+    upper.includes('TRANSACTIONS LIST') &&
+    /TRANSACTIO\s*N\s*ID/.test(upper) &&
+    upper.includes('CR/DR')
+  ) {
+    return 'ICICI_DETAILED_STATEMENT';
+  }
+
+  // Retail format markers
+  if (
+    (upper.includes('STATEMENT OF TRANSACTIONS') &&
+     upper.includes('TRANSACTION REMARKS') &&
+     upper.includes('WITHDRAWAL') &&
+     upper.includes('DEPOSIT') &&
+     upper.includes('BALANCE')) ||
     (text.includes('ICICI Bank') && text.includes('S No.') && text.includes('Transaction Remarks'))
-  );
+  ) {
+    return 'ICICI_RETAIL_STATEMENT';
+  }
+
+  return null;
+}
+
+export function isICICIStatement(text: string): boolean {
+  return detectICICIVariant(text) !== null;
 }
 
 // ─── Main Parser ───
@@ -206,8 +236,37 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
   const fullText: string = data.text;
   const numPages = data.numpages || 1;
 
+  // Detect variant and dispatch
+  const variant = detectICICIVariant(fullText);
+
+  if (variant === 'ICICI_DETAILED_STATEMENT') {
+    const detailed = parseICICIDetailedStatement(fullText, numPages);
+    // Generate statement fingerprint
+    const { generateStatementFingerprint } = await import('./statementHashUtils');
+    detailed.statementFingerprint = generateStatementFingerprint({
+      bankName: detailed.bankName,
+      accountNumber: detailed.accountNumber,
+      statementFromDate: detailed.statementFromDate,
+      statementToDate: detailed.statementToDate,
+      openingBalance: detailed.openingBalance,
+      closingBalance: detailed.closingBalance,
+      totalDebit: detailed.totalDebit,
+      totalCredit: detailed.totalCredit,
+      debitCount: detailed.debitCount,
+      creditCount: detailed.creditCount,
+    });
+    return detailed;
+  }
+
+  // ─── Retail parser (existing logic) ───
+  return parseICICIRetailStatement(fullText, numPages);
+}
+
+async function parseICICIRetailStatement(fullText: string, numPages: number): Promise<ParsedStatementResult> {
+
   const result: ParsedStatementResult = {
     parser: 'ICICI_DETERMINISTIC',
+    parserVariant: 'ICICI_RETAIL_STATEMENT',
     bankName: 'ICICI',
     accountNumber: null,
     statementFromDate: null,
@@ -240,6 +299,32 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
     result.statementFromDate = parseICICIHeaderDate(headerMatch[2]!.trim());
     result.statementToDate = parseICICIHeaderDate(headerMatch[3]!.trim());
   }
+
+  // ── Extract account metadata ──
+  // Branch: "BRANCH, TRINITY BUSINESS PARKG -2, L P" or "BRANCH,  SARTHANA CHOKDI"
+  const branchMatch = fullText.match(/^BRANCH,\s*(.+?)(?:\n|$)/im);
+  if (branchMatch) {
+    const branchName = branchMatch[1]!.replace(/\s+/g, ' ').trim();
+    if (branchName.length >= 3) result.bankBranchName = branchName;
+  }
+
+  // Account Holder: The name typically appears a few lines after branch address
+  // Pattern: appears as standalone line with uppercase name after address block
+  const nameBlock = fullText.match(/BRANCH[^\n]+\n[^\n]+\n\s*\d{6}\s*\n\s*([A-Z][A-Z\s]+?)\s*\n/m);
+  if (nameBlock) {
+    const candidate = nameBlock[1]!.trim();
+    if (candidate.split(/\s+/).length >= 2 && candidate.length <= 150) {
+      result.accountHolderName = candidate;
+    }
+  }
+
+  // IFSC (if present): "IFSC: ICIC0001234"
+  const ifscMatch = fullText.match(/IFSC\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
+
+  // Customer ID (if present)
+  const custMatch = fullText.match(/Customer\s*(?:Id|ID)\s*:?\s*(\d+)/i);
+  if (custMatch) result.customerId = custMatch[1]!;
 
   // ─── Parse transaction rows ───
 
@@ -392,6 +477,21 @@ export async function parseICICIStatement(buffer: Buffer): Promise<ParsedStateme
   result.totalCredit = creditRows
     .reduce((sum, r) => sum + parseFloat(r.creditAmount!), 0)
     .toFixed(2);
+
+  // ── Generate statement fingerprint for dedup ──
+  const { generateStatementFingerprint } = await import('./statementHashUtils');
+  result.statementFingerprint = generateStatementFingerprint({
+    bankName: result.bankName,
+    accountNumber: result.accountNumber,
+    statementFromDate: result.statementFromDate,
+    statementToDate: result.statementToDate,
+    openingBalance: result.openingBalance,
+    closingBalance: result.closingBalance,
+    totalDebit: result.totalDebit,
+    totalCredit: result.totalCredit,
+    debitCount: result.debitCount,
+    creditCount: result.creditCount,
+  });
 
   // ─── Validate ───
   validateICICIStatement(result);

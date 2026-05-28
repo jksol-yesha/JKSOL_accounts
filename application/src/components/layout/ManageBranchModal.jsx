@@ -7,10 +7,12 @@ import apiService from '../../services/api';
 import { useCurrencyOptions } from '../../hooks/useCurrencyOptions';
 import { useBranch } from '../../context/BranchContext';
 import { useOrganization } from '../../context/OrganizationContext';
+import { useToast } from '../../context/ToastContext';
 
 const ManageBranchModal = ({ isOpen, onClose }) => {
     const { selectedBranch, setSelectedBranch, selectedBranchIds, refreshBranches } = useBranch();
     const { selectedOrg } = useOrganization();
+    const { showToast } = useToast();
     const { currencyOptions } = useCurrencyOptions();
     const [showCountryDropdown, setShowCountryDropdown] = useState(false);
     const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
@@ -273,7 +275,7 @@ const ManageBranchModal = ({ isOpen, onClose }) => {
             }
         } catch (error) {
             console.error('Failed to delete branch:', error);
-            alert(error.response?.data?.message || 'Failed to archive branch.');
+            showToast(error.response?.data?.message || 'Failed to archive branch.', 'error');
         }
     };
 
