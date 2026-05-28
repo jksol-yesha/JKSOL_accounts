@@ -1153,7 +1153,8 @@ const Transactions = () => {
             const payload = {
                 branchId: 'all',
                 financialYearId: selectedYear.id,
-                targetCurrency: appliedFilters.currency
+                targetCurrency: appliedFilters.currency,
+                limit: -1
             };
             
             const params = new URLSearchParams(typeof window !== 'undefined' ? window.location.search : '');
