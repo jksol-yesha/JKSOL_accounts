@@ -678,42 +678,43 @@ export const ReportsService = {
                 d.incomes || [],
                 d.netLoss > 0 ? { label: 'Nett Loss', amount: d.netLoss } : null
             );
+            const hasProfitLossData = leftRows.length > 0 || rightRows.length > 0;
 
-            const maxRows = Math.max(leftRows.length, rightRows.length, 1);
-            const rowsHtml = [];
-            for (let i = 0; i < maxRows; i++) {
-                const left = leftRows[i] || null;
-                const right = rightRows[i] || null;
-                const isLeftLastItem = left?.kind === 'item' && leftRows[i + 1]?.kind !== 'item';
-                const isRightLastItem = right?.kind === 'item' && rightRows[i + 1]?.kind !== 'item';
+            const renderSideRows = (rows: PnlRow[], isRightSide: boolean) => {
+                const html = [];
+                for (let i = 0; i < rows.length; i++) {
+                    const row = rows[i];
+                    const isLastItem = row.kind === 'item' && rows[i + 1]?.kind !== 'item';
+                    
+                    if (i > 0 && (row.kind === 'section' || row.kind === 'balance')) {
+                        html.push(`<tr style="height: 16px;"><td colspan="3" style="border: none;"></td></tr>`);
+                    }
 
-                rowsHtml.push(`
-                    <tr class="pnl-data-row">
-                        <td class="pnl-particulars ${left?.kind === 'section' ? 'pnl-section' : left?.kind === 'item' ? 'pnl-item' : left?.kind === 'balance' ? 'pnl-balance' : 'pnl-empty'}">
-                            ${left?.label ? escapeHtml(left.label) : '&nbsp;'}
-                        </td>
-                        <td class="pnl-amount text-right ${left?.kind === 'item' ? 'pnl-item-amount' : 'pnl-empty'}">
-                            ${left?.kind === 'item'
-                                ? `<span class="pnl-item-value ${isLeftLastItem ? 'pnl-subtotal-line' : ''}">${escapeHtml(formatStatementAmount(left.amount || 0))}</span>`
-                                : '&nbsp;'}
-                        </td>
-                        <td class="pnl-total text-right pnl-side-divider ${left?.kind === 'section' ? 'pnl-section-total' : left?.kind === 'balance' ? 'pnl-balance-total' : 'pnl-empty'}">
-                            ${left?.kind === 'section' || left?.kind === 'balance' ? escapeHtml(formatStatementAmount(left.total || 0)) : '&nbsp;'}
-                        </td>
-                        <td class="pnl-particulars ${right?.kind === 'section' ? 'pnl-section pnl-right-section' : right?.kind === 'item' ? 'pnl-item pnl-right-item' : right?.kind === 'balance' ? 'pnl-balance pnl-right-section' : 'pnl-empty'}">
-                            ${right?.label ? escapeHtml(right.label) : '&nbsp;'}
-                        </td>
-                        <td class="pnl-amount text-right ${right?.kind === 'item' ? 'pnl-item-amount' : 'pnl-empty'}">
-                            ${right?.kind === 'item'
-                                ? `<span class="pnl-item-value ${isRightLastItem ? 'pnl-subtotal-line' : ''}">${escapeHtml(formatStatementAmount(right.amount || 0))}</span>`
-                                : '&nbsp;'}
-                        </td>
-                        <td class="pnl-total text-right ${right?.kind === 'section' ? 'pnl-section-total' : right?.kind === 'balance' ? 'pnl-balance-total' : 'pnl-empty'} ${right?.kind === 'balance' && right?.label === 'Nett Loss' ? 'pnl-loss-italic' : ''}">
-                            ${right?.kind === 'section' || right?.kind === 'balance' ? escapeHtml(formatStatementAmount(right.total || 0)) : '&nbsp;'}
-                        </td>
-                    </tr>
-                `);
-            }
+                    const particularClass = row.kind === 'section' ? 'pnl-section' : row.kind === 'item' ? 'pnl-item' : 'pnl-balance';
+                    const amountClass = row.kind === 'item' ? 'pnl-item-amount' : 'pnl-empty';
+                    const totalClass = row.kind === 'section' ? 'pnl-section-total' : row.kind === 'balance' ? 'pnl-balance-total' : 'pnl-empty';
+                    const rightSideParticularsClass = isRightSide ? (row.kind === 'section' || row.kind === 'balance' ? 'pnl-right-section' : 'pnl-right-item') : '';
+                    const rightSideLossItalic = (isRightSide && row.kind === 'balance' && row.label === 'Nett Loss') ? 'pnl-loss-italic' : '';
+
+                    html.push(`
+                        <tr class="pnl-data-row">
+                            <td class="pnl-particulars ${particularClass} ${rightSideParticularsClass}">
+                                ${row.label ? escapeHtml(row.label) : '&nbsp;'}
+                            </td>
+                            <td class="pnl-amount text-right ${amountClass}">
+                                ${row.kind === 'item' ? `<span class="pnl-item-value ${isLastItem ? 'pnl-subtotal-line' : ''}">${escapeHtml(formatStatementAmount(row.amount || 0))}</span>` : '&nbsp;'}
+                            </td>
+                            <td class="pnl-total text-right ${totalClass} ${rightSideLossItalic}">
+                                ${row.kind === 'section' || row.kind === 'balance' ? escapeHtml(formatStatementAmount(row.total || 0)) : '&nbsp;'}
+                            </td>
+                        </tr>
+                    `);
+                }
+                return html.join('');
+            };
+
+            const leftRowsHtml = renderSideRows(leftRows, false);
+            const rightRowsHtml = renderSideRows(rightRows, true);
 
             const formatDateExact = (val?: string) => {
                 if (!val) return '';
@@ -749,41 +750,88 @@ export const ReportsService = {
                         <div class="pnl-title">Profit &amp; Loss A/c</div>
                         <div class="pnl-period">${escapeHtml(headerRange)}</div>
                     </div>
-                    <table class="pnl-table">
-                        <colgroup>
-                            <col style="width:26%;">
-                            <col style="width:11%;">
-                            <col style="width:13%;">
-                            <col style="width:26%;">
-                            <col style="width:11%;">
-                            <col style="width:13%;">
-                        </colgroup>
-                        <thead>
-                            <tr class="pnl-column-row">
-                                <th class="text-center">E x p e n s e s</th>
-                                <th colspan="2" class="text-center pnl-side-divider">&nbsp;</th>
-                                <th class="text-center">I n c o m e</th>
-                                <th colspan="2" class="text-center">&nbsp;</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <tr style="height: 6px;"><td colspan="6" style="border: none;"></td></tr>
-                            ${rowsHtml.join('')}
-                            <tr style="height: 12px;"><td colspan="6" style="border: none;"></td></tr>
-                        </tbody>
-                        <tfoot>
-                            <tr class="pnl-total-row">
-                                <td colspan="2" class="pnl-total-label">Total</td>
-                                <td class="pnl-total-cell pnl-side-divider">
-                                    ${escapeHtml(formatStatementAmount(d.totalLeft || 0, true))}
-                                </td>
-                                <td colspan="2" class="pnl-total-label">Total</td>
-                                <td class="pnl-total-cell">
-                                    ${escapeHtml(formatStatementAmount(d.totalRight || 0, true))}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
+                    ${hasProfitLossData ? `
+                        <table class="pnl-table">
+                            <colgroup>
+                                <col style="width:50%;">
+                                <col style="width:50%;">
+                            </colgroup>
+                            <thead>
+                                <tr class="pnl-column-row">
+                                    <th class="text-center pnl-side-divider">Expense</th>
+                                    <th class="text-center">Income</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="pnl-side-divider" style="padding: 0; vertical-align: top;">
+                                        <table class="pnl-nested-table">
+                                            <colgroup>
+                                                <col style="width:52%;">
+                                                <col style="width:22%;">
+                                                <col style="width:26%;">
+                                            </colgroup>
+                                            <tbody>
+                                                <tr style="height: 6px;"><td colspan="3" style="border: none;"></td></tr>
+                                                ${leftRowsHtml}
+                                                <tr style="height: 12px;"><td colspan="3" style="border: none;"></td></tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                    <td style="padding: 0; vertical-align: top;">
+                                        <table class="pnl-nested-table">
+                                            <colgroup>
+                                                <col style="width:52%;">
+                                                <col style="width:22%;">
+                                                <col style="width:26%;">
+                                            </colgroup>
+                                            <tbody>
+                                                <tr style="height: 6px;"><td colspan="3" style="border: none;"></td></tr>
+                                                ${rightRowsHtml}
+                                                <tr style="height: 12px;"><td colspan="3" style="border: none;"></td></tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </tbody>
+                            <tfoot>
+                                <tr class="pnl-total-row">
+                                    <td class="pnl-side-divider" style="padding: 0;">
+                                        <table class="pnl-nested-table" style="height: 100%;">
+                                            <colgroup>
+                                                <col style="width:74%;">
+                                                <col style="width:26%;">
+                                            </colgroup>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="pnl-total-label" style="padding-left: 8px !important;">Total</td>
+                                                    <td class="pnl-total-cell pnl-side-divider">
+                                                        ${escapeHtml(formatStatementAmount(d.totalLeft || 0, true))}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                    <td style="padding: 0;">
+                                        <table class="pnl-nested-table" style="height: 100%;">
+                                            <colgroup>
+                                                <col style="width:74%;">
+                                                <col style="width:26%;">
+                                            </colgroup>
+                                            <tbody>
+                                                <tr>
+                                                    <td class="pnl-total-label pnl-right-section" style="padding-left: 8px !important;">Total</td>
+                                                    <td class="pnl-total-cell">
+                                                        ${escapeHtml(formatStatementAmount(d.totalRight || 0, true))}
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    ` : `<div class="pnl-empty-state">No data found for this period</div>`}
                 </div>
             `;
         }
@@ -972,11 +1020,11 @@ export const ReportsService = {
                         table-layout: fixed;
                         width: 100%;
                         font-size: 10.5px;
-                        border: none;
+                        border: none !important;
                     }
                     .pnl-table th,
                     .pnl-table td {
-                        border: none;
+                        border: none !important;
                         padding: 0.5px 0;
                         vertical-align: top;
                     }
@@ -993,11 +1041,18 @@ export const ReportsService = {
                         text-transform: none;
                         padding-top: 1px;
                         padding-bottom: 1px;
-                        border-top: 1px solid #2f2f2f;
-                        border-bottom: 1px solid #2f2f2f;
+                        border-top: 1px solid #2f2f2f !important;
+                        border-bottom: 1px solid #2f2f2f !important;
                     }
-                    .pnl-column-row th:first-child { padding: 0 !important; }
-                    .pnl-column-row th:nth-child(3) { padding: 0 !important; }
+                    .pnl-nested-table {
+                        border-collapse: collapse;
+                        table-layout: fixed;
+                        width: 100%;
+                        border: none !important;
+                    }
+                    .pnl-nested-table td, .pnl-nested-table th {
+                        border: none !important;
+                    }
                     .pnl-particulars { width: 30%; padding-left: 8px !important; }
                     .pnl-amount {
                         width: 10%;
@@ -1015,7 +1070,8 @@ export const ReportsService = {
                         word-break: normal;
                         padding-right: 8px !important;
                     }
-                    .pnl-side-divider { border-right: 1px solid #4b4b4b !important; }
+                    .pnl-table td.pnl-side-divider,
+                    .pnl-table th.pnl-side-divider { border-right: 1px solid #4b4b4b !important; }
                     .pnl-data-row td { background: transparent; }
                     .pnl-section {
                         font-weight: 550;
@@ -1070,11 +1126,11 @@ export const ReportsService = {
                     .pnl-loss-italic {
                         font-style: italic;
                     }
-                    .pnl-total-row td {
+                    .pnl-total-row > td {
                         padding-top: 1px;
                         padding-bottom: 1px;
-                        border-top: 1px solid #2f2f2f;
-                        border-bottom: 1px solid #2f2f2f;
+                        border-top: 1px solid #2f2f2f !important;
+                        border-bottom: 1px solid #2f2f2f !important;
                         background: transparent;
                     }
                     .pnl-total-label {
@@ -1085,9 +1141,6 @@ export const ReportsService = {
                         color: #111111;
                         text-align: left;
                     }
-                    .pnl-total-row td:first-child, .pnl-total-row td:nth-child(3) {
-                        padding-left: 8px !important;
-                    }
                     .pnl-total-cell {
                         font-size: 10.5px;
                         font-weight: 550;
@@ -1096,6 +1149,13 @@ export const ReportsService = {
                         white-space: nowrap;
                         word-break: normal;
                         padding-right: 8px !important;
+                    }
+                    .pnl-empty-state {
+                        padding: 48px 0;
+                        text-align: center;
+                        font-size: 11.5px;
+                        font-weight: 500;
+                        color: #6b7280;
                     }
 
                     .text-right { text-align: right !important; }

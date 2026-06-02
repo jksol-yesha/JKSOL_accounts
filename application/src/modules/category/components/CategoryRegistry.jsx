@@ -4,7 +4,6 @@ import { ModuleRegistry, AllCommunityModule, themeQuartz } from 'ag-grid-communi
 import {
     Search,
     Edit,
-    Trash2,
     Plus,
     CornerDownRight,
     ShoppingBag,
@@ -22,8 +21,6 @@ ModuleRegistry.registerModules([AllCommunityModule]);
 const CategoryRegistry = ({
     categories = [],
     subCategories = [],
-    onDeleteCategory,
-    onDeleteSubCategory,
     onQuickAddSub,
     onEditCategory,
     onEditSubCategory,
@@ -197,7 +194,7 @@ const CategoryRegistry = ({
         },
         {
             headerName: "Action",
-            maxWidth: 160,
+            maxWidth: 124,
             sortable: false,
             filter: false,
             cellRenderer: (params) => {
@@ -223,21 +220,11 @@ const CategoryRegistry = ({
                         >
                             <Edit size={12} strokeWidth={2.5} />
                         </button>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (data.isSubCategory) onDeleteSubCategory(data.id);
-                                else onDeleteCategory(data.id);
-                            }}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                            <Trash2 size={12} strokeWidth={2.5} />
-                        </button>
                     </div>
                 );
             }
         }
-    ], [onToggleStatus, onToggleSubStatus, onEditCategory, onEditSubCategory, onDeleteCategory, onDeleteSubCategory, onQuickAddSub]);
+    ], [onToggleStatus, onToggleSubStatus, onEditCategory, onEditSubCategory, onQuickAddSub]);
     const gridTheme = useMemo(() => themeQuartz.withParams({
         headerFontSize: 12,
     }), []);

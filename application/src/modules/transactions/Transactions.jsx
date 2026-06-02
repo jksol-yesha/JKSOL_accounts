@@ -325,13 +325,11 @@ const enrichTransaction = (txn) => {
         if (type === 'expense' || typeId === 2) {
             const exp = txn.entries.find(e => e.debit > 0);
             const asset = txn.entries.find(e => e.credit > 0);
-            if (exp && exp.account) categoryName = exp.account.name;
             if (asset && asset.account) accountName = asset.account.name;
         } else if (type === 'income' || typeId === 1) {
             const asset = txn.entries.find(e => e.debit > 0);
             const inc = txn.entries.find(e => e.credit > 0);
             if (asset && asset.account) accountName = asset.account.name;
-            if (inc && inc.account) categoryName = inc.account.name;
         } else if (type === 'transfer' || typeId === 4) {
             const to = txn.entries.find(e => e.debit > 0);
             const from = txn.entries.find(e => e.credit > 0);
@@ -1703,24 +1701,34 @@ const Transactions = () => {
     };
 
     const handleEdit = (txn) => {
-        // Find all transactions with the same name + date (siblings created via multi-branch)
         const nameKey = (txn.name || '').toLowerCase().trim();
         const dateKey = txn.txnDate ? new Date(txn.txnDate).toISOString().split('T')[0] : '';
-        const siblings = transactions.filter(t =>
-            (t.name || '').toLowerCase().trim() === nameKey &&
-            (t.txnDate ? new Date(t.txnDate).toISOString().split('T')[0] : '') === dateKey &&
-            t.branchId
-        );
+        const amountKey = Number(txn.amountBaseCurrency ?? txn.amountBase ?? txn.amountLocal ?? 0);
+        const typeKey = (txn.transactionType?.name || txn.txnType || '').toLowerCase();
+
+        const siblings = transactions.filter(t => {
+            if (t.id === txn.id) return false; // skip self
+            if (t.branchId === txn.branchId) return false; // siblings must be on different branches
+            
+            const tName = (t.name || '').toLowerCase().trim();
+            const tDate = t.txnDate ? new Date(t.txnDate).toISOString().split('T')[0] : '';
+            const tAmount = Number(t.amountBaseCurrency ?? t.amountBase ?? t.amountLocal ?? 0);
+            const tType = (t.transactionType?.name || t.txnType || '').toLowerCase();
+
+            if (tDate !== dateKey || tType !== typeKey) return false;
+            
+            return tName === nameKey && tAmount === amountKey;
+        });
 
         const siblingMap = {};
+        siblingMap[Number(txn.branchId)] = txn.id;
+
         if (siblings.length > 0) {
             siblings.forEach(t => {
                 if (!siblingMap[Number(t.branchId)]) {
                     siblingMap[Number(t.branchId)] = t.id;
                 }
             });
-        } else {
-            siblingMap[Number(txn.branchId)] = txn.id;
         }
 
         setDrawerState({
@@ -2247,7 +2255,7 @@ const Transactions = () => {
                                     pagination={true}
                                     paginationPageSize={50}
                                     paginationPageSizeSelector={[25, 50, 100, 200]}
-                                    onCellDoubleClicked={(event) => {
+                                    onRowClicked={(event) => {
                                         const target = event.event?.target;
                                         if (target && target.closest && target.closest('.attachment-btn')) {
                                             return;

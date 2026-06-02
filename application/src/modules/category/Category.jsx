@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
 import CategoryRegistry from './components/CategoryRegistry';
 import CategoryDetailsDrawer from './components/CategoryDetailsDrawer';
 import apiService from '../../services/api';
@@ -16,20 +15,6 @@ const transactionTabs = [
     { label: 'Categories', key: 'categories', path: '/category', icon: ShoppingBag },
     { label: 'Parties', key: 'parties', path: '/parties', icon: Users }
 ];
-
-const createInitialDeleteDialog = () => ({
-    open: false,
-    type: null,
-    id: null,
-    name: '',
-    loading: false
-});
-
-const isUsedCategoryDeleteError = (message) => {
-    const value = String(message || '');
-    return /cannot delete this (category|subcategory) because it is used in associated records/i.test(value)
-        || /modify (the )?status to 'inactive'/i.test(value);
-};
 
 const Category = () => {
     const navigate = useNavigate();
@@ -47,7 +32,6 @@ const Category = () => {
     const [parentCategoryForSub, setParentCategoryForSub] = useState(null);
 
     const [pageSize, setPageSize] = useState(20);
-    const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
     const cacheKey = `categories:registry:v6:${selectedBranch?.id || 'all'}`;
 
     const extractCategoryErrorMessage = (error, fallbackMessage) => {
@@ -210,86 +194,6 @@ const Category = () => {
         }
     };
 
-    const deleteCategoryById = async (id) => {
-        try {
-            await apiService.categories.delete(id);
-            await fetchCategories();
-        } catch (error) {
-            console.error("Failed to delete category:", error);
-            const msg = error.response?.data?.message || error.message || "Failed to delete category";
-            throw new Error(msg);
-        }
-    };
-
-    const deleteSubCategoryById = async (id) => {
-        try {
-            await apiService.categories.deleteSub(id);
-            await fetchCategories();
-        } catch (error) {
-            console.error("Failed to delete subcategory:", error);
-            const msg = error.response?.data?.message || error.message || "Failed to delete subcategory";
-            throw new Error(msg);
-        }
-    };
-
-    const handleDeleteCategory = (id) => {
-        const targetCategory = categories.find((cat) => String(cat.id) === String(id));
-        setDeleteDialog({
-            open: true,
-            type: 'category',
-            id,
-            name: targetCategory?.name || '',
-            loading: false
-        });
-    };
-
-    const handleDeleteSubCategory = (id) => {
-        const targetSubCategory = subCategories.find((sub) => String(sub.id) === String(id));
-        setDeleteDialog({
-            open: true,
-            type: 'subcategory',
-            id,
-            name: targetSubCategory?.name || '',
-            loading: false
-        });
-    };
-
-    const handleCloseDeleteDialog = () => {
-        setDeleteDialog((current) => (
-            current.loading ? current : createInitialDeleteDialog()
-        ));
-    };
-
-    const handleConfirmDelete = async () => {
-        const { id, type } = deleteDialog;
-        if (!id || !type) return;
-
-        setDeleteDialog((current) => ({ ...current, loading: true }));
-
-        try {
-            if (type === 'subcategory') {
-                await deleteSubCategoryById(id);
-            } else {
-                await deleteCategoryById(id);
-            }
-
-            setDeleteDialog(createInitialDeleteDialog());
-        } catch (error) {
-            const msg = error?.message || "Failed to delete category";
-            setDeleteDialog(createInitialDeleteDialog());
-            showToast(
-                msg,
-                'error',
-                isUsedCategoryDeleteError(msg)
-                    ? {
-                        persistent: true,
-                        duration: 0
-                    }
-                    : undefined
-            );
-        }
-    };
-
     const handleToggleStatus = async (id, newStatus) => {
         try {
             await apiService.categories.update(id, { status: newStatus });
@@ -351,12 +255,6 @@ const Category = () => {
         }
     };
 
-    const deleteTargetLabel = deleteDialog.type === 'subcategory' ? 'Sub-Category' : 'Category';
-    const deleteTargetDescriptor = deleteDialog.type === 'subcategory' ? 'sub-category' : 'category';
-    const deleteDialogMessage = deleteDialog.name
-        ? `Are you sure you want to archive "${deleteDialog.name}"? It will be hidden from active lists.`
-        : `Are you sure you want to archive this ${deleteTargetDescriptor}? It will be hidden from active lists.`;
-
     return (
         <PageContentShell
             header={(
@@ -385,8 +283,6 @@ const Category = () => {
                         categories={categories}
                         subCategories={subCategories}
                         selectedYearId={selectedYear?.id}
-                        onDeleteCategory={handleDeleteCategory}
-                        onDeleteSubCategory={handleDeleteSubCategory}
                         onToggleStatus={handleToggleStatus}
                         onToggleSubStatus={handleToggleSubStatus}
                         onQuickAddSub={handleOpenQuickAdd}
@@ -407,16 +303,6 @@ const Category = () => {
                 categoryToEdit={categoryToEdit}
                 parentCategory={parentCategoryForSub}
                 onSave={handleSaveFromDrawer}
-            />
-
-            <ConfirmDialog
-                open={deleteDialog.open}
-                title={`Delete ${deleteTargetLabel}`}
-                message={deleteDialogMessage}
-                confirmLabel={`Yes, Delete ${deleteTargetLabel}`}
-                isSubmitting={deleteDialog.loading}
-                onCancel={handleCloseDeleteDialog}
-                onConfirm={handleConfirmDelete}
             />
         </PageContentShell>
     );

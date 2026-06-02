@@ -10,7 +10,6 @@ import {
     Plus,
     Search,
     Edit,
-    Trash2,
     Copy,
     ListMinus,
     ShoppingBag,
@@ -27,7 +26,6 @@ import PageHeader from '../../components/layout/PageHeader';
 import PageContentShell from '../../components/layout/PageContentShell';
 import MobilePagination from '../../components/common/MobilePagination';
 import LoadingOverlay from '../../components/common/LoadingOverlay';
-import ConfirmDialog from '../../components/common/ConfirmDialog';
 import useDelayedOverlayLoader from '../../hooks/useDelayedOverlayLoader';
 import { useBranch } from '../../context/BranchContext';
 import { useOrganization } from '../../context/OrganizationContext';
@@ -36,19 +34,6 @@ import apiService from '../../services/api';
 import { useToast } from '../../context/ToastContext';
 
 import isIgnorableRequestError from '../../utils/isIgnorableRequestError';
-
-const createInitialDeleteDialog = () => ({
-    open: false,
-    id: null,
-    name: '',
-    loading: false
-});
-
-const isUsedPartyDeleteError = (message) => {
-    const value = String(message || '');
-    return /cannot delete this party because it is used in associated records/i.test(value)
-        || /modify (the )?status to 'inactive'/i.test(value);
-};
 
 const normalizePartyRecord = (party) => ({
     ...party,
@@ -71,7 +56,6 @@ const Parties = () => {
 
     const canCreateParty = usePermission('PARTIES_MANAGE');
     const canEditParty = usePermission('PARTIES_MANAGE');
-    const canDeleteParty = usePermission('PARTIES_MANAGE');
 
     const [parties, setParties] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
@@ -192,7 +176,7 @@ const Parties = () => {
         },
         {
             headerName: "Action",
-            maxWidth: 100,
+            maxWidth: 64,
             sortable: false,
             filter: false,
             cellRenderer: (params) => (
@@ -209,22 +193,13 @@ const Parties = () => {
                             <Edit size={12} strokeWidth={2.5} />
                         </button>
                     )}
-                    {canDeleteParty && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); handleDelete(params.data); }}
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors"
-                        >
-                            <Trash2 size={12} strokeWidth={2.5} />
-                        </button>
-                    )}
                 </div>
             )
         }
-    ], [canEditParty, canDeleteParty]);
+    ], [canEditParty]);
 
     // Tooltip State
     const [tooltip, setTooltip] = useState({ show: false, text: '', x: 0, y: 0 });
-    const [deleteDialog, setDeleteDialog] = useState(createInitialDeleteDialog);
 
     const CACHE_KEY = `parties_cache_${selectedOrg?.id}_global`;
 
@@ -303,48 +278,6 @@ const Parties = () => {
 
     const showInitialLoader = isLoading && !hasFetchedOnce;
     const showOverlayLoader = useDelayedOverlayLoader(isLoading, hasFetchedOnce);
-
-    const handleDelete = (party) => {
-        setDeleteDialog({
-            open: true,
-            id: party.id,
-            name: party.name || '',
-            loading: false
-        });
-    };
-
-    const handleCloseDeleteDialog = () => {
-        setDeleteDialog((current) => (
-            current.loading ? current : createInitialDeleteDialog()
-        ));
-    };
-
-    const handleConfirmDelete = async () => {
-        if (!deleteDialog.id) return;
-
-        setDeleteDialog((current) => ({ ...current, loading: true }));
-
-        try {
-            await apiService.parties.delete(deleteDialog.id);
-            setParties(prev => prev.filter(p => p.id !== deleteDialog.id));
-            setDeleteDialog(createInitialDeleteDialog());
-            showToast('Party archived successfully.', 'success');
-        } catch (error) {
-            console.error("Failed to delete party:", error);
-            const msg = error.response?.data?.message || "Failed to delete party";
-            setDeleteDialog(createInitialDeleteDialog());
-            showToast(
-                msg,
-                'error',
-                isUsedPartyDeleteError(msg)
-                    ? {
-                        persistent: true,
-                        duration: 0
-                    }
-                    : undefined
-            );
-        }
-    };
 
     const gridTheme = useMemo(() => themeQuartz.withParams({
         headerFontSize: 12,
@@ -466,6 +399,12 @@ const Parties = () => {
                                 animateRows={true}
                                 suppressCellFocus={true}
                                 suppressRowClickSelection={true}
+                                onRowClicked={(event) => {
+                                    if (canEditParty && event.data) {
+                                        setEditingParty(event.data);
+                                        setIsDrawerOpen(true);
+                                    }
+                                }}
                                 pagination={true}
                                 paginationPageSize={50}
                                 paginationPageSizeSelector={[25, 50, 100, 200]}
@@ -483,18 +422,6 @@ const Parties = () => {
                     onSuccess={handlePartySaved}
                 />
             </PageContentShell>
-
-            <ConfirmDialog
-                open={deleteDialog.open}
-                title="Delete Party"
-                message={deleteDialog.name
-                    ? `Are you sure you want to archive "${deleteDialog.name}"? It will be hidden from active lists.`
-                    : 'Are you sure you want to archive this party? It will be hidden from active lists.'}
-                confirmLabel="Yes, Delete Party"
-                isSubmitting={deleteDialog.loading}
-                onCancel={handleCloseDeleteDialog}
-                onConfirm={handleConfirmDelete}
-            />
 
             {/* Global Tooltip */}
             {tooltip.show && (

@@ -1,5 +1,6 @@
 
 import { ReportsService } from './reports.service';
+import { buildProfitLossPdfBuffer } from './profitLossPdf';
 import type { ElysiaContext } from '../../shared/auth.middleware';
 import { db } from '../../db';
 import { branches, organizations } from '../../db/schema';
@@ -66,6 +67,41 @@ const parseStringListOrSingle = (val: any): string | string[] | undefined => {
 
     if (normalized.length === 0) return undefined;
     return normalized.length === 1 ? normalized[0] : normalized;
+};
+
+const formatProfitLossFileDate = (value?: string) => {
+    if (!value) return 'date';
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value || '').trim() || 'date';
+
+    return new Intl.DateTimeFormat('en-GB', {
+        day: 'numeric',
+        month: 'short',
+        year: '2-digit'
+    }).format(parsed).replace(/ /g, '-');
+};
+
+const formatProfitLossFileTime = (value = new Date()) => {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    }).formatToParts(value);
+
+    const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    const hour = String(partMap.hour || 'time').trim();
+    const minute = String(partMap.minute || '00').trim();
+    const dayPeriod = String(partMap.dayPeriod || 'am').trim().toLowerCase();
+
+    return `${hour}.${minute} ${dayPeriod}`;
+};
+
+const buildProfitLossPdfFileName = (startDate?: string, endDate?: string) => {
+    const fromLabel = formatProfitLossFileDate(startDate);
+    const toLabel = formatProfitLossFileDate(endDate);
+    const timeLabel = formatProfitLossFileTime();
+    return `p&l-${fromLabel}-to-${toLabel}-${timeLabel}.pdf`.replace(/\s+/g, '-');
 };
 
 const buildReportHeaderMeta = async (
@@ -297,6 +333,27 @@ export const exportReport = async ({ body, set, headers, user, orgId, branchId: 
         if (format === 'pdf') {
             const headerMeta = await buildReportHeaderMeta(orgId, branchId);
             const isProfitLossReport = reportType === 'Profit/Loss' || reportType === 'Profit & Loss';
+
+            if (isProfitLossReport) {
+                const fileName = buildProfitLossPdfFileName(startDate, endDate);
+                const pdfBuffer = buildProfitLossPdfBuffer(data as any, {
+                    organizationName: headerMeta.organizationName,
+                    organizationAddress: headerMeta.organizationAddress,
+                    organizationBranchLine: headerMeta.organizationBranchLine,
+                    startDate,
+                    endDate
+                });
+
+                return {
+                    success: true,
+                    data: {
+                        fileName,
+                        mimeType: 'application/pdf',
+                        fileContent: Buffer.from(pdfBuffer).toString('base64')
+                    }
+                };
+            }
+
             const printableOrganizationName = isProfitLossReport
                 ? headerMeta.organizationName
                 : (headerMeta.organizationBranchLine

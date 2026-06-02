@@ -75,6 +75,16 @@ function isAmountLikeToken(value: string): boolean {
   return /^[\d,]+\.\d{2}$/i.test(String(value || '').trim());
 }
 
+function looksLikeDateFragment(value: string): boolean {
+  const normalized = String(value || '').trim();
+  if (!normalized) return false;
+
+  return (
+    /\d{2}[-/.]\d{2}[-/.]$/.test(normalized) ||
+    /\d{2}[-/.]\d{2}[-/.]\d{2,4}$/.test(normalized)
+  );
+}
+
 function splitTokenByAmountSuffix(rawToken: string, amount: string): { prefix: string, suffix: string } | null {
   const token = String(rawToken || '');
   const normalizedToken = token.replace(/,/g, '');
@@ -168,11 +178,15 @@ function extractICICITrailingFields(combinedText: string): TrailingAmountFields 
 
   const fusedRemarkAmountMatch = lastToken.match(/^(.+?)([\d,]+\.\d{2})$/);
   if (fusedRemarkAmountMatch) {
+    const fusedPrefix = fusedRemarkAmountMatch[1]!.trim();
     const candidateAmount = fusedRemarkAmountMatch[2]!;
 
-    if (candidateAmount.replace(/,/g, '').length < 15) {
+    if (
+      candidateAmount.replace(/,/g, '').length < 15 &&
+      !looksLikeDateFragment(fusedPrefix)
+    ) {
       return {
-        narration: [lastTokenPrefix, fusedRemarkAmountMatch[1]!.trim()].filter(Boolean).join(' ').trim(),
+        narration: [lastTokenPrefix, fusedPrefix].filter(Boolean).join(' ').trim(),
         amount: normalizeAmount(candidateAmount),
         closingBalance,
         ambiguousAmountToken: null,
@@ -753,4 +767,5 @@ function validateICICIStatement(result: ParsedStatementResult): void {
 export const __test__ = {
   extractICICITrailingFields,
   classifyDebitsCredits,
+  looksLikeDateFragment,
 };

@@ -12,6 +12,9 @@ if (typeof (globalThis as any).DOMMatrix === 'undefined') {
 import pdf from 'pdf-parse/lib/pdf-parse.js';
 import type { ParsedStatementResult, ParsedStatementRow } from './types';
 
+const AXIS_DATE_TOKEN = '(\\d{2}-\\d{2}-\\d{4})';
+const AXIS_DATE_PAIR_PREFIX = new RegExp(`^${AXIS_DATE_TOKEN}\\s*${AXIS_DATE_TOKEN}`);
+
 function normalizeAmount(raw: string | null | undefined): string | null {
   if (!raw || !raw.trim()) return null;
   const cleaned = raw.trim().replace(/,/g, '');
@@ -23,6 +26,140 @@ function parseAxisDate(dateStr: string): string | null {
   const parts = dateStr.trim().split('-');
   if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
   return null;
+}
+
+export function extractAxisDatePair(text: string): {
+  transactionDateRaw: string;
+  valueDateRaw: string;
+  remainder: string;
+} | null {
+  const match = text.match(AXIS_DATE_PAIR_PREFIX);
+  if (!match) return null;
+
+  return {
+    transactionDateRaw: match[1]!,
+    valueDateRaw: match[2]!,
+    remainder: text.substring(match[0].length).trim(),
+  };
+}
+
+export function extractAxisTrailingFields(text: string): {
+  remainder: string;
+  amount: string;
+  drCr: 'DR' | 'CR';
+  balance: string;
+} | null {
+  const match = text.match(
+    /^(.*?)\s+([\d,]+\.\d{2})\s*(DR|CR)\s+([\d,]+\.\d{2})(?:\s+.*)?$/i
+  );
+  if (!match) return null;
+
+  return {
+    remainder: match[1]!.trim(),
+    amount: match[2]!,
+    drCr: match[3]!.toUpperCase() as 'DR' | 'CR',
+    balance: match[4]!,
+  };
+}
+
+function normalizeAxisBranchCandidate(raw: string): string | null {
+  const candidate = raw.replace(/\s+/g, ' ').trim();
+  if (!candidate) return null;
+  if (!/[A-Za-z]/.test(candidate)) return null;
+  if (/^\[?[A-Z]{2}\]?$/.test(candidate)) return null;
+  if (AXIS_DATE_PAIR_PREFIX.test(candidate)) return null;
+  if (extractAxisTrailingFields(candidate)) return null;
+  if (/^(?:OPENING|CLOSING|TRANSACTION\s+TOTAL|STATEMENT\s+OF\s+AXIS|CUSTOMER\s+ID|IFSC|MICR|CURRENCY|SCHEME)\b/i.test(candidate)) {
+    return null;
+  }
+  return candidate;
+}
+
+export function extractAxisBranchNameFromBlock(lines: string[]): string | null {
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const candidate = normalizeAxisBranchCandidate(lines[i] || '');
+    if (candidate) return candidate;
+  }
+  return null;
+}
+
+export function pickDominantAxisBranchName(candidates: string[]): string | null {
+  const counts = new Map<string, { value: string; count: number; firstSeen: number }>();
+
+  candidates.forEach((rawCandidate, index) => {
+    const candidate = normalizeAxisBranchCandidate(rawCandidate);
+    if (!candidate) return;
+
+    const key = candidate.toUpperCase();
+    const existing = counts.get(key);
+    if (existing) {
+      existing.count += 1;
+      return;
+    }
+
+    counts.set(key, {
+      value: candidate,
+      count: 1,
+      firstSeen: index,
+    });
+  });
+
+  const winner = [...counts.values()].sort((a, b) => {
+    if (b.count !== a.count) return b.count - a.count;
+    if (b.value.length !== a.value.length) return b.value.length - a.value.length;
+    return a.firstSeen - b.firstSeen;
+  })[0];
+
+  return winner?.value || null;
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasStandaloneAxisToken(text: string, token: string): boolean {
+  if (!text || !token) return false;
+  const pattern = new RegExp(`(^|[\\s/:()-])${escapeRegex(token)}(?=$|[\\s/:()-])`);
+  return pattern.test(text);
+}
+
+export function extractOptionalAxisChequeNumber(prefix: string): {
+  narration: string;
+  chequeNumber: string | null;
+} {
+  const trimmed = prefix.trim();
+
+  const spacedMatch = trimmed.match(/^(.*?)\s+(\d{3,10})$/);
+  if (spacedMatch) {
+    return {
+      narration: spacedMatch[1]!.trim(),
+      chequeNumber: spacedMatch[2]!,
+    };
+  }
+
+  const slashSegments = trimmed.split('/');
+  const lastSlashSegment = [...slashSegments].reverse().find(segment => segment.trim().length > 0) || null;
+
+  if (lastSlashSegment) {
+    const lastSlashIndex = trimmed.lastIndexOf(lastSlashSegment);
+    const leadingText = lastSlashIndex >= 0 ? trimmed.slice(0, lastSlashIndex) : '';
+    const fusedSegmentMatch = lastSlashSegment.match(/^([A-Za-z][A-Za-z .&-]{1,60}?)(\d{3,10})$/);
+
+    if (
+      fusedSegmentMatch &&
+      hasStandaloneAxisToken(leadingText, fusedSegmentMatch[2]!)
+    ) {
+      return {
+        narration: `${leadingText}${fusedSegmentMatch[1]}`.trim(),
+        chequeNumber: fusedSegmentMatch[2]!,
+      };
+    }
+  }
+
+  return {
+    narration: trimmed,
+    chequeNumber: null,
+  };
 }
 
 export function isAxisStatement(text: string): boolean {
@@ -77,7 +214,7 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
   }
 
   // IFSC: "IFSC Code :UTIB0000848"
-  const ifscMatch = fullText.match(/IFSC\s*(?:Code)?\s*:?\s*([A-Z]{4}0[A-Z0-9]{6})/i);
+  const ifscMatch = fullText.match(/IFSC\s*(?:Code)?\s*:?\s*([A-Za-z]{4}0[A-Za-z0-9]{6})/i);
   if (ifscMatch) result.ifsc = ifscMatch[1]!.toUpperCase();
 
   // MICR: "MICR Code :395211005"
@@ -89,7 +226,7 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
   if (custMatch) result.customerId = custMatch[1]!;
 
   // Extract Opening Balance
-  const obMatch = fullText.match(/OPENING BALANCE\s+([\d,]+\.\d{2})/i);
+  const obMatch = fullText.match(/OPENING\s+BALANCE\s*:?\s*(?:INR\s*)?([\d,]+\.\d{2})/i);
   if (obMatch) result.openingBalance = normalizeAmount(obMatch[1]);
 
   // Extract Closing Balance
@@ -125,7 +262,8 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
 
   const txnBlocks: RawTxnBlock[] = [];
   let currentBlock: RawTxnBlock | null = null;
-  const DATE_PREFIX = /^(\d{2}-\d{2}-\d{4})(\d{2}-\d{2}-\d{4})/;
+  const DATE_PREFIX = AXIS_DATE_PAIR_PREFIX;
+  const branchCandidates: string[] = [];
 
   for (let i = transactionStartIdx; i < lines.length; i++) {
     const line = lines[i]!.trim();
@@ -150,52 +288,42 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
   for (const block of txnBlocks) {
     rowCounter++;
     const combinedText = block.lines.join(' ');
+    const branchName = extractAxisBranchNameFromBlock(block.lines);
+    if (branchName) branchCandidates.push(branchName);
     
-    const dateMatch = combinedText.match(DATE_PREFIX);
-    if (!dateMatch) continue;
+    const dateParts = extractAxisDatePair(combinedText);
+    if (!dateParts) continue;
 
-    const transactionDate = parseAxisDate(dateMatch[1]!);
-    const valueDateStr = parseAxisDate(dateMatch[2]!);
-    
-    // Remove the two dates (each is 10 chars, total 20)
-    let remaining = combinedText.substring(20).trim();
+    const transactionDate = parseAxisDate(dateParts.transactionDateRaw);
+    const valueDateStr = parseAxisDate(dateParts.valueDateRaw);
+    const remaining = dateParts.remainder;
 
-    // Find Amount and Direction (DR/CR)
-    const amtRegex = /(\d+(?:,\d+)*\.\d{2})(DR|CR)/i;
-    const amtMatch = remaining.match(amtRegex);
-    
-    if (!amtMatch) {
+    const trailingFields = extractAxisTrailingFields(remaining);
+    if (!trailingFields) {
       result.validation.warnings.push(`Row ${rowCounter}: Could not find amount and DR/CR indicator.`);
       continue;
     }
 
-    const amt = normalizeAmount(amtMatch[1]);
-    const dir = amtMatch[2]!.toUpperCase();
+    const amt = normalizeAmount(trailingFields.amount);
+    const dir = trailingFields.drCr;
     const debitAmount = dir === 'DR' ? amt : null;
     const creditAmount = dir === 'CR' ? amt : null;
 
     // Narration is everything before the amount
-    let narration = remaining.substring(0, amtMatch.index).trim();
+    let narration = trailingFields.remainder;
     
     // ── Separate cheque number from narration ──
     // In Axis PDFs, the Chq No column value appears as a standalone numeric sequence
     // (typically 6 digits) at the end of the narration, separated by whitespace.
     // e.g., "SAK/CASH WDL/SAK468708991/848/VARACHHA /JATIN          820467"
     // The cheque number is "820467", narration is everything before it.
-    let chequeNumber: string | null = null;
-    
-    // Look for a standalone number (3-10 digits) at the end of narration,
-    // preceded by at least 2+ spaces (column gap in the PDF)
-    const chqMatch = narration.match(/\s{2,}(\d{3,10})\s*$/);
-    if (chqMatch) {
-      chequeNumber = chqMatch[1]!;
-      narration = narration.substring(0, chqMatch.index).trim();
-    }
+    const {
+      narration: narrationWithoutCheque,
+      chequeNumber,
+    } = extractOptionalAxisChequeNumber(narration);
+    narration = narrationWithoutCheque;
 
-    // Remaining text after amount (contains closing balance and branch)
-    const afterAmount = remaining.substring(amtMatch.index + amtMatch[0].length);
-    const cbMatchLocal = afterAmount.match(/(\d+(?:,\d+)*\.\d{2})/);
-    const closingBalanceStr = cbMatchLocal ? normalizeAmount(cbMatchLocal[1]) : null;
+    const closingBalanceStr = normalizeAmount(trailingFields.balance);
 
     if (!closingBalanceStr) {
       result.validation.warnings.push(`Row ${rowCounter}: Could not normalize closing balance`);
@@ -228,13 +356,24 @@ export async function parseAxisStatement(buffer: Buffer): Promise<ParsedStatemen
     });
   }
 
+  if (!result.bankBranchName) {
+    result.bankBranchName = pickDominantAxisBranchName(branchCandidates);
+  }
+
   // Set counts
   result.debitCount = result.rows.filter(r => r.debitAmount !== null).length;
   result.creditCount = result.rows.filter(r => r.creditAmount !== null).length;
 
   // Calculate total debit/credit
-  result.totalDebit = result.rows.reduce((sum, r) => sum + (r.debitAmount ? parseFloat(r.debitAmount) : 0), 0).toFixed(2);
-  result.totalCredit = result.rows.reduce((sum, r) => sum + (r.creditAmount ? parseFloat(r.creditAmount) : 0), 0).toFixed(2);
+  const computedTotalDebit = result.rows
+    .reduce((sum, r) => sum + (r.debitAmount ? parseFloat(r.debitAmount) : 0), 0)
+    .toFixed(2);
+  const computedTotalCredit = result.rows
+    .reduce((sum, r) => sum + (r.creditAmount ? parseFloat(r.creditAmount) : 0), 0)
+    .toFixed(2);
+
+  if (result.totalDebit === null) result.totalDebit = computedTotalDebit;
+  if (result.totalCredit === null) result.totalCredit = computedTotalCredit;
 
   // Generate statement fingerprint
   const { generateStatementFingerprint } = await import('./statementHashUtils');

@@ -57,6 +57,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const [pdfCurrentPage, setPdfCurrentPage] = useState(1);
     const [pdfScale, setPdfScale] = useState(1.0);
     const [pdfPageReady, setPdfPageReady] = useState(false);
+    const attachmentInputRef = React.useRef(null);
 
     // Animation States
     const [shouldRenderDrawer, setShouldRenderDrawer] = useState(isOpen);
@@ -260,7 +261,61 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
         fetchDependencies();
     }, [fetchDependencies]);
 
+    useEffect(() => {
+        if (attachmentInputRef.current) {
+            attachmentInputRef.current.value = '';
+        }
+    }, [focusedTransactionId]);
+
     if (!isOpen) return null;
+
+    const calculateGst = (amount, isTaxable, isInclusive, gstType, gstRate) => {
+        if (!isTaxable || !amount || !gstRate) {
+            return { cgstAmount: 0, sgstAmount: 0, igstAmount: 0, gstTotal: 0, finalAmount: amount || 0, calculatedBase: amount || 0 };
+        }
+        
+        const parsedAmount = parseFloat(amount) || 0;
+        const rate = parseFloat(gstRate) || 0;
+        
+        let baseAmount = parsedAmount;
+        let gstTotal = 0;
+        let finalAmount = parsedAmount;
+        
+        if (isInclusive) {
+            baseAmount = parsedAmount / (1 + rate / 100);
+            gstTotal = parsedAmount - baseAmount;
+            finalAmount = parsedAmount;
+        } else {
+            gstTotal = baseAmount * (rate / 100);
+            finalAmount = baseAmount + gstTotal;
+        }
+        
+        let cgstAmount = 0;
+        let sgstAmount = 0;
+        let igstAmount = 0;
+        
+        if (Number(gstType === undefined ? 1 : gstType) === 1) { // INTRA
+            cgstAmount = gstTotal / 2;
+            sgstAmount = gstTotal / 2;
+        } else { // INTER
+            igstAmount = gstTotal;
+        }
+        
+        return { cgstAmount, sgstAmount, igstAmount, gstTotal, finalAmount, calculatedBase: baseAmount };
+    };
+
+    const getReviewAmount = (txn) => {
+        if (!txn) return 0;
+        return Number(
+            calculateGst(
+                txn.amount,
+                txn.isTaxable,
+                txn.isGstInclusive,
+                txn.gstType,
+                txn.gstRate
+            ).finalAmount || 0
+        );
+    };
 
     const filteredAccounts = accounts?.filter(acc => !acc.branchId || acc.branchId === selectedBranch?.id || acc.accountType === 1) || [];
     
@@ -268,8 +323,8 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
     const activeAccountObj = filteredAccounts.find(a => String(a.id) === String(selectedAccount));
     const openingBalance = activeAccountObj ? Number(activeAccountObj.closingBalance || 0) : 0;
     
-    const totalCredit = transactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
-    const totalDebit = transactions.filter(t => t.type !== 'Income').reduce((sum, t) => sum + Number(t.amount || 0), 0);
+    const totalCredit = transactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + getReviewAmount(t), 0);
+    const totalDebit = transactions.filter(t => t.type !== 'Income').reduce((sum, t) => sum + getReviewAmount(t), 0);
     const closingBalance = openingBalance + totalCredit - totalDebit;
 
     const formatCurrency = (val) => new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(val);
@@ -436,41 +491,6 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             <span className={`text-sm font-black ${colorClass}`}>{formatCurrency(value)}</span>
         </div>
     );
-
-    const calculateGst = (amount, isTaxable, isInclusive, gstType, gstRate) => {
-        if (!isTaxable || !amount || !gstRate) {
-            return { cgstAmount: 0, sgstAmount: 0, igstAmount: 0, gstTotal: 0, finalAmount: amount || 0, calculatedBase: amount || 0 };
-        }
-        
-        const parsedAmount = parseFloat(amount) || 0;
-        const rate = parseFloat(gstRate) || 0;
-        
-        let baseAmount = parsedAmount;
-        let gstTotal = 0;
-        let finalAmount = parsedAmount;
-        
-        if (isInclusive) {
-            baseAmount = parsedAmount / (1 + rate / 100);
-            gstTotal = parsedAmount - baseAmount;
-            finalAmount = parsedAmount;
-        } else {
-            gstTotal = baseAmount * (rate / 100);
-            finalAmount = baseAmount + gstTotal;
-        }
-        
-        let cgstAmount = 0;
-        let sgstAmount = 0;
-        let igstAmount = 0;
-        
-        if (Number(gstType === undefined ? 1 : gstType) === 1) { // INTRA
-            cgstAmount = gstTotal / 2;
-            sgstAmount = gstTotal / 2;
-        } else { // INTER
-            igstAmount = gstTotal;
-        }
-        
-        return { cgstAmount, sgstAmount, igstAmount, gstTotal, finalAmount, calculatedBase: baseAmount };
-    };
 
     const gstCalc = focusedTxn ? calculateGst(focusedTxn.amount, focusedTxn.isTaxable, focusedTxn.isGstInclusive, focusedTxn.gstType, focusedTxn.gstRate) : null;
 
@@ -647,7 +667,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                                 </span>
                                                             </td>
                                                             <td className="px-3 py-2 text-xs font-medium text-slate-800 break-words whitespace-normal">{txn.description}</td>
-                                                            <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{Number(txn.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                                                            <td className="px-3 py-2 text-xs font-bold text-slate-800 text-right">{getReviewAmount(txn).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                                                         </tr>
                                                     ))
                                                 )}
@@ -901,11 +921,13 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
                                                         <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                                             <div className="flex-1 min-w-0">
                                                                 <input
+                                                                    ref={attachmentInputRef}
                                                                     type="file"
                                                                     onChange={(e) => {
                                                                         if (e.target.files?.[0]) {
                                                                             handleFieldChange(focusedTxn._id, 'attachment', e.target.files[0]);
                                                                         }
+                                                                        e.target.value = '';
                                                                     }}
                                                                     className="block w-full text-sm text-slate-500
                                                                     file:mr-4 file:py-2 file:px-4
@@ -1099,6 +1121,7 @@ const ImportReviewModal = ({ isOpen, onClose, parsedData, onSuccess, file, isPro
             {/* Add Account Drawer — shown when statement account is not found */}
             <CreateAccount
                 isOpen={showAddAccountDrawer}
+                existingAccounts={accounts}
                 onClose={() => {
                     // CreateAccount calls onClose() both when user manually dismisses
                     // AND after a successful save (after onSuccess).

@@ -5,6 +5,7 @@ import { parseBankStatement } from '../../utils/pdfParser';
 import { PDFParserService } from '../../shared/pdf-parser.service';
 import { isHDFCStatement, parseHDFCStatement } from '../../services/statement-parsers/hdfcStatementParser';
 import { isAxisStatement, parseAxisStatement } from '../../services/statement-parsers/axisStatementParser';
+import { isAxisCorporateStatement, parseAxisCorporateStatement } from '../../services/statement-parsers/axisCorporateStatementParser';
 import { isICICIStatement, parseICICIStatement } from '../../services/statement-parsers/iciciStatementParser';
 import { isSBIStatement, parseSBIStatement } from '../../services/statement-parsers/sbiStatementParser';
 import { isYesBankStatement, parseYesBankStatement } from '../../services/statement-parsers/yesBankStatementParser';
@@ -244,7 +245,13 @@ export const transactionRoutes = new Elysia({ prefix: '/transactions' })
                 return buildDeterministicResponse(result, 'HDFC', 'HDFC_DETERMINISTIC');
             }
 
-            // ─── Axis Deterministic ───
+            // ─── Axis Corporate Deterministic ───
+            if (isAxisCorporateStatement(text)) {
+                const result = await parseAxisCorporateStatement(buffer);
+                return buildDeterministicResponse(result, 'AXIS', 'AXIS_CORP_DETERMINISTIC');
+            }
+
+            // ─── Axis Retail Deterministic ───
             if (isAxisStatement(text)) {
                 const result = await parseAxisStatement(buffer);
                 return buildDeterministicResponse(result, 'AXIS', 'AXIS_DETERMINISTIC');

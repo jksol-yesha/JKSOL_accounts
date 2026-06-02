@@ -18,7 +18,7 @@ import { useOrganization } from '../../../context/OrganizationContext';
 import { useAuth } from '../../../context/AuthContext';
 import { notifyTransactionDataChanged } from '../../transactions/transactionDataSync';
 import { useToast } from '../../../context/ToastContext';
-
+import CreateTransaction from '../../transactions/components/CreateTransaction';
 const recentTransactionsFetches = new Map();
 const DEFAULT_TRANSACTION_TYPE_ORDER = ['income', 'expense', 'transfer', 'investment'];
 const RECENT_TXN_COLUMN_STORAGE_KEY = 'dashboard:recentTxColumns:v1';
@@ -494,6 +494,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
         label: '',
         loading: false
     });
+    const [drawerState, setDrawerState] = React.useState({ open: false, transaction: null });
     const [loading, setLoading] = React.useState(false);
     const [hasFetchedOnce, setHasFetchedOnce] = React.useState(false);
     const cacheKey = `dashboard:recentTx:${selectedOrg?.id || 'org'}:${selectedYear?.id || 'fy'}`;
@@ -855,8 +856,8 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
         return `calc(100% / ${totalDesktopColumns})`;
     }, [visibleDesktopColumns.length]);
     const handleEdit = React.useCallback((tx) => {
-        navigate(`/transactions/edit/${tx.id}`);
-    }, [navigate]);
+        setDrawerState({ open: true, transaction: tx });
+    }, []);
     const handleDelete = React.useCallback((event, tx) => {
         event?.preventDefault?.();
         event?.stopPropagation?.();
@@ -941,7 +942,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                 >
                     {displayTransactions.length > 0 ? (
                         displayTransactions.map((tx, index) => (
-                            <div key={`${tx.id}-${index}`} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3">
+                            <div key={`${tx.id}-${index}`} onClick={() => canEditTxn(tx) && handleEdit(tx)} className="bg-white border border-gray-100 rounded-xl p-3 shadow-sm space-y-3 cursor-pointer">
                                 <div className="flex justify-between items-start border-b border-gray-50 pb-2">
                                     <div>
                                         <div className="text-[10px] uppercase font-bold text-gray-400 tracking-wider mb-0.5">Date</div>
@@ -1040,7 +1041,7 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {displayTransactions.length > 0 ? displayTransactions.map((tx, index) => (
-                                <tr key={`${tx.id}-${index}`} className="hover:bg-gray-50 transition-colors">
+                                <tr key={`${tx.id}-${index}`} onClick={() => canEditTxn(tx) && handleEdit(tx)} className="hover:bg-gray-50 transition-colors cursor-pointer">
                                     {visibleDesktopColumns.map((column) => (
                                         <td
                                             key={column.key}
@@ -1101,6 +1102,15 @@ const RecentTransactions = ({ maxVisibleDesktopRows = 20, fillAvailableHeight = 
                 isSubmitting={deleteDialog.loading}
                 onCancel={handleCloseDeleteDialog}
                 onConfirm={handleConfirmDelete}
+            />
+            <CreateTransaction
+                isOpen={drawerState.open}
+                onClose={() => setDrawerState({ open: false, transaction: null })}
+                transactionToEdit={drawerState.transaction}
+                onSuccess={() => {
+                    setDrawerState({ open: false, transaction: null });
+                    notifyTransactionDataChanged();
+                }}
             />
         </Card >
     );

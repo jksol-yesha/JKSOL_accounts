@@ -1343,6 +1343,17 @@ const Accounts = () => {
 
   const showOverlayLoader = useDelayedOverlayLoader(loading, hasFetchedOnce);
 
+  const handleAccountCellClick = (params) => {
+    if (!params?.data || params.data.isGroupHeader) return;
+
+    const clickedInteractiveElement = params.event?.target?.closest?.(
+      "button, a, input, textarea, select, [role='button']",
+    );
+    if (clickedInteractiveElement) return;
+
+    setDrawerState({ open: true, account: params.data });
+  };
+
   // Cell Renderers define how specific columns render complex UI
   const NameCellRenderer = (params) => {
     if (!params.data) return null;
@@ -1395,6 +1406,7 @@ const Accounts = () => {
           <button
             onClick={(e) => {
               e.stopPropagation();
+              e.nativeEvent.stopPropagation();
               const rect = e.currentTarget.getBoundingClientRect();
               setActiveRowPopover((prev) =>
                 prev?.id === account.id
@@ -1681,11 +1693,7 @@ const Accounts = () => {
                     paginationPageSize={15}
                     paginationPageSizeSelector={[10, 15, 20, 50, 100]}
                     suppressCellFocus={true}
-                    onCellDoubleClicked={(params) => {
-                      if (params.data && !params.data.isGroupHeader) {
-                        setDrawerState({ open: true, account: params.data });
-                      }
-                    }}
+                    onCellClicked={handleAccountCellClick}
                   />
                 </div>
                 {showOverlayLoader && (

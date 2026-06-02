@@ -679,7 +679,18 @@ const CreateAccount = ({
 
     switch (name) {
       case "name":
-        if (!value.trim()) error = "Required";
+        if (!value.trim()) {
+          error = "Required";
+        } else {
+          const normalizedInput = value.trim().toLowerCase();
+          const currentId = Number(accountToEdit?.id || 0);
+          const isDuplicate = existingAccounts.some((acc) => 
+            acc.name && acc.name.trim().toLowerCase() === normalizedInput && Number(acc.id || 0) !== currentId
+          );
+          if (isDuplicate) {
+            error = "Account with this name already exists";
+          }
+        }
         break;
       case "branchId":
         if (!String(value || "").trim()) {
@@ -1005,10 +1016,13 @@ const CreateAccount = ({
       return true;
     } catch (error) {
       console.error("Save failed:", error);
-      showToast(
-        error.response?.data?.message || error.message || "Failed to save account",
-        "error",
-      );
+      const msg = error.response?.data?.message || error.message || "Failed to save account";
+      showToast(msg, "error");
+      
+      if (msg.toLowerCase().includes("already exists") && msg.toLowerCase().includes("account")) {
+        setErrors(prev => ({ ...prev, name: "Account with this name already exists" }));
+      }
+      
       return false;
     }
   };
